@@ -1,1 +1,1 @@
-export const placeholder = 'level-core';
+export * from './surface-pipeline';

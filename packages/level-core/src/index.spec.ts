@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { placeholder } from './index';
+import { buildSurfaceGraph } from './surface-pipeline';
 
-describe('level-core package', () => {
-  it('exports placeholder', () => {
-    expect(placeholder).toBe('level-core');
+describe('level-core', () => {
+  it('exports buildSurfaceGraph', () => {
+    expect(buildSurfaceGraph).toBeDefined();
   });
 });
