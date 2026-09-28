@@ -1,0 +1,107 @@
+import { describe, it, expect } from 'vitest';
+import {
+  SurfaceGraph,
+  LevelPlan,
+  PIECE_IDS,
+  KIT_CATALOG,
+} from '@roomquest/schema';
+
+describe('Schema smoke test (client)', () => {
+  it('can import and parse SurfaceGraph', () => {
+    const graph = {
+      version: 1 as const,
+      roomHash: 'test12345678',
+      mode: 'scene' as const,
+      floorY: 0,
+      nodes: [
+        {
+          id: 's1',
+          label: 'table' as const,
+          kind: 'plane' as const,
+          topHeight: 0.75,
+          centroid: [0, 0.75, 0] as [number, number, number],
+          size: [1, 1] as [number, number],
+          yaw: 0,
+          area: 1,
+          reach: 'hand' as const,
+          angleFromForward: 0,
+        },
+        {
+          id: 's2',
+          label: 'couch' as const,
+          kind: 'plane' as const,
+          topHeight: 0.45,
+          centroid: [2, 0.45, 0] as [number, number, number],
+          size: [2, 0.9] as [number, number],
+          yaw: 0,
+          area: 1.8,
+          reach: 'ray' as const,
+          angleFromForward: 30,
+        },
+      ],
+      edges: [],
+    };
+    expect(() => SurfaceGraph.parse(graph)).not.toThrow();
+  });
+
+  it('can access PIECE_IDS', () => {
+    expect(PIECE_IDS).toContain('village_hut');
+    expect(PIECE_IDS).toContain('crystal_shrine');
+    expect(PIECE_IDS).toHaveLength(10);
+  });
+
+  it('can access KIT_CATALOG', () => {
+    expect(KIT_CATALOG.village_hut).toBeDefined();
+    expect(KIT_CATALOG.village_hut.minArea).toBe(0.3);
+  });
+
+  it('can import and parse LevelPlan', () => {
+    const plan = {
+      seed: 'test-2026-10-14',
+      theme: 'forest' as const,
+      title: 'Test Level',
+      start: 's1',
+      goal: 's2',
+      placements: [
+        {
+          id: 'p1',
+          piece: 'village_hut' as const,
+          surface: 's1',
+          u: 0.5,
+          v: 0.5,
+        },
+        {
+          id: 'p2',
+          piece: 'crystal_shrine' as const,
+          surface: 's2',
+          u: 0.5,
+          v: 0.5,
+        },
+        {
+          id: 'p3',
+          piece: 'plank_bridge' as const,
+          surface: 's1',
+          to: 's2',
+          u: 0.8,
+          v: 0.5,
+          playerBuilt: true,
+        },
+        {
+          id: 'p4',
+          piece: 'gem' as const,
+          surface: 's1',
+          u: 0.3,
+          v: 0.3,
+        },
+      ],
+      beats: [
+        { goal: 'Build the bridge', uses: ['p3'] },
+        { goal: 'Reach the shrine', uses: ['p2'] },
+      ],
+      dialogue: [
+        { trigger: 'intro' as const, line: 'Welcome!' },
+      ],
+    };
+    expect(() => LevelPlan.parse(plan)).not.toThrow();
+  });
+});
