@@ -161,10 +161,9 @@ export const LevelPlanLLM = z.object({
   parTimeMs: z
     .number()
     .int()
-    .min(PAR_TIME_MIN_MS)
-    .max(PAR_TIME_MAX_MS)
+    .positive()
     .describe(
-      'Par completion time in milliseconds for 3-star rating (1-8 minutes)',
+      'Par completion time in milliseconds for 3-star rating (target: 1-8 minutes)',
     ),
 });
 export type LevelPlanLLM = z.infer<typeof LevelPlanLLM>;
