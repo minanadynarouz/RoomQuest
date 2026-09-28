@@ -96,7 +96,7 @@ Returns `null` when no beat is active or beat is completed.
 ## Usage
 
 ```ts
-import { createGameStore, defaultParTimeMs } from './game';
+import { createGameStore } from './game';
 
 const store = createGameStore({
   clock: customClock, // optional, defaults to performance.now()
@@ -107,10 +107,9 @@ const store = createGameStore({
 store.requestLevel();
 store.startSurveying();
 
-// Building requires a plan and par time
+// Building requires a plan (par time read from plan.parTimeMs)
 const plan = getLevelPlan();
-const parTime = defaultParTimeMs(plan); // 180000ms for now
-store.startBuilding(plan, { parTimeMs: parTime });
+store.startBuilding(plan);
 
 store.startPlaying();
 store.pause();
@@ -136,14 +135,14 @@ console.log(store.stuckPlayerSignal); // For adapt agent
 
 ## Design Decisions
 
-### 1. Par Time as Input Parameter
+### 1. Par Time from Schema
 
-**Decision**: Par time is passed to `startBuilding()` as an optional parameter rather than being part of the `LevelPlan` schema.
+**Decision**: Par time is read from `plan.parTimeMs` (required field in `LevelPlan` from `@roomquest/schema`).
 
 **Rationale**: 
-- The schema package (`@roomquest/schema`) is owned by backend ticket B-01 (PR #5) which is already under review
-- Par time should be deterministic based on level structure, not LLM-chosen
-- A `defaultParTimeMs()` helper provides a 180000ms (3 minute) constant as a placeholder until backend's `level-core` implements the deterministic calculation
+- The B-01 schema package (PR #5) now includes `parTimeMs` as a required field with bounds 60000-480000ms (1-8 minutes)
+- Backend's `level-core` clamps par time to these bounds during plan generation
+- The store accepts an optional `parTimeMs` override in `startBuilding(plan, { parTimeMs })` for testing, but production code uses `plan.parTimeMs`
 
 ### 2. Timer Implementation
 

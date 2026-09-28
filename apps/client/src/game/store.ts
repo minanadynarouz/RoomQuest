@@ -341,7 +341,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
 
     startBuilding(levelPlan: LevelPlan, options?: { parTimeMs?: number }) {
       plan.value = levelPlan;
-      parTimeMs.value = options?.parTimeMs ?? 0;
+      parTimeMs.value = options?.parTimeMs ?? levelPlan.parTimeMs;
       events.value = [];
       gemsCollected.value = 0;
       beatTimings.value = [];
