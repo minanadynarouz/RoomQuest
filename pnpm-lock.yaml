@@ -111,6 +111,9 @@ importers:
       '@pmndrs/uikit-lucide':
         specifier: ^1.0.74
         version: 1.0.76(super-three@0.181.0)
+      '@roomquest/level-core':
+        specifier: workspace:*
+        version: link:../../packages/level-core
       '@roomquest/schema':
         specifier: workspace:*
         version: link:../../packages/schema
@@ -189,6 +192,9 @@ importers:
         specifier: workspace:*
         version: link:../schema
     devDependencies:
+      '@roomquest/fixtures':
+        specifier: workspace:*
+        version: link:../fixtures
       eslint:
         specifier: ^9.16.0
         version: 9.39.5
