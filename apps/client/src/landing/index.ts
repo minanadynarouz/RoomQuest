@@ -21,7 +21,7 @@ let capabilityResult: CapabilityResult = { state: 'checking' };
  */
 async function prefetchXRChunk(): Promise<void> {
   try {
-    await import('../xr/boot');
+    await import('../xr/index');
     xrChunkReady = true;
     console.log('[Landing] XR chunk prefetched successfully');
   } catch (error) {
@@ -52,7 +52,7 @@ async function launchXR(): Promise<void> {
     ui.enterButton.textContent = 'Launching...';
     ui.enterButton.disabled = true;
     
-    const { launchXR: bootXR } = await import('../xr/boot');
+    const { launchXR: bootXR } = await import('../xr/index');
     await bootXR();
     
     ui.landingPage.style.display = 'none';
