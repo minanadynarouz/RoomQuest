@@ -397,28 +397,36 @@ describe('Level schemas', () => {
       expect(() => PlacementLLM.parse(missingPlayerBuilt.placements[0])).toThrow();
     });
 
-    it('validates parTimeMs in LevelPlanLLM', () => {
-      // Valid
+    it('validates parTimeMs in LevelPlanLLM (positive integer, no bounds)', () => {
+      // Valid in range
       expect(() => LevelPlanLLM.parse(validPlanLLM)).not.toThrow();
 
-      // Missing (should fail because required)
-      const { parTimeMs: _parTimeMs, ...withoutPar } = validPlanLLM;
-      expect(() => LevelPlanLLM.parse(withoutPar)).toThrow();
-
-      // Below min
+      // Valid out of range (will be clamped by level-core)
       expect(() =>
-        LevelPlanLLM.parse({ ...validPlanLLM, parTimeMs: 59999 }),
+        LevelPlanLLM.parse({ ...validPlanLLM, parTimeMs: 500000 }),
+      ).not.toThrow();
+      expect(() =>
+        LevelPlanLLM.parse({ ...validPlanLLM, parTimeMs: 1000 }),
+      ).not.toThrow();
+
+      // Zero (should fail - not positive)
+      expect(() =>
+        LevelPlanLLM.parse({ ...validPlanLLM, parTimeMs: 0 }),
       ).toThrow();
 
-      // Above max
+      // Negative (should fail)
       expect(() =>
-        LevelPlanLLM.parse({ ...validPlanLLM, parTimeMs: 480001 }),
+        LevelPlanLLM.parse({ ...validPlanLLM, parTimeMs: -1000 }),
       ).toThrow();
 
       // Non-integer
       expect(() =>
         LevelPlanLLM.parse({ ...validPlanLLM, parTimeMs: 120000.5 }),
       ).toThrow();
+
+      // Missing (should fail because required)
+      const { parTimeMs: _parTimeMs, ...withoutPar } = validPlanLLM;
+      expect(() => LevelPlanLLM.parse(withoutPar)).toThrow();
     });
 
     it('uses null for optional fields instead of undefined', () => {
