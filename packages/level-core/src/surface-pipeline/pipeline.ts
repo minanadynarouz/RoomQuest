@@ -68,6 +68,45 @@ interface ProcessedSurface {
 /**
  * Step 1-3: Extract, clean, and merge surfaces
  */
+/**
+ * Calculate extents from a polygon using shoelace formula
+ */
+function computeExtentsFromPolygon(
+  polygon: [number, number, number][],
+): { width: number; height: number; area: number } {
+  if (polygon.length < 3) {
+    return { width: 0.5, height: 0.5, area: 0.25 };
+  }
+
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  let area = 0;
+
+  for (let i = 0; i < polygon.length; i++) {
+    const point = polygon[i];
+    if (!point) continue;
+    const [x, _y, z] = point;
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minZ = Math.min(minZ, z);
+    maxZ = Math.max(maxZ, z);
+
+    const next = polygon[(i + 1) % polygon.length];
+    if (!next) continue;
+    area += x * next[2] - next[0] * z;
+  }
+
+  area = Math.abs(area) / 2;
+
+  return {
+    width: maxX - minX,
+    height: maxZ - minZ,
+    area,
+  };
+}
+
 export function processSurfaces(
   descriptors: SurfaceDescriptor[],
   floorY: number,
@@ -100,6 +139,10 @@ export function processSurfaces(
     if (desc.type === 'plane' && desc.extents) {
       size = [desc.extents.width, desc.extents.height];
       area = size[0] * size[1];
+    } else if (desc.type === 'plane' && desc.polygon) {
+      const computed = computeExtentsFromPolygon(desc.polygon);
+      size = [computed.width, computed.height];
+      area = computed.area;
     } else if (desc.type === 'mesh' && desc.bounds) {
       const width = desc.bounds.max[0] - desc.bounds.min[0];
       const depth = desc.bounds.max[2] - desc.bounds.min[2];

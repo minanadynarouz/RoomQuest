@@ -3,10 +3,47 @@ import {
   XRPlane,
   XRMesh,
   Types,
+  Vector3,
+  Quaternion,
 } from '@iwsdk/core';
-import type { SurfaceGraph } from '@roomquest/schema';
+import type { SurfaceGraph, SurfaceLabel } from '@roomquest/schema';
 import type { SurfaceDescriptor } from '@roomquest/level-core';
 import { buildSurfaceGraph } from '@roomquest/level-core';
+
+/**
+ * Normalize native semantic label to schema SurfaceLabel
+ */
+function normalizeSurfaceLabel(nativeLabel: string): string {
+  const lower = nativeLabel.toLowerCase();
+  const validLabels: SurfaceLabel[] = [
+    'table',
+    'desk',
+    'couch',
+    'bed',
+    'shelf',
+    'storage',
+    'floor',
+    'seat_like',
+    'other',
+  ];
+
+  for (const valid of validLabels) {
+    if (lower === valid) {
+      return valid;
+    }
+  }
+
+  if (lower.includes('table') || lower === 'coffee table') return 'table';
+  if (lower.includes('desk')) return 'desk';
+  if (lower.includes('couch') || lower === 'sofa') return 'couch';
+  if (lower.includes('bed')) return 'bed';
+  if (lower.includes('shelf')) return 'shelf';
+  if (lower.includes('storage') || lower === 'cabinet') return 'storage';
+  if (lower === 'floor' || lower === 'ground') return 'floor';
+  if (lower === 'chair' || lower === 'seat') return 'seat_like';
+
+  return 'other';
+}
 
 /**
  * SurfaceGraphSystem - Queries XRPlane and XRMesh entities to build a SurfaceGraph
@@ -24,13 +61,14 @@ export class SurfaceGraphSystem extends createSystem(
   },
   {
     stabilizationTimeMs: { type: Types.Float32, default: 2500 },
-    captureAttempted: { type: Types.Boolean, default: false },
   },
 ) {
   private graph: SurfaceGraph | null = null;
-  private startTime: number = 0;
-  private stabilized: boolean = false;
-  private eventEmitter: EventTarget = new EventTarget();
+  private startTime = 0;
+  private stabilized = false;
+  private eventEmitter = new EventTarget();
+  private captureAttempted = false;
+  private inFlight = false;
 
   init() {
     this.startTime = performance.now();
@@ -43,8 +81,8 @@ export class SurfaceGraphSystem extends createSystem(
     }
   }
 
-  async update(_delta: number, _time: number) {
-    if (this.stabilized) return;
+  update(_delta: number, _time: number) {
+    if (this.stabilized || this.inFlight) return;
 
     const elapsed = performance.now() - this.startTime;
 
@@ -55,10 +93,16 @@ export class SurfaceGraphSystem extends createSystem(
     const planeCount = this.queries.planes.entities.size;
     const meshCount = this.queries.meshes.entities.size;
 
-    if (planeCount === 0 && meshCount === 0 && !this.config.captureAttempted.value) {
-      await this.initiateRoomCapture();
-      this.config.captureAttempted.value = true;
-      this.startTime = performance.now();
+    if (planeCount === 0 && meshCount === 0 && !this.captureAttempted) {
+      this.captureAttempted = true;
+      this.inFlight = true;
+      this.initiateRoomCapture()
+        .then(() => {
+          this.startTime = performance.now();
+        })
+        .finally(() => {
+          this.inFlight = false;
+        });
       return;
     }
 
@@ -79,46 +123,59 @@ export class SurfaceGraphSystem extends createSystem(
     const floorY = this.computeFloorY(descriptors);
     const startPose = this.getStartPose();
 
+    this.inFlight = true;
     const buildStart = performance.now();
-    try {
-      this.graph = await buildSurfaceGraph(descriptors, floorY, startPose);
-      const buildTime = performance.now() - buildStart;
 
-      if (this.graph) {
+    buildSurfaceGraph(descriptors, floorY, startPose)
+      .then((graph) => {
+        this.graph = graph;
+        const buildTime = performance.now() - buildStart;
+
         console.log(`[SurfaceGraphSystem] Built graph in ${buildTime.toFixed(1)}ms:`, {
-          nodes: this.graph.nodes.length,
-          edges: this.graph.edges.length,
-          roomHash: this.graph.roomHash,
-          size: JSON.stringify(this.graph).length,
+          nodes: graph.nodes.length,
+          edges: graph.edges.length,
+          roomHash: graph.roomHash,
+          size: JSON.stringify(graph).length,
         });
-      }
 
-      this.stabilized = true;
-      this.eventEmitter.dispatchEvent(
-        new CustomEvent('graphReady', { detail: this.graph }),
-      );
-    } catch (error) {
-      console.error('[SurfaceGraphSystem] Failed to build graph:', error);
-      this.stabilized = true;
-      this.eventEmitter.dispatchEvent(new CustomEvent('noSurfaces'));
-    }
+        this.stabilized = true;
+        this.eventEmitter.dispatchEvent(
+          new CustomEvent('graphReady', { detail: graph }),
+        );
+      })
+      .catch((error: unknown) => {
+        console.error('[SurfaceGraphSystem] Failed to build graph:', error);
+        this.stabilized = true;
+        this.eventEmitter.dispatchEvent(new CustomEvent('noSurfaces'));
+      })
+      .finally(() => {
+        this.inFlight = false;
+      });
   }
 
   private extractDescriptors(): SurfaceDescriptor[] {
     const descriptors: SurfaceDescriptor[] = [];
+    const tmpVec = new Vector3();
+    const tmpQuat = new Quaternion();
 
     for (const entity of this.queries.planes.entities) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const planeData = entity.getValue(XRPlane, '_plane') as any;
       if (!planeData) continue;
 
       const obj = entity.object3D;
       if (!obj) continue;
 
-      const pos = obj.position.toArray() as [number, number, number];
-      const quat = obj.quaternion.toArray() as [number, number, number, number];
+      obj.getWorldPosition(tmpVec);
+      obj.getWorldQuaternion(tmpQuat);
+
+      const pos = tmpVec.toArray();
+      const quat = tmpQuat.toArray();
 
       let label = 'other';
-      if (planeData.orientation === 'horizontal') {
+      if (planeData.semanticLabel) {
+        label = normalizeSurfaceLabel(String(planeData.semanticLabel));
+      } else if (planeData.orientation === 'horizontal') {
         const heightAboveFloor = pos[1];
         if (heightAboveFloor < 0.1) {
           label = 'floor';
@@ -128,29 +185,44 @@ export class SurfaceGraphSystem extends createSystem(
       descriptors.push({
         type: 'plane',
         label,
-        orientation: planeData.orientation || 'horizontal',
+        orientation: planeData.orientation ?? 'horizontal',
         pose: { position: pos, orientation: quat },
-        polygon: planeData.polygon ? Array.from(planeData.polygon as any[]).map((p: any) => [p.x as number, p.y as number, p.z as number] as [number, number, number]) : undefined,
+        polygon: planeData.polygon
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
+          ? Array.from(planeData.polygon).map((p: any) => [
+              p.x,
+              p.y,
+              p.z,
+            ])
+          : undefined,
       });
     }
 
     for (const entity of this.queries.meshes.entities) {
-      const isBounded = entity.getValue(XRMesh, 'isBounded3D') || false;
-      const semanticLabel = entity.getValue(XRMesh, 'semanticLabel') || 'other';
+      const isBounded = Boolean(entity.getValue(XRMesh, 'isBounded3D'));
+      const semanticLabel = entity.getValue(XRMesh, 'semanticLabel') ?? 'other';
       const min = entity.getValue(XRMesh, 'min');
       const max = entity.getValue(XRMesh, 'max');
 
       const obj = entity.object3D;
       if (!obj) continue;
 
-      const pos = obj.position.toArray() as [number, number, number];
-      const quat = obj.quaternion.toArray() as [number, number, number, number];
+      obj.getWorldPosition(tmpVec);
+      obj.getWorldQuaternion(tmpQuat);
+
+      const pos = tmpVec.toArray();
+      const quat = tmpQuat.toArray();
+
+      let adjustedPos = pos;
+      if (isBounded && max) {
+        adjustedPos = [pos[0], pos[1] + max[1], pos[2]];
+      }
 
       descriptors.push({
         type: 'mesh',
-        label: semanticLabel,
+        label: normalizeSurfaceLabel(semanticLabel),
         isBounded,
-        pose: { position: pos, orientation: quat },
+        pose: { position: adjustedPos, orientation: quat },
         bounds: min && max ? { min, max } : undefined,
       });
     }
@@ -176,20 +248,25 @@ export class SurfaceGraphSystem extends createSystem(
     forward: [number, number, number];
   } {
     const camera = this.camera;
-    const pos = camera.position.toArray() as [number, number, number];
+    const pos = camera.position.toArray();
 
-    camera.getWorldDirection(this.world.globals.tmp.vec3_0);
-    const forward = this.world.globals.tmp.vec3_0.toArray() as [number, number, number];
+    const tmpVec = new Vector3();
+    camera.getWorldDirection(tmpVec);
+    const forward = tmpVec.toArray();
 
     return { position: pos, forward };
   }
 
-  private async initiateRoomCapture() {
+  private async initiateRoomCapture(): Promise<void> {
     const session = this.renderer.xr.getSession();
     if (!session) return;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sessionAny = session as any;
-    if ('initiateRoomCapture' in sessionAny && typeof sessionAny.initiateRoomCapture === 'function') {
+    if (
+      'initiateRoomCapture' in sessionAny &&
+      typeof sessionAny.initiateRoomCapture === 'function'
+    ) {
       try {
         console.log('[SurfaceGraphSystem] Initiating room capture...');
         await sessionAny.initiateRoomCapture();
@@ -200,7 +277,7 @@ export class SurfaceGraphSystem extends createSystem(
   }
 
   private setupExport() {
-    this.addEventListener('graphReady', ((event: Event) => {
+    this.addEventListener('graphReady', (event: Event) => {
       const graph = (event as CustomEvent<SurfaceGraph>).detail;
       const blob = new Blob([JSON.stringify(graph, null, 2)], {
         type: 'application/json',
@@ -210,8 +287,10 @@ export class SurfaceGraphSystem extends createSystem(
       a.href = url;
       a.download = `surface-graph-${graph.roomHash}.json`;
       a.click();
-      URL.revokeObjectURL(url);
-    }) as EventListener);
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+      }, 100);
+    });
   }
 
   public getGraph(): SurfaceGraph | null {
