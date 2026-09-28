@@ -6,4 +6,3 @@
 export * from './types.js';
 export * from './store.js';
 export * from './stars.js';
-export * from './par.js';
