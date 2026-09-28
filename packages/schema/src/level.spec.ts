@@ -381,6 +381,109 @@ describe('Level schemas', () => {
       });
       expect(jsonSchema).toBeDefined();
       expect(typeof jsonSchema).toBe('object');
+      expect(jsonSchema.$schema).toBeDefined();
+    });
+
+    it('contains all top-level LevelPlan fields', () => {
+      const jsonSchema = toJsonSchema(LevelPlanLLM);
+
+      // Should be an object type
+      expect(jsonSchema.type).toBe('object');
+
+      // Should have properties object
+      expect(jsonSchema.properties).toBeDefined();
+      const properties = jsonSchema.properties as Record<string, unknown>;
+
+      // All top-level fields must be present
+      const requiredFields = [
+        'seed',
+        'theme',
+        'title',
+        'start',
+        'goal',
+        'placements',
+        'beats',
+        'dialogue',
+      ];
+      requiredFields.forEach((field) => {
+        expect(properties[field]).toBeDefined();
+      });
+
+      // Should have required array
+      expect(Array.isArray(jsonSchema.required)).toBe(true);
+      const required = jsonSchema.required as string[];
+      requiredFields.forEach((field) => {
+        expect(required).toContain(field);
+      });
+    });
+
+    it('has correct enum values for piece IDs and theme', () => {
+      const jsonSchema = toJsonSchema(LevelPlanLLM);
+      const properties = jsonSchema.properties as Record<string, unknown>;
+
+      // Theme should have enum values
+      const theme = properties.theme as Record<string, unknown>;
+      expect(theme.enum).toBeDefined();
+      expect(theme.enum).toEqual(['forest', 'desert', 'snow', 'sky']);
+
+      // Placements should have piece enum in nested structure
+      const placements = properties.placements as Record<string, unknown>;
+      const items = placements.items as Record<string, unknown>;
+      const itemProps = items.properties as Record<string, unknown>;
+      const piece = itemProps.piece as Record<string, unknown>;
+
+      expect(piece.enum).toBeDefined();
+      expect(piece.enum).toEqual([
+        'village_hut',
+        'crystal_shrine',
+        'plank_bridge',
+        'ramp',
+        'moving_platform',
+        'gate',
+        'lever',
+        'gem',
+        'slime',
+        'portal',
+      ]);
+    });
+
+    it('has correct Placement item shape nested under placements', () => {
+      const jsonSchema = toJsonSchema(LevelPlanLLM);
+      const properties = jsonSchema.properties as Record<string, unknown>;
+      const placements = properties.placements as Record<string, unknown>;
+
+      // Should be array with min/max
+      expect(placements.type).toBe('array');
+      expect(placements.minItems).toBe(4);
+      expect(placements.maxItems).toBe(14);
+
+      // Should have items object
+      expect(placements.items).toBeDefined();
+      const items = placements.items as Record<string, unknown>;
+      expect(items.type).toBe('object');
+
+      // Should have all placement fields
+      const itemProps = items.properties as Record<string, unknown>;
+      expect(itemProps.id).toBeDefined();
+      expect(itemProps.piece).toBeDefined();
+      expect(itemProps.surface).toBeDefined();
+      expect(itemProps.to).toBeDefined();
+      expect(itemProps.u).toBeDefined();
+      expect(itemProps.v).toBeDefined();
+      expect(itemProps.playerBuilt).toBeDefined();
+      expect(itemProps.links).toBeDefined();
+
+      // Should have all fields required
+      expect(Array.isArray(items.required)).toBe(true);
+      const required = items.required as string[];
+      expect(required).toContain('id');
+      expect(required).toContain('piece');
+      expect(required).toContain('surface');
+      expect(required).toContain('to');
+      expect(required).toContain('u');
+      expect(required).toContain('v');
+      expect(required).toContain('playerBuilt');
+      expect(required).toContain('links');
     });
 
     it('is LLM-safe (no prefixItems, pattern, anyOf, oneOf, default)', () => {
