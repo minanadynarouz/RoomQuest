@@ -1,0 +1,35 @@
+{
+  "name": "roomquest",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Your room, a new quest every day. Hands-only WebXR MR puzzle game for Meta Quest (IWSDK)",
+  "license": "MIT",
+  "author": "Mina Nady Narouz",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/minanarouzi/roomquest.git"
+  },
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "clean": "turbo run clean && rm -rf node_modules .turbo"
+  },
+  "engines": {
+    "node": ">=22.12.0 <23",
+    "pnpm": ">=10.0.0"
+  },
+  "packageManager": "pnpm@10.34.6",
+  "devDependencies": {
+    "@eslint/js": "^9.16.0",
+    "eslint": "^9.16.0",
+    "eslint-config-prettier": "^10.0.1",
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.4",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.20.0"
+  }
+}
