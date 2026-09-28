@@ -1,27 +1,22 @@
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { z } from 'zod';
 
 /**
  * Convert a Zod schema to JSON Schema
- * Used for LangChain withStructuredOutput
+ * Uses Zod 4's native toJSONSchema API
  *
  * @param schema - Zod schema to convert
- * @param options - Conversion options
+ * @param _options - Legacy options parameter (unused, kept for API compatibility)
  * @returns JSON Schema object
  */
-export function toJsonSchema(
-  // Using any is necessary for compatibility with zod-to-json-schema
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  schema: any,
-  options?: {
+export function toJsonSchema<T>(
+  schema: z.ZodType<T>,
+  _options?: {
     name?: string;
     description?: string;
   },
 ): Record<string, unknown> {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-  return zodToJsonSchema(schema, {
-    name: options?.name,
-    $refStrategy: 'none', // Inline all definitions for LLM compatibility
-  });
+  // Zod 4's toJSONSchema doesn't accept options, just the schema
+  return z.toJSONSchema(schema);
 }
 
 /**
