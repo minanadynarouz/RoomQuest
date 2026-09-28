@@ -96,12 +96,37 @@ Plane 23: {orientation: vertical, position: Array(3), area: 0.457}
 Plane 24: {orientation: vertical, position: Array(3), area: 4.091}
 
 --- Meshes ---
+Mesh 1: {label: screen, isBounded: true, dimensions: Array(3), position: Array(3)}
+Mesh 2: {label: couch, isBounded: true, dimensions: Array(3), position: Array(3)}
+Mesh 3: {label: table, isBounded: true, dimensions: Array(3), position: Array(3)}
+Mesh 4: {label: screen, isBounded: true, dimensions: Array(3), position: Array(3)}
+Mesh 5: {label: lamp, isBounded: true, dimensions: Array(3), position: Array(3)}
+Mesh 6: {label: table, isBounded: true, dimensions: Array(3), position: Array(3)}
+Mesh 7: {label: screen, isBounded: true, dimensions: Array(3), position: Array(3)}
+Mesh 8: {label: lamp, isBounded: true, dimensions: Array(3), position: Array(3)}
+Mesh 9: {label: table, isBounded: true, dimensions: Array(3), position: Array(3)}
+Mesh 10: {label: lamp, isBounded: true, dimensions: Array(3), position: Array(3)}
+Mesh 11: {label: plant, isBounded: true, dimensions: Array(3), position: Array(3)}
+Mesh 12: {label: other, isBounded: true, dimensions: Array(3), position: Array(3)}
+Mesh 13: {label: shelf, isBounded: true, dimensions: Array(3), position: Array(3)}
+Mesh 14: {label: shelf, isBounded: true, dimensions: Array(3), position: Array(3)}
+
+--- Label Summary ---
+screen: 3
+table: 3
+lamp: 3
+shelf: 2
+couch: 1
+plant: 1
+other: 1
+============================================================
+[X-01 Spike] Finding largest table...
 Error: Array/vector types must be read via getVectorView(component, key).
     at Entity.getValue (https://localhost:5173/node_modules/.vite/deps/@iwsdk_core___elics.js?v=45615c14:285:15)
-    at https://localhost:5173/src/xr/systems/PlaneTestSystem.ts:112:35
+    at https://localhost:5173/src/xr/systems/PlaneTestSystem.ts:172:35
     at Array.forEach (<anonymous>)
-    at PlaneTestSystem.logSurfaceCounts (https://localhost:5173/src/xr/systems/PlaneTestSystem.ts:109:20)
-    at PlaneTestSystem.update (https://localhost:5173/src/xr/systems/PlaneTestSystem.ts:48:12)
+    at PlaneTestSystem.spawnTestCube (https://localhost:5173/src/xr/systems/PlaneTestSystem.ts:168:18)
+    at PlaneTestSystem.update (https://localhost:5173/src/xr/systems/PlaneTestSystem.ts:52:12)
     at World.update (https://localhost:5173/node_modules/.vite/deps/@iwsdk_core___elics.js?v=45615c14:916:16)
     at World.update (https://localhost:5173/@fs/workspace/node_modules/.pnpm/@iwsdk+core@1.0.0-rc.2_@opentelemetry+core@2.11.0_@opentelemetry+api@1.9.1__react@19.3.0/node_modules/@iwsdk/core/dist/ecs/world.js?v=4b18f41c:458:15)
     at world.update (https://localhost:5173/@fs/workspace/node_modules/.pnpm/@iwsdk+core@1.0.0-rc.2_@opentelemetry+core@2.11.0_@opentelemetry+api@1.9.1__react@19.3.0/node_modules/@iwsdk/core/dist/mcp/ecs-debug-tools.js?v=4b18f41c:106:9)

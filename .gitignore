@@ -42,3 +42,6 @@ coverage/
 # Misc
 *.tsbuildinfo
 .eslintcache
+
+# IWSDK dev runtime (contains private keys and session data)
+.iwsdk/
