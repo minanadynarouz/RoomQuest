@@ -62,6 +62,7 @@ describe('Schema smoke test (client)', () => {
       title: 'Test Level',
       start: 's1',
       goal: 's2',
+      parTimeMs: 180000,
       placements: [
         {
           id: 'p1',

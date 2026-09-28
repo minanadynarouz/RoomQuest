@@ -117,6 +117,7 @@ describe('API schemas', () => {
         title: 'The Fallen Sun Crystal',
         start: 's1',
         goal: 's4',
+        parTimeMs: 240000,
         placements: [
           {
             id: 'p1',
