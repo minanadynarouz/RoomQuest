@@ -1,0 +1,155 @@
+{
+  "planeCount": 24,
+  "meshCount": 14,
+  "planes": [
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.0292224884033203,
+      "area": 1.4648580459120524
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.2163325548171997,
+      "area": 4.151880379708814
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.212132453918457,
+      "area": 9.21635964043162
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.2176097631454468,
+      "area": 2.14433975736965
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.4718828201293945,
+      "area": 2.3749990701676325
+    },
+    {
+      "label": "PLANE",
+      "orientation": "HORIZONTAL",
+      "height": 0.7673649191856384,
+      "area": 0.4219051320496874
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.6358379125595093,
+      "area": 0.49454616951152275
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.522356390953064,
+      "area": 1.7944159111877411
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.4329766035079956,
+      "area": 0.23404631783918717
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.2142256498336792,
+      "area": 1.8132942414380437
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.4674321413040161,
+      "area": 1.782792327802781
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.0248407125473022,
+      "area": 1.4853283088857552
+    },
+    {
+      "label": "PLANE",
+      "orientation": "HORIZONTAL",
+      "height": 0.0017685890197753906,
+      "area": 17.171768329332963
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.212735652923584,
+      "area": 7.566105550518614
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.2162305116653442,
+      "area": 9.139519145096926
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.218163013458252,
+      "area": 3.637049953133271
+    },
+    {
+      "label": "PLANE",
+      "orientation": "HORIZONTAL",
+      "height": 0.7562332153320312,
+      "area": 0.7474425629350208
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.4570790529251099,
+      "area": 0.16701748580830156
+    },
+    {
+      "label": "PLANE",
+      "orientation": "HORIZONTAL",
+      "height": 0.772670567035675,
+      "area": 0.8724493777808675
+    },
+    {
+      "label": "PLANE",
+      "orientation": "HORIZONTAL",
+      "height": 0.36626768112182617,
+      "area": 0.744100830423065
+    },
+    {
+      "label": "PLANE",
+      "orientation": "HORIZONTAL",
+      "height": 2.431033134460449,
+      "area": 17.17010881803435
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 0.5080059766769409,
+      "area": 2.070000116825099
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.5825525522232056,
+      "area": 0.45690712095094455
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.218231439590454,
+      "area": 4.090837112280269
+    }
+  ],
+  "meshes": [],
+  "interactionFired": {
+    "rayPinch": false,
+    "poke": false
+  }
+}

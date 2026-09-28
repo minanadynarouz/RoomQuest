@@ -1,0 +1,109 @@
+[vite] connecting...
+[vite] connected.
+[IWSDK Dev] Configuration: {device: metaQuest3, activation: localhost, verbose: false, sem: Object, ai: null}
+                                                 
+▄▄▄▄▄▄  ▄▄      ▄▄   ▄▄▄▄    ▄▄▄▄▄     ▄▄   ▄▄▄ 
+▀▀██▀▀  ██      ██ ▄█▀▀▀▀█   ██▀▀▀██   ██  ██▀  
+  ██    ▀█▄ ██ ▄█▀ ██▄       ██    ██  ██▄██    
+  ██     ██ ██ ██   ▀████▄   ██    ██  █████    
+  ██     ███▀▀███       ▀██  ██    ██  ██  ██▄  
+▄▄██▄▄   ███  ███  █▄▄▄▄▄█▀  ██▄▄▄██   ██   ██▄ 
+▀▀▀▀▀▀   ▀▀▀  ▀▀▀   ▀▀▀▀▀    ▀▀▀▀▀     ▀▀    ▀▀                                                
+===============================================
+Immersive Web SDK v1.0.0-rc.2
+Three.js r181
+EliCS v3.4.2
+[X-01] Client index.ts loaded, DEV= true
+[X-01] Enter AR button found, showing it
+[X-01] Enter AR button clicked
+[X-01] navigator.xr available, checking session support...
+[X-01] immersive-ar supported, launching XR...
+[X-01 Spike] PlaneTestSystem initialized
+[X-01 Spike] Waiting for planes and meshes to appear...
+[iwsdk][gaze] 'gaze-tracking' was NOT granted for this session, so tracked gaze is unavailable. Check that the project requests xr.features.gazeTracking, that this browser build exposes eye tracking, and that the page's permissions policy allows xr-spatial-tracking. {enabledFeatures: Array(9)}
+[X-01 Spike] New plane detected: {orientation: vertical}
+[X-01 Spike] New plane detected: {orientation: vertical}
+[X-01 Spike] New plane detected: {orientation: vertical}
+[X-01 Spike] New plane detected: {orientation: vertical}
+[X-01 Spike] New plane detected: {orientation: vertical}
+[X-01 Spike] New plane detected: {orientation: horizontal}
+[X-01 Spike] New plane detected: {orientation: vertical}
+[X-01 Spike] New plane detected: {orientation: vertical}
+[X-01 Spike] New plane detected: {orientation: vertical}
+[X-01 Spike] New plane detected: {orientation: vertical}
+[X-01 Spike] New plane detected: {orientation: vertical}
+[X-01 Spike] New plane detected: {orientation: vertical}
+[X-01 Spike] New plane detected: {orientation: horizontal}
+[X-01 Spike] New plane detected: {orientation: vertical}
+[X-01 Spike] New plane detected: {orientation: vertical}
+[X-01 Spike] New plane detected: {orientation: vertical}
+[X-01 Spike] New plane detected: {orientation: horizontal}
+[X-01 Spike] New plane detected: {orientation: vertical}
+[X-01 Spike] New plane detected: {orientation: horizontal}
+[X-01 Spike] New plane detected: {orientation: horizontal}
+[X-01 Spike] New plane detected: {orientation: horizontal}
+[X-01 Spike] New plane detected: {orientation: vertical}
+[X-01 Spike] New plane detected: {orientation: vertical}
+[X-01 Spike] New plane detected: {orientation: vertical}
+[X-01 Spike] New mesh detected: {semanticLabel: screen, isBounded: true}
+[X-01 Spike] New mesh detected: {semanticLabel: couch, isBounded: true}
+[X-01 Spike] New mesh detected: {semanticLabel: table, isBounded: true}
+[X-01 Spike] New mesh detected: {semanticLabel: screen, isBounded: true}
+[X-01 Spike] New mesh detected: {semanticLabel: lamp, isBounded: true}
+[X-01 Spike] New mesh detected: {semanticLabel: table, isBounded: true}
+[X-01 Spike] New mesh detected: {semanticLabel: screen, isBounded: true}
+[X-01 Spike] New mesh detected: {semanticLabel: lamp, isBounded: true}
+[X-01 Spike] New mesh detected: {semanticLabel: table, isBounded: true}
+[X-01 Spike] New mesh detected: {semanticLabel: lamp, isBounded: true}
+[X-01 Spike] New mesh detected: {semanticLabel: plant, isBounded: true}
+[X-01 Spike] New mesh detected: {semanticLabel: other, isBounded: true}
+[X-01 Spike] New mesh detected: {semanticLabel: shelf, isBounded: true}
+[X-01 Spike] New mesh detected: {semanticLabel: shelf, isBounded: true}
+[SceneUnderstandingSystem] Anchor needed but not present, triggering creation
+[iwsdk][gaze] no XRInputSource with targetRayMode === "gaze" appeared within 3s of session start. Ordinary hand/controller far targeting remains active. Common causes: the feature was not granted, eye tracking is disabled in system settings, the headset has not been calibrated for this user, or the hardware has no eye tracking.
+[X-01 Spike] PlaneTestSystem update: frame 30, planes=24, meshes=14
+[X-01 Spike] PlaneTestSystem update: frame 60, planes=24, meshes=14
+============================================================
+[X-01 Spike] Surface Detection Results
+============================================================
+XRPlane entities: 24
+XRMesh entities: 14
+
+--- Planes ---
+Plane 1: {orientation: vertical, position: Array(3), area: 1.465}
+Plane 2: {orientation: vertical, position: Array(3), area: 4.152}
+Plane 3: {orientation: vertical, position: Array(3), area: 9.216}
+Plane 4: {orientation: vertical, position: Array(3), area: 2.144}
+Plane 5: {orientation: vertical, position: Array(3), area: 2.375}
+Plane 6: {orientation: horizontal, position: Array(3), area: 0.422}
+Plane 7: {orientation: vertical, position: Array(3), area: 0.495}
+Plane 8: {orientation: vertical, position: Array(3), area: 1.794}
+Plane 9: {orientation: vertical, position: Array(3), area: 0.234}
+Plane 10: {orientation: vertical, position: Array(3), area: 1.813}
+Plane 11: {orientation: vertical, position: Array(3), area: 1.783}
+Plane 12: {orientation: vertical, position: Array(3), area: 1.485}
+Plane 13: {orientation: horizontal, position: Array(3), area: 17.172}
+Plane 14: {orientation: vertical, position: Array(3), area: 7.566}
+Plane 15: {orientation: vertical, position: Array(3), area: 9.140}
+Plane 16: {orientation: vertical, position: Array(3), area: 3.637}
+Plane 17: {orientation: horizontal, position: Array(3), area: 0.747}
+Plane 18: {orientation: vertical, position: Array(3), area: 0.167}
+Plane 19: {orientation: horizontal, position: Array(3), area: 0.872}
+Plane 20: {orientation: horizontal, position: Array(3), area: 0.744}
+Plane 21: {orientation: horizontal, position: Array(3), area: 17.170}
+Plane 22: {orientation: vertical, position: Array(3), area: 2.070}
+Plane 23: {orientation: vertical, position: Array(3), area: 0.457}
+Plane 24: {orientation: vertical, position: Array(3), area: 4.091}
+
+--- Meshes ---
+Error: Array/vector types must be read via getVectorView(component, key).
+    at Entity.getValue (https://localhost:5173/node_modules/.vite/deps/@iwsdk_core___elics.js?v=45615c14:285:15)
+    at https://localhost:5173/src/xr/systems/PlaneTestSystem.ts:112:35
+    at Array.forEach (<anonymous>)
+    at PlaneTestSystem.logSurfaceCounts (https://localhost:5173/src/xr/systems/PlaneTestSystem.ts:109:20)
+    at PlaneTestSystem.update (https://localhost:5173/src/xr/systems/PlaneTestSystem.ts:48:12)
+    at World.update (https://localhost:5173/node_modules/.vite/deps/@iwsdk_core___elics.js?v=45615c14:916:16)
+    at World.update (https://localhost:5173/@fs/workspace/node_modules/.pnpm/@iwsdk+core@1.0.0-rc.2_@opentelemetry+core@2.11.0_@opentelemetry+api@1.9.1__react@19.3.0/node_modules/@iwsdk/core/dist/ecs/world.js?v=4b18f41c:458:15)
+    at world.update (https://localhost:5173/@fs/workspace/node_modules/.pnpm/@iwsdk+core@1.0.0-rc.2_@opentelemetry+core@2.11.0_@opentelemetry+api@1.9.1__react@19.3.0/node_modules/@iwsdk/core/dist/mcp/ecs-debug-tools.js?v=4b18f41c:106:9)
+    at render (https://localhost:5173/@fs/workspace/node_modules/.pnpm/@iwsdk+core@1.0.0-rc.2_@opentelemetry+core@2.11.0_@opentelemetry+api@1.9.1__react@19.3.0/node_modules/@iwsdk/core/dist/init/world-initializer.js?v=4b18f41c:585:15)
+    at onAnimationFrame (https://localhost:5173/node_modules/.vite/deps/chunk-BTPTJMXC.js?v=4b18f41c:39873:37)
