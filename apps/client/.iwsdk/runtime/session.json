@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
-  "sessionId": "4611458a-f922-4aff-a080-585363688a97",
+  "sessionId": "1fdf5e05-96c7-4706-991a-92384c64dfc9",
   "workspaceRoot": "/workspace/apps/client",
-  "pid": 4251,
-  "processStart": "76d94e95-d174-4259-b587-37145931a2a0:67268",
+  "pid": 16004,
+  "processStart": "76d94e95-d174-4259-b587-37145931a2a0:234519",
   "port": 5173,
   "localUrl": "https://localhost:5173/",
   "networkUrls": [
@@ -13,11 +13,11 @@
     "lifecycle": {
       "state": "running",
       "policy": "eager",
-      "sessionId": "4611458a-f922-4aff-a080-585363688a97",
+      "sessionId": "1fdf5e05-96c7-4706-991a-92384c64dfc9",
       "browserEpoch": 1,
       "revision": 4,
-      "stateEnteredAt": "2026-09-28T20:17:08.284Z",
-      "lastObservedAt": "2026-09-28T20:17:09.061Z",
+      "stateEnteredAt": "2026-09-28T20:40:22.356Z",
+      "lastObservedAt": "2026-09-28T20:40:22.916Z",
       "failures": 0,
       "cleanupConfirmed": true,
       "attemptLimit": 3,
@@ -28,48 +28,48 @@
         {
           "revision": 1,
           "state": "launching",
-          "at": "2026-09-28T20:17:07.946Z",
+          "at": "2026-09-28T20:40:21.948Z",
           "reason": "launch"
         },
         {
           "revision": 2,
           "state": "launching",
-          "at": "2026-09-28T20:17:07.946Z",
+          "at": "2026-09-28T20:40:21.948Z",
           "reason": "prepared"
         },
         {
           "revision": 3,
           "state": "running",
-          "at": "2026-09-28T20:17:08.284Z",
+          "at": "2026-09-28T20:40:22.356Z",
           "reason": "running"
         }
       ],
-      "attemptId": "8564ad40-07d5-49c5-a87f-8c30a1b2bb9b"
+      "attemptId": "333736b7-edf8-4f8c-8af9-521b5f6c2c5f"
     },
     "status": "connected",
     "clients": [
       {
         "commandReady": false,
-        "sessionId": "4611458a-f922-4aff-a080-585363688a97",
+        "sessionId": "1fdf5e05-96c7-4706-991a-92384c64dfc9",
         "browserEpoch": 1,
         "deviceClass": "managed",
-        "pageId": "tab-mulov1i5-kqwac2",
+        "pageId": "tab-mulpox2d-pfhpah",
         "role": "editor",
-        "sceneSessionId": "scene-lw6i69cw5zb",
+        "sceneSessionId": "scene-f08uyuftmk",
         "tabGeneration": 1
       }
     ],
-    "lastBridgeConnectedAt": "2026-09-28T20:17:09.061Z",
+    "lastBridgeConnectedAt": "2026-09-28T20:40:22.916Z",
     "connected": true,
     "commandReady": false,
     "connectedClientCount": 1,
-    "lastTransitionAt": "2026-09-28T20:17:08.284Z"
+    "lastTransitionAt": "2026-09-28T20:40:22.356Z"
   },
   "browserAutomation": {
     "configured": false,
     "enabled": false,
     "protocol": "cdp"
   },
-  "registeredAt": "2026-09-28T20:17:07.942Z",
-  "updatedAt": "2026-09-28T20:17:09.889Z"
+  "registeredAt": "2026-09-28T20:40:21.943Z",
+  "updatedAt": "2026-09-28T20:40:22.923Z"
 }

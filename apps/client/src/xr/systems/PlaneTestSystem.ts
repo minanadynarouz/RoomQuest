@@ -34,7 +34,7 @@ export class PlaneTestSystem extends createSystem(
   private hasLogged = false;
   private cubeSpawned = false;
   private framesSinceStart = 0;
-  private readonly WAIT_FRAMES = 150; // ~2.5s at 60fps
+  private readonly WAIT_FRAMES = 60; // ~1s at 60fps
 
   init() {
     console.log('[X-01 Spike] PlaneTestSystem initialized');
@@ -61,6 +61,11 @@ export class PlaneTestSystem extends createSystem(
   update(_delta: number, _time: number) {
     this.framesSinceStart++;
 
+    // Debug log every 30 frames
+    if (this.framesSinceStart % 30 === 0) {
+      console.log(`[X-01 Spike] PlaneTestSystem update: frame ${this.framesSinceStart}, planes=${Array.from(this.queries.planes.entities).length}, meshes=${Array.from(this.queries.meshes.entities).length}`);
+    }
+
     // Wait for surfaces to stabilize
     if (!this.hasLogged && this.framesSinceStart > this.WAIT_FRAMES) {
       this.logSurfaceCounts();
@@ -81,11 +86,17 @@ export class PlaneTestSystem extends createSystem(
     const meshCount = meshEntities.length;
 
     console.log('='.repeat(60));
-    console.log('[X-01 Spike] Surface Detection Results (living_room)');
+    console.log('[X-01 Spike] Surface Detection Results');
     console.log('='.repeat(60));
     console.log(`XRPlane entities: ${planeCount}`);
     console.log(`XRMesh entities: ${meshCount}`);
     console.log('');
+
+    // Expose data to window for test script
+    (window as any).__xr01PlaneCount = planeCount;
+    (window as any).__xr01MeshCount = meshCount;
+    (window as any).__xr01Planes = [];
+    (window as any).__xr01Meshes = [];
 
     // Log all plane details
     if (planeCount > 0) {
@@ -93,13 +104,38 @@ export class PlaneTestSystem extends createSystem(
       planeEntities.forEach((entity, idx) => {
         const plane = entity.getValue(XRPlane, '_plane') as any;
         const pos = entity.getVectorView(Transform, 'position');
-        console.log(`Plane ${idx + 1}:`, {
-          orientation: plane?.orientation || 'unknown',
+        const orientation = plane?.orientation || 'unknown';
+        const polygon = plane?.polygon;
+        
+        // Calculate approximate area from polygon
+        let area = 0;
+        if (polygon && polygon.length >= 3) {
+          for (let i = 0; i < polygon.length; i++) {
+            const p1 = polygon[i];
+            const p2 = polygon[(i + 1) % polygon.length];
+            area += (p1.x * p2.z - p2.x * p1.z) / 2;
+          }
+          area = Math.abs(area);
+        }
+        
+        const planeInfo = {
+          orientation,
           position: [
             pos?.[0]?.toFixed(2) || '0',
             pos?.[1]?.toFixed(2) || '0',
             pos?.[2]?.toFixed(2) || '0',
           ],
+          area: area.toFixed(3),
+        };
+        
+        console.log(`Plane ${idx + 1}:`, planeInfo);
+        
+        // Expose to window
+        (window as any).__xr01Planes.push({
+          label: 'PLANE',
+          orientation: orientation.toUpperCase(),
+          height: pos?.[1] ?? 0,
+          area,
         });
       });
       console.log('');
@@ -113,12 +149,12 @@ export class PlaneTestSystem extends createSystem(
       meshEntities.forEach((entity, idx) => {
         const label = entity.getValue(XRMesh, 'semanticLabel') || 'unknown';
         const isBounded = entity.getValue(XRMesh, 'isBounded3D');
-        const dimensions = entity.getValue(XRMesh, 'dimensions');
+        const dimensions = entity.getVectorView(XRMesh, 'dimensions');
         const pos = entity.getVectorView(Transform, 'position');
 
         labelCounts[label] = (labelCounts[label] || 0) + 1;
 
-        console.log(`Mesh ${idx + 1}:`, {
+        const meshInfo = {
           label,
           isBounded,
           dimensions: dimensions
@@ -133,6 +169,17 @@ export class PlaneTestSystem extends createSystem(
             pos?.[1]?.toFixed(2) || '0',
             pos?.[2]?.toFixed(2) || '0',
           ],
+        };
+
+        console.log(`Mesh ${idx + 1}:`, meshInfo);
+        
+        // Expose to window
+        (window as any).__xr01Meshes.push({
+          label: label.toUpperCase(),
+          isBounded3D: isBounded,
+          width: dimensions?.[0] ?? 0,
+          height: dimensions?.[1] ?? 0,
+          depth: dimensions?.[2] ?? 0,
         });
       });
 
@@ -260,7 +307,8 @@ export class PlaneTestSystem extends createSystem(
 
     // Add pointer event handlers for testing
     (cubeMesh as any).onClick = () => {
-      console.log('[X-01 Spike] Cube clicked!');
+      console.log('[X-01 Spike] Cube clicked (RAY+PINCH)!');
+      (window as any).__xr01RayPinch = true;
       // Flash the cube color
       const mat = cubeMesh.material as MeshStandardMaterial;
       mat.color.setHex(0x00ff00);
@@ -268,7 +316,8 @@ export class PlaneTestSystem extends createSystem(
     };
 
     (cubeMesh as any).onPointerEnter = () => {
-      console.log('[X-01 Spike] Cube pointer enter');
+      console.log('[X-01 Spike] Cube pointer enter (POKE)');
+      (window as any).__xr01Poke = true;
       const mat = cubeMesh.material as MeshStandardMaterial;
       mat.emissive.setHex(0x444444);
     };

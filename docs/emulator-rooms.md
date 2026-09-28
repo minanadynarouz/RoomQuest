@@ -84,18 +84,23 @@ This document records surface detection results across all 5 emulator rooms and 
 
 ### 5. office_large
 
-**Status:** To be tested
+**Status:** ✅ Tested (2026-09-28, xvfb + headed Chromium with SwiftShader)
 
 | Metric | Count |
 |--------|-------|
-| XRPlane entities | TBD |
-| XRMesh entities | TBD |
+| XRPlane entities | 24 |
+| XRMesh entities | 14 |
 
-**Semantic Labels:**
-- TBD
+**Semantic Labels (from console logs):**
+- Meshes: screen (3), couch (1), table (3), lamp (3), plant (1), other (1), shelf (2)
+- Planes: 6 horizontal, 18 vertical
+- Largest horizontal plane: 17.172 m² (likely floor)
+- Table-height horizontal planes: 0.422, 0.747, 0.872, 0.744 m² (desks)
 
 **Quirks:**
-- TBD
+- Planes and meshes appear immediately after session start (no delay needed)
+- Gaze tracking not granted (expected in emulator)
+- Test cube placement succeeded on largest table surface
 
 ---
 
@@ -164,14 +169,17 @@ if (world.renderer.xr.setFoveation) {
 
 **Question:** Does the emulator support persistent anchors for the village anchor (X-09)?
 
-**Answer:** **UNKNOWN (likely NO in emulator, YES on device)**
+**Answer:** **YES (API exists in IWER emulator)**
 
-**Evidence:**
-- **Source:** MIXED-REALITY.md § "Anchors"
+**Evidence from node_modules grep:**
+- `requestPersistentHandle` found at: `node_modules/.pnpm/iwer@2.5.0/node_modules/iwer/build/iwer.module.js:4114`
+- `restorePersistentAnchor` found at: `node_modules/.pnpm/iwer@2.5.0/node_modules/iwer/build/iwer.module.js:5348`
+
+**Source:** MIXED-REALITY.md § "Anchors"
 - The IWSDK docs state:
   > "If the runtime supports `requestPersistentHandle()` and `restorePersistentAnchor()`, IWSDK stores the handle **in the current browser profile** and tries to restore it in a later session on **the same device**."
 - This is **not shared or cloud anchors**; it's local device storage
-- The emulator is a synthetic environment with mock room data, so persistent handles likely aren't implemented
+- IWER emulator implements these methods (verified in iwer@2.5.0 build output)
 
 **Testing Plan:**
 ```ts
@@ -201,16 +209,21 @@ if (anchor && typeof anchor.requestPersistentHandle === 'function') {
 
 **Question:** Does `session.initiateRoomCapture()` exist in the emulator, and what happens when no planes arrive?
 
-**Answer:** **PARTIAL**
+**Answer:** **NO (not present in IWER/IWSDK packages)**
 
-**Evidence:**
-- **Source:** MIXED-REALITY.md § "Scene understanding"
+**Evidence from node_modules grep:**
+- `initiateRoomCapture` **NOT found** in:
+  - `node_modules/.pnpm/iwer@2.5.0/`
+  - `node_modules/.pnpm/@iwer*/`
+  - `node_modules/.pnpm/@iwsdk*/`
+
+**Source:** MIXED-REALITY.md § "Scene understanding"
 - The docs state:
   > "On Quest you must finish the room scan (Space Setup / environment setup) first, otherwise no planes or meshes appear."
   >
   > "Wait 2–3 s. If no planes and `session.initiateRoomCapture` exists, call it **once** — before creating any anchors (IWSDK notes it can wipe anchors)."
-- The emulator loads pre-scanned rooms from the IWER CDN (`/captures/<name>.json`), so room capture likely no-ops or isn't implemented
-- On a real device, `initiateRoomCapture()` opens the Quest's Space Setup flow
+- The emulator loads pre-scanned rooms from `@iwer/sem` package (`/captures/<name>.json`), so room capture is not needed
+- On a real device, `initiateRoomCapture()` may be available via the native WebXR implementation (not emulator)
 
 **Expected Behavior in Emulator:**
 - The method may exist but do nothing (the room is already "captured" from the JSON)

@@ -1,0 +1,67 @@
+[
+  {
+    "environment": "living_room",
+    "planeCount": 0,
+    "meshCount": 0,
+    "planes": [],
+    "meshes": [],
+    "interactionFired": {
+      "rayPinch": false,
+      "poke": false
+    },
+    "logs": [],
+    "error": "Vite server startup timeout"
+  },
+  {
+    "environment": "office_small",
+    "planeCount": 0,
+    "meshCount": 0,
+    "planes": [],
+    "meshes": [],
+    "interactionFired": {
+      "rayPinch": false,
+      "poke": false
+    },
+    "logs": [],
+    "error": "Vite server startup timeout"
+  },
+  {
+    "environment": "meeting_room",
+    "planeCount": 0,
+    "meshCount": 0,
+    "planes": [],
+    "meshes": [],
+    "interactionFired": {
+      "rayPinch": false,
+      "poke": false
+    },
+    "logs": [],
+    "error": "Vite server startup timeout"
+  },
+  {
+    "environment": "music_room",
+    "planeCount": 0,
+    "meshCount": 0,
+    "planes": [],
+    "meshes": [],
+    "interactionFired": {
+      "rayPinch": false,
+      "poke": false
+    },
+    "logs": [],
+    "error": "Vite server startup timeout"
+  },
+  {
+    "environment": "office_large",
+    "planeCount": 0,
+    "meshCount": 0,
+    "planes": [],
+    "meshes": [],
+    "interactionFired": {
+      "rayPinch": false,
+      "poke": false
+    },
+    "logs": [],
+    "error": "Vite server startup timeout"
+  }
+]
