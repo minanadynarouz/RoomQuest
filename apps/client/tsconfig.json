@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
+    "noEmit": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "types": ["@iwsdk/vite-plugin-dev/client", "vite/client"]
+  },
+  "include": ["src", "index.html", "vite.config.ts", "vitest.config.ts", "iwsdk.config.json"],
+  "exclude": ["node_modules", "dist"]
+}
