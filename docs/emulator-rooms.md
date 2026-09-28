@@ -236,7 +236,7 @@ if (anchor && typeof anchor.requestPersistentHandle === 'function') {
 npm view @iwsdk/core dist-tags
 ```
 
-**Expected Output (as of spike):**
+**Actual Output (verified 2026-09-28):**
 ```json
 {
   "latest": "1.0.0-rc.2",
@@ -244,7 +244,7 @@ npm view @iwsdk/core dist-tags
 }
 ```
 
-**Answer:** **TBD** (to be verified during spike)
+**Answer:** **YES - rc.2 is the correct pin**
 
 **Evidence:**
 - The CONCEPTS.md notes mention that npm on 2026-09-27 reported `latest: 1.0.0-rc.2` and `next: 1.0.0`
