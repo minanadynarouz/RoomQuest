@@ -1,0 +1,160 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Level schemas > LevelPlanLLM JSON schema > matches the expected JSON schema snapshot 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "beats": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "goal": {
+            "type": "string",
+          },
+          "uses": {
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+        },
+        "required": [
+          "goal",
+          "uses",
+        ],
+        "type": "object",
+      },
+      "maxItems": 4,
+      "minItems": 2,
+      "type": "array",
+    },
+    "dialogue": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "line": {
+            "type": "string",
+          },
+          "trigger": {
+            "enum": [
+              "intro",
+              "beat",
+              "stuck",
+              "win",
+              "gaze",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "trigger",
+          "line",
+        ],
+        "type": "object",
+      },
+      "maxItems": 12,
+      "type": "array",
+    },
+    "goal": {
+      "type": "string",
+    },
+    "placements": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+          },
+          "links": {
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "piece": {
+            "enum": [
+              "village_hut",
+              "crystal_shrine",
+              "plank_bridge",
+              "ramp",
+              "moving_platform",
+              "gate",
+              "lever",
+              "gem",
+              "slime",
+              "portal",
+            ],
+            "type": "string",
+          },
+          "playerBuilt": {
+            "type": "boolean",
+          },
+          "surface": {
+            "type": "string",
+          },
+          "to": {
+            "type": [
+              "string",
+              "null",
+            ],
+          },
+          "u": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number",
+          },
+          "v": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number",
+          },
+        },
+        "required": [
+          "id",
+          "piece",
+          "surface",
+          "to",
+          "u",
+          "v",
+          "playerBuilt",
+          "links",
+        ],
+        "type": "object",
+      },
+      "maxItems": 14,
+      "minItems": 4,
+      "type": "array",
+    },
+    "seed": {
+      "type": "string",
+    },
+    "start": {
+      "type": "string",
+    },
+    "theme": {
+      "enum": [
+        "forest",
+        "desert",
+        "snow",
+        "sky",
+      ],
+      "type": "string",
+    },
+    "title": {
+      "type": "string",
+    },
+  },
+  "required": [
+    "seed",
+    "theme",
+    "title",
+    "start",
+    "goal",
+    "placements",
+    "beats",
+    "dialogue",
+  ],
+  "type": "object",
+}
+`;

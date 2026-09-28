@@ -493,6 +493,13 @@ describe('Level schemas', () => {
       // This is the critical test per B-01 requirements
       expect(errors).toHaveLength(0);
     });
+
+    it('matches the expected JSON schema snapshot', () => {
+      const jsonSchema = toJsonSchema(LevelPlanLLM);
+      
+      // Snapshot test ensures the schema structure remains stable
+      expect(jsonSchema).toMatchSnapshot();
+    });
   });
 
   describe('Enums', () => {
