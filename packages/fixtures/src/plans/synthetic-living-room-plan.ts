@@ -121,4 +121,5 @@ export const SYNTHETIC_LIVING_ROOM_PLAN: LevelPlan = {
       line: 'You did it! The crystal is safe!',
     },
   ],
+  parTimeMs: 180000,
 };
