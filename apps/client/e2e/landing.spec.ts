@@ -74,14 +74,20 @@ test.describe('Landing Page - Screenshots', () => {
   });
 
   test('should verify button becomes enabled in emulator mode', async ({ page }) => {
-    await page.goto('/?emulator=1&room=living_room');
-    await page.waitForLoadState('networkidle');
-    
-    // Set up console log listener
+    // Set up console log listener BEFORE navigation
     const consoleLogs: string[] = [];
     page.on('console', msg => {
       consoleLogs.push(msg.text());
     });
+    
+    // Also capture page errors
+    const pageErrors: string[] = [];
+    page.on('pageerror', error => {
+      pageErrors.push(error.message);
+    });
+    
+    await page.goto('/?emulator=1&room=living_room');
+    await page.waitForLoadState('networkidle');
     
     const button = page.locator('#enter-button');
     const statusMessage = page.locator('#status-message');
@@ -96,7 +102,7 @@ test.describe('Landing Page - Screenshots', () => {
       const isEnabled = await button.isEnabled();
       if (isEnabled) {
         buttonBecameEnabled = true;
-        console.log(`Button became enabled after ${i * 500}ms`);
+        console.log(`Button became enabled after ${String(i * 500)}ms`);
         break;
       }
       await page.waitForTimeout(500);
@@ -105,6 +111,14 @@ test.describe('Landing Page - Screenshots', () => {
     const finalStatusText = await statusMessage.textContent();
     console.log('Final status:', finalStatusText);
     console.log('Button enabled:', buttonBecameEnabled);
+    
+    // Log ALL console messages for debugging
+    console.log('All console logs:', consoleLogs);
+    
+    // Log page errors
+    if (pageErrors.length > 0) {
+      console.log('Page errors:', pageErrors);
+    }
     
     // Log relevant console messages
     const relevantLogs = consoleLogs.filter(log => 

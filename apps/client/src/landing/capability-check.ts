@@ -40,30 +40,3 @@ export async function checkImmersiveARSupport(): Promise<CapabilityResult> {
     };
   }
 }
-
-/**
- * Wait for the emulator to inject its polyfill.
- * The IWER plugin should inject the polyfill before DOMContentLoaded,
- * but we give it a moment to ensure it's ready.
- */
-export async function waitForEmulatorPolyfill(): Promise<void> {
-  return new Promise((resolve) => {
-    if (navigator.xr) {
-      resolve();
-      return;
-    }
-    
-    const checkInterval = setInterval(() => {
-      if (navigator.xr) {
-        clearInterval(checkInterval);
-        clearTimeout(timeout);
-        resolve();
-      }
-    }, 50);
-    
-    const timeout = setTimeout(() => {
-      clearInterval(checkInterval);
-      resolve();
-    }, 2000);
-  });
-}

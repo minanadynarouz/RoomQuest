@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { checkImmersiveARSupport, waitForEmulatorPolyfill } from './capability-check';
+import { checkImmersiveARSupport } from './capability-check';
 
 describe('capability-check', () => {
   beforeEach(() => {
@@ -77,52 +77,6 @@ describe('capability-check', () => {
 
       expect(result.state).toBe('error');
       expect(result.message).toContain('Could not check');
-    });
-  });
-
-  describe('waitForEmulatorPolyfill', () => {
-    it('should resolve immediately if navigator.xr exists', async () => {
-      const mockXR = { isSessionSupported: vi.fn() };
-      Object.defineProperty(navigator, 'xr', {
-        value: mockXR,
-        configurable: true,
-      });
-
-      await expect(waitForEmulatorPolyfill()).resolves.toBeUndefined();
-    });
-
-    it('should wait for navigator.xr to be injected', async () => {
-      Object.defineProperty(navigator, 'xr', {
-        value: undefined,
-        configurable: true,
-        writable: true,
-      });
-
-      const promise = waitForEmulatorPolyfill();
-      
-      vi.advanceTimersByTime(100);
-      
-      Object.defineProperty(navigator, 'xr', {
-        value: { isSessionSupported: vi.fn() },
-        configurable: true,
-      });
-      
-      vi.advanceTimersByTime(100);
-      
-      await expect(promise).resolves.toBeUndefined();
-    });
-
-    it('should timeout after 2 seconds if xr is never injected', async () => {
-      Object.defineProperty(navigator, 'xr', {
-        value: undefined,
-        configurable: true,
-      });
-
-      const promise = waitForEmulatorPolyfill();
-      
-      vi.advanceTimersByTime(2000);
-      
-      await expect(promise).resolves.toBeUndefined();
     });
   });
 });

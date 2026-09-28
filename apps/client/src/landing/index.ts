@@ -5,13 +5,15 @@
 
 import {
   checkImmersiveARSupport,
-  waitForEmulatorPolyfill,
   type CapabilityResult,
 } from './capability-check';
+import { loadEmulatorRuntime, waitForWebXRPolyfill } from './emulator-loader';
 import { getLandingUIElements, updateCapabilityUI } from './ui';
 import './styles.css';
 
-const IS_EMULATOR = new URLSearchParams(window.location.search).get('emulator') === '1';
+const params = new URLSearchParams(window.location.search);
+const IS_EMULATOR = params.get('emulator') === '1';
+const ROOM = params.get('room') as 'living_room' | 'meeting_room' | 'music_room' | 'office_large' | 'office_small' | null;
 
 let xrChunkReady = false;
 let capabilityResult: CapabilityResult = { state: 'checking' };
@@ -74,8 +76,25 @@ export async function initLanding(): Promise<void> {
   
   updateCapabilityUI(ui, capabilityResult, xrChunkReady);
   
+  // If emulator mode is requested, load IWER runtime dynamically
   if (IS_EMULATOR) {
-    await waitForEmulatorPolyfill();
+    try {
+      ui.statusMessage.textContent = 'Loading emulator...';
+      await loadEmulatorRuntime({
+        device: 'metaQuest3',
+        room: ROOM || 'living_room',
+      });
+      
+      // Wait for polyfill to be ready
+      const polyfillReady = await waitForWebXRPolyfill(3000);
+      if (!polyfillReady) {
+        console.warn('[Landing] Emulator polyfill did not load in time');
+      }
+    } catch (error) {
+      console.error('[Landing] Failed to load emulator:', error);
+      ui.statusMessage.textContent = 'Emulator failed to load';
+      ui.statusMessage.classList.add('text-red-300');
+    }
   }
   
   capabilityResult = await checkImmersiveARSupport();
