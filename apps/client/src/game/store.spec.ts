@@ -68,7 +68,6 @@ describe('createGameStore', () => {
       { goal: 'Collect gems', uses: ['p3', 'p4'] },
     ],
     dialogue: [{ trigger: 'intro', line: 'Welcome!' }],
-    parTimeMs: 180000,
     ...overrides,
   });
 
@@ -113,7 +112,7 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       const plan = createMockPlan();
-      store.startBuilding(plan);
+      store.startBuilding(plan, { parTimeMs: 180000 });
       expect(store.phase).toBe('building');
       expect(store.plan).toEqual(plan);
     });
@@ -122,7 +121,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       store.startPlaying();
       expect(store.phase).toBe('playing');
     });
@@ -131,7 +130,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       store.startPlaying();
       store.pause();
       expect(store.phase).toBe('paused');
@@ -141,7 +140,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       store.startPlaying();
       store.pause();
       store.resume();
@@ -152,7 +151,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       store.startPlaying();
       store.win();
       expect(store.phase).toBe('won');
@@ -175,7 +174,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       store.startPlaying();
       store.win();
       store.exit();
@@ -222,7 +221,7 @@ describe('createGameStore', () => {
           store.startSurveying();
         }
         if (startPhase === 'building' || startPhase === 'playing') {
-          store.startBuilding(createMockPlan());
+          store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
         }
         if (startPhase === 'playing') {
           store.startPlaying();
@@ -262,7 +261,7 @@ describe('createGameStore', () => {
         
         store.requestLevel();
         store.startSurveying();
-        store.startBuilding(createMockPlan());
+        store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
         store.startSurveying();
         
         expect(store.phase).toBe('building');
@@ -279,7 +278,7 @@ describe('createGameStore', () => {
         
         store.requestLevel();
         store.startSurveying();
-        store.startBuilding(createMockPlan());
+        store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
         store.startPlaying();
         store.win();
         store.requestLevel();
@@ -328,7 +327,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -341,7 +340,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -361,7 +360,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -379,7 +378,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -400,7 +399,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -426,7 +425,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -444,7 +443,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -460,7 +459,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -477,7 +476,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -498,7 +497,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       store.startPlaying();
       
       mockTime = 2000;
@@ -512,7 +511,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       store.startPlaying();
       
       store.slimeStunned('slime1');
@@ -524,7 +523,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       store.startPlaying();
       
       expect(store.state.gemsCollected).toBe(0);
@@ -545,7 +544,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       store.startPlaying();
       
       store.explorerBlocked('unbuiltGap');
@@ -560,7 +559,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       store.startPlaying();
       
       store.explorerOutOfView();
@@ -572,7 +571,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       store.startPlaying();
       
       mockTime = 5000;
@@ -587,7 +586,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       store.startPlaying();
       
       store.pieceBuilt('p1');
@@ -608,7 +607,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -626,7 +625,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -652,7 +651,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -674,7 +673,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -697,7 +696,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan()); // Has 2 beats
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 }); // Has 2 beats
       
       store.startPlaying(); // Beat 0
       store.advanceBeat(); // Beat 1
@@ -722,7 +721,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -741,7 +740,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -770,7 +769,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -795,7 +794,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -822,7 +821,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan({ parTimeMs: 180000 }));
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -846,7 +845,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan({ parTimeMs: 180000 }));
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -863,7 +862,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan({ parTimeMs: 180000 }));
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -883,7 +882,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan({ parTimeMs: 180000 }));
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -898,7 +897,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       store.startPlaying();
       
       expect(store.result?.completed).toBe(false);
@@ -930,7 +929,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       
       mockTime = 1000;
       store.startPlaying();
@@ -957,7 +956,7 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
       store.startSurveying();
-      store.startBuilding(createMockPlan());
+      store.startBuilding(createMockPlan(), { parTimeMs: 180000 });
       store.startPlaying();
       
       store.gemCollected('gem1');

@@ -66,6 +66,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
   // Core signals
   const phase = signal<GamePhase>('landing');
   const plan = signal<LevelPlan | null>(null);
+  const parTimeMs = signal<number>(0);
   const events = signal<GameEvent[]>([]);
   const timerState = signal<TimerState>({
     startTime: 0,
@@ -104,11 +105,12 @@ export function createGameStore(options: GameStoreOptions = {}) {
 
   const result = computed<GameResult | null>(() => {
     const currentPlan = plan.value;
-    if (!currentPlan) return null;
+    const currentParTimeMs = parTimeMs.value;
+    if (!currentPlan || currentParTimeMs === 0) return null;
 
     const stars = calculateStars(
       getElapsedMs(),
-      currentPlan.parTimeMs,
+      currentParTimeMs,
       gemsCollected.value,
     );
 
@@ -281,7 +283,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
     
     // beatCompleted already has all fields
     if (event.type === 'beatCompleted') {
-      events.value = [...events.value, event as GameEvent];
+      events.value = [...events.value, event];
       return;
     }
     
@@ -289,7 +291,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
       ...event,
       timestamp: now,
       beatIndex: currentBeatIndex.value,
-    } as GameEvent;
+    };
 
     events.value = [...events.value, fullEvent];
 
@@ -337,8 +339,9 @@ export function createGameStore(options: GameStoreOptions = {}) {
       transition('noSurfaces');
     },
 
-    startBuilding(levelPlan: LevelPlan) {
+    startBuilding(levelPlan: LevelPlan, options?: { parTimeMs?: number }) {
       plan.value = levelPlan;
+      parTimeMs.value = options?.parTimeMs ?? 0;
       events.value = [];
       gemsCollected.value = 0;
       beatTimings.value = [];
@@ -381,23 +384,27 @@ export function createGameStore(options: GameStoreOptions = {}) {
       }
 
       const currentPlan = plan.value;
+      const currentParTimeMs = parTimeMs.value;
       if (!currentPlan) {
         console.warn('[GameStore] Cannot replay: no plan available');
         return;
       }
 
-      // Replay resets to building with the same plan
+      // Replay resets to building with the same plan and par time
       transition('building');
       events.value = [];
       gemsCollected.value = 0;
       beatTimings.value = [];
       currentBeatIndex.value = 0;
       resetTimer();
+      // Keep the same par time
+      parTimeMs.value = currentParTimeMs;
     },
 
     exit() {
       // Exit returns to landing
       plan.value = null;
+      parTimeMs.value = 0;
       events.value = [];
       gemsCollected.value = 0;
       beatTimings.value = [];
