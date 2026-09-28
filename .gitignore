@@ -42,3 +42,8 @@ coverage/
 # Misc
 *.tsbuildinfo
 .eslintcache
+
+# IWSDK
+.iwsdk/
+*.pem
+*.key
