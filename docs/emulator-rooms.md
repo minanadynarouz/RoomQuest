@@ -247,16 +247,21 @@ npm view @iwsdk/core dist-tags
 **Answer:** **YES - rc.2 is the correct pin**
 
 **Evidence:**
-- The CONCEPTS.md notes mention that npm on 2026-09-27 reported `latest: 1.0.0-rc.2` and `next: 1.0.0`
-- ⚠ This is confusing: typically `rc.2` < `1.0.0`, but here `latest` is the RC
-- The scaffold was generated with `npm create @iwsdk@1.0.0-rc.2`, which explicitly pins the RC
+- Verified via `npm view @iwsdk/core dist-tags` on 2026-09-28
+- `latest` tag points to `1.0.0-rc.2` (the release candidate)
+- `next` tag points to `1.0.0` (the stable release)
+- ⚠ This is unusual: typically `rc.2` < `1.0.0`, but here `latest` is the RC
+
+**Explanation:**
+- The IWSDK team appears to be using `next` for the stable `1.0.0` release
+- The `latest` tag still points to the RC, likely because most users and tooling depend on it
+- The official scaffold (`npm create @iwsdk@1.0.0-rc.2`) explicitly pins the RC
 
 **Implications:**
-- If `latest` is indeed `1.0.0-rc.2`, our pin is correct
-- If `1.0.0` is stable and newer, we should consider upgrading (but only after testing; the docs warned about 0.5 breaking everything)
-- For the MVP, stick with `1.0.0-rc.2` (exact pin in `package.json`) since that's what the scaffold and examples use
-
-**Action:** Run `npm view @iwsdk/core dist-tags` during the spike and document the output
+- ✅ Our exact pin of `1.0.0-rc.2` is correct and matches the official scaffold
+- The `1.0.0` on the `next` tag may have breaking changes (the docs warned about 0.5 breaking everything)
+- **Recommendation:** Stick with `1.0.0-rc.2` for the MVP (exact pin in `package.json`)
+- Consider upgrading to `1.0.0` only after testing in the buffer weeks (Oct 12+)
 
 ---
 

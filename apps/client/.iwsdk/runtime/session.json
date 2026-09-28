@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 2,
+  "sessionId": "4611458a-f922-4aff-a080-585363688a97",
+  "workspaceRoot": "/workspace/apps/client",
+  "pid": 4251,
+  "processStart": "76d94e95-d174-4259-b587-37145931a2a0:67268",
+  "port": 5173,
+  "localUrl": "https://localhost:5173/",
+  "networkUrls": [
+    "https://172.30.0.2:5173/"
+  ],
+  "browser": {
+    "lifecycle": {
+      "state": "running",
+      "policy": "eager",
+      "sessionId": "4611458a-f922-4aff-a080-585363688a97",
+      "browserEpoch": 1,
+      "revision": 4,
+      "stateEnteredAt": "2026-09-28T20:17:08.284Z",
+      "lastObservedAt": "2026-09-28T20:17:09.061Z",
+      "failures": 0,
+      "cleanupConfirmed": true,
+      "attemptLimit": 3,
+      "historyTruncated": false,
+      "retryEligible": false,
+      "nextAction": "Use runtime_list_targets to inspect endpoint readiness.",
+      "history": [
+        {
+          "revision": 1,
+          "state": "launching",
+          "at": "2026-09-28T20:17:07.946Z",
+          "reason": "launch"
+        },
+        {
+          "revision": 2,
+          "state": "launching",
+          "at": "2026-09-28T20:17:07.946Z",
+          "reason": "prepared"
+        },
+        {
+          "revision": 3,
+          "state": "running",
+          "at": "2026-09-28T20:17:08.284Z",
+          "reason": "running"
+        }
+      ],
+      "attemptId": "8564ad40-07d5-49c5-a87f-8c30a1b2bb9b"
+    },
+    "status": "connected",
+    "clients": [
+      {
+        "commandReady": false,
+        "sessionId": "4611458a-f922-4aff-a080-585363688a97",
+        "browserEpoch": 1,
+        "deviceClass": "managed",
+        "pageId": "tab-mulov1i5-kqwac2",
+        "role": "editor",
+        "sceneSessionId": "scene-lw6i69cw5zb",
+        "tabGeneration": 1
+      }
+    ],
+    "lastBridgeConnectedAt": "2026-09-28T20:17:09.061Z",
+    "connected": true,
+    "commandReady": false,
+    "connectedClientCount": 1,
+    "lastTransitionAt": "2026-09-28T20:17:08.284Z"
+  },
+  "browserAutomation": {
+    "configured": false,
+    "enabled": false,
+    "protocol": "cdp"
+  },
+  "registeredAt": "2026-09-28T20:17:07.942Z",
+  "updatedAt": "2026-09-28T20:17:09.889Z"
+}
