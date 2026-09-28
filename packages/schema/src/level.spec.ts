@@ -171,7 +171,6 @@ describe('Level schemas', () => {
           line: 'The sun crystal fell onto the couch. Help me get there!',
         },
       ],
-      parTimeMs: 180000,
     };
 
     it('accepts valid level plan', () => {
@@ -179,7 +178,6 @@ describe('Level schemas', () => {
       expect(result.seed).toBe('r7f2-2026-10-14');
       expect(result.placements).toHaveLength(4);
       expect(result.beats).toHaveLength(2);
-      expect(result.parTimeMs).toBe(180000);
     });
 
     it('validates title max length (40 chars)', () => {
@@ -373,13 +371,11 @@ describe('Level schemas', () => {
           line: 'The sun crystal fell onto the couch. Help me get there!',
         },
       ],
-      parTimeMs: 180000,
     };
 
     it('accepts valid LLM plan', () => {
       const result = LevelPlanLLM.parse(validPlanLLM);
       expect(result.seed).toBe('r7f2-2026-10-14');
-      expect(result.parTimeMs).toBe(180000);
     });
 
     it('requires all fields (no defaults)', () => {
