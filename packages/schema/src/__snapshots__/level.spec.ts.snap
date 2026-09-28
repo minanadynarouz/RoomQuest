@@ -59,6 +59,12 @@ exports[`Level schemas > LevelPlanLLM JSON schema > matches the expected JSON sc
     "goal": {
       "type": "string",
     },
+    "parTimeMs": {
+      "description": "Par completion time in milliseconds for 3-star rating (1-8 minutes)",
+      "maximum": 480000,
+      "minimum": 60000,
+      "type": "integer",
+    },
     "placements": {
       "items": {
         "additionalProperties": false,
@@ -154,6 +160,7 @@ exports[`Level schemas > LevelPlanLLM JSON schema > matches the expected JSON sc
     "placements",
     "beats",
     "dialogue",
+    "parTimeMs",
   ],
   "type": "object",
 }

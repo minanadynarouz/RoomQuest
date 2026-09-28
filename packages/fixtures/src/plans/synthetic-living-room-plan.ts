@@ -22,6 +22,7 @@ export const SYNTHETIC_LIVING_ROOM_PLAN: LevelPlan = {
   title: 'The Living Room Quest',
   start: 's1',
   goal: 's2',
+  parTimeMs: 180000, // 3 minutes
   placements: [
     {
       id: 'p1',

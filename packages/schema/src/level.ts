@@ -2,6 +2,13 @@ import { z } from 'zod';
 import { PieceId } from './piece.js';
 
 /**
+ * Par time bounds for level completion (milliseconds)
+ * Sessions must complete within 10 minutes (600000 ms)
+ */
+export const PAR_TIME_MIN_MS = 60000; // 1 minute
+export const PAR_TIME_MAX_MS = 480000; // 8 minutes
+
+/**
  * Theme palette for level
  */
 export const Theme = z.enum(['forest', 'desert', 'snow', 'sky']);
@@ -99,6 +106,8 @@ export const LevelPlan = z.object({
   beats: z.array(Beat).min(2).max(4),
   /** Dialogue lines (max 12) */
   dialogue: z.array(Dialogue).max(12),
+  /** Par completion time in milliseconds (1-8 minutes) */
+  parTimeMs: z.number().int().min(PAR_TIME_MIN_MS).max(PAR_TIME_MAX_MS),
 });
 export type LevelPlan = z.infer<typeof LevelPlan>;
 
@@ -149,5 +158,13 @@ export const LevelPlanLLM = z.object({
   placements: z.array(PlacementLLM).min(4).max(14),
   beats: z.array(BeatLLM).min(2).max(4),
   dialogue: z.array(DialogueLLM).max(12),
+  parTimeMs: z
+    .number()
+    .int()
+    .min(PAR_TIME_MIN_MS)
+    .max(PAR_TIME_MAX_MS)
+    .describe(
+      'Par completion time in milliseconds for 3-star rating (1-8 minutes)',
+    ),
 });
 export type LevelPlanLLM = z.infer<typeof LevelPlanLLM>;

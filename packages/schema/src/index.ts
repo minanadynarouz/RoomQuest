@@ -8,3 +8,6 @@ export * from './level.js';
 export * from './api.js';
 export * from './kit-catalog.js';
 export * from './json-schema.js';
+
+// Re-export constants for convenience
+export { PAR_TIME_MIN_MS, PAR_TIME_MAX_MS } from './level.js';

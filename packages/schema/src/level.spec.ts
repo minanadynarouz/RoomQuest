@@ -128,6 +128,7 @@ describe('Level schemas', () => {
       title: 'The Fallen Sun Crystal',
       start: 's1',
       goal: 's4',
+      parTimeMs: 240000, // 4 minutes
       placements: [
         {
           id: 'p1',
@@ -276,6 +277,38 @@ describe('Level schemas', () => {
         LevelPlan.parse({ ...validPlan, theme: 'invalid' }),
       ).toThrow();
     });
+
+    it('validates parTimeMs range (60000..480000)', () => {
+      // Valid values
+      expect(() =>
+        LevelPlan.parse({ ...validPlan, parTimeMs: 60000 }),
+      ).not.toThrow(); // min
+      expect(() =>
+        LevelPlan.parse({ ...validPlan, parTimeMs: 180000 }),
+      ).not.toThrow(); // 3 min
+      expect(() =>
+        LevelPlan.parse({ ...validPlan, parTimeMs: 480000 }),
+      ).not.toThrow(); // max
+
+      // Below min
+      expect(() =>
+        LevelPlan.parse({ ...validPlan, parTimeMs: 59999 }),
+      ).toThrow();
+
+      // Above max
+      expect(() =>
+        LevelPlan.parse({ ...validPlan, parTimeMs: 480001 }),
+      ).toThrow();
+
+      // Non-integer
+      expect(() =>
+        LevelPlan.parse({ ...validPlan, parTimeMs: 120000.5 }),
+      ).toThrow();
+
+      // Missing (should fail because required)
+      const { parTimeMs: _parTimeMs, ...withoutPar } = validPlan;
+      expect(() => LevelPlan.parse(withoutPar)).toThrow();
+    });
   });
 
   describe('LevelPlanLLM', () => {
@@ -285,6 +318,7 @@ describe('Level schemas', () => {
       title: 'The Fallen Sun Crystal',
       start: 's1',
       goal: 's4',
+      parTimeMs: 240000, // 4 minutes
       placements: [
         {
           id: 'p1',
@@ -363,6 +397,30 @@ describe('Level schemas', () => {
       expect(() => PlacementLLM.parse(missingPlayerBuilt.placements[0])).toThrow();
     });
 
+    it('validates parTimeMs in LevelPlanLLM', () => {
+      // Valid
+      expect(() => LevelPlanLLM.parse(validPlanLLM)).not.toThrow();
+
+      // Missing (should fail because required)
+      const { parTimeMs: _parTimeMs, ...withoutPar } = validPlanLLM;
+      expect(() => LevelPlanLLM.parse(withoutPar)).toThrow();
+
+      // Below min
+      expect(() =>
+        LevelPlanLLM.parse({ ...validPlanLLM, parTimeMs: 59999 }),
+      ).toThrow();
+
+      // Above max
+      expect(() =>
+        LevelPlanLLM.parse({ ...validPlanLLM, parTimeMs: 480001 }),
+      ).toThrow();
+
+      // Non-integer
+      expect(() =>
+        LevelPlanLLM.parse({ ...validPlanLLM, parTimeMs: 120000.5 }),
+      ).toThrow();
+    });
+
     it('uses null for optional fields instead of undefined', () => {
       const placement = validPlanLLM.placements[0];
       expect(placement).toBeDefined();
@@ -404,6 +462,7 @@ describe('Level schemas', () => {
         'placements',
         'beats',
         'dialogue',
+        'parTimeMs',
       ];
       requiredFields.forEach((field) => {
         expect(properties[field]).toBeDefined();
