@@ -54,7 +54,7 @@
   "dev": {
     "emulator": {
       "device": "metaQuest3",
-      "environment": "living_room"
+      "environment": "office_large"
     }
   }
 }
