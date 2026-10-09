@@ -11,6 +11,7 @@ import {
   type LevelRequest,
 } from '@roomquest/schema';
 import { makeCacheKey } from '../levels/cache-key';
+import { makeDailySeed } from '../levels/daily-seed';
 import { createDirectorDeadline } from './deadline';
 import {
   FALLBACK_MIN_REMAINING_MS,
@@ -66,10 +67,6 @@ interface AttemptFail {
 
 type Attempt = AttemptOk | AttemptFail;
 
-function makeSeed(roomHash: string, date: string): string {
-  return `${roomHash}-${date}`;
-}
-
 export function proceduralOutcome(
   request: LevelRequest,
   startedMs: number,
@@ -77,7 +74,7 @@ export function proceduralOutcome(
   promptVersion: string,
   now: () => number
 ): DirectorOutcome {
-  const seed = makeSeed(request.graph.roomHash, request.date);
+  const seed = makeDailySeed(request.graph.roomHash, request.date);
   const plan = generatePlan(request.graph, seed, request.tier, {
     recentThemes: request.recentThemes,
   });
@@ -246,7 +243,7 @@ export async function runDirector(
   };
 
   try {
-    const seed = makeSeed(request.graph.roomHash, request.date);
+    const seed = makeDailySeed(request.graph.roomHash, request.date);
     const draftMessages = [
       new SystemMessage(SYSTEM_PREFIX),
       new HumanMessage(

@@ -47,7 +47,7 @@ export class DirectorService {
     }
 
     const googleKey = this.config.get('GOOGLE_API_KEY', { infer: true });
-    if (googleKey === undefined) {
+    if (googleKey === undefined || googleKey.length === 0) {
       this.logger.warn(
         'DIRECTOR_MODE=live but GOOGLE_API_KEY is unset; falling back to a procedural plan'
       );

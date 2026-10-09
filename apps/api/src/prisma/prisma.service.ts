@@ -24,6 +24,14 @@ export class PrismaService implements OnModuleDestroy {
   }
 
   /**
+   * Runtime client, or null when DATABASE_URL is unset / client failed to
+   * start. Callers must treat null as "no cache" and never throw.
+   */
+  getClient(): PrismaClient | null {
+    return this.client;
+  }
+
+  /**
    * True when a client exists and `SELECT 1` succeeds within the ping budget.
    * Never throws: a missing URL, a bad URL, or an unreachable DB are all
    * reported as down so the API can boot in mock mode.

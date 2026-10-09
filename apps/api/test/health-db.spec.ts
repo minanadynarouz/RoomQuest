@@ -21,8 +21,8 @@ describe('GET /api/health without DATABASE_URL', () => {
 
   beforeAll(async () => {
     vi.stubEnv('NODE_ENV', 'test');
-    vi.stubEnv('DATABASE_URL', '');
-    vi.stubEnv('DIRECT_URL', '');
+    delete process.env.DATABASE_URL;
+    delete process.env.DIRECT_URL;
     app = await createApp();
     await app.init();
   });
@@ -45,14 +45,10 @@ describe('GET /api/health with DATABASE_URL pointing at a closed port', () => {
 
   beforeAll(async () => {
     vi.stubEnv('NODE_ENV', 'test');
-    vi.stubEnv(
-      'DATABASE_URL',
-      'postgresql://postgres:postgres@127.0.0.1:1/roomquest'
-    );
-    vi.stubEnv(
-      'DIRECT_URL',
-      'postgresql://postgres:postgres@127.0.0.1:1/roomquest'
-    );
+    process.env.DATABASE_URL =
+      'postgresql://postgres:postgres@127.0.0.1:1/roomquest';
+    process.env.DIRECT_URL =
+      'postgresql://postgres:postgres@127.0.0.1:1/roomquest';
     app = await createApp();
     await app.init();
   });

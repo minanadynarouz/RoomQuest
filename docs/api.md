@@ -1,7 +1,7 @@
 # Roomquest API
 
 Source of truth for these endpoints: architecture §6 (`docs/ARCHITECTURE-AND-PLAN.md`).
-This document describes the API contract. B-02 shipped the skeleton and mock director; B-10 adds optional Prisma/Neon (health `db` ping); B-05 adds the live LangChain director. Later tickets (B-06 cache/rate limits, B-09 results) extend the same contract.
+This document describes the API contract. B-02 shipped the skeleton and mock director; B-10 adds optional Prisma/Neon (health `db` ping); B-05 adds the live LangChain director; B-06 adds the Postgres level cache, daily seed, and rate limits. B-09 (results) still comes later.
 
 ## Base URL
 
@@ -22,9 +22,9 @@ JSON only. Request body ≤ **16 KB**.
 | Method & path         | Request                                                                           | Success                                     | Errors                                                                                                                       |
 | --------------------- | --------------------------------------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `GET /api/health`     | none                                                                              | `200 {status:"ok", version, db, llm, time}` | none (always 200 if the process is up)                                                                                       |
-| `POST /api/v1/levels` | Headers `X-Device-Id` (UUID v4), `X-Client-Version` (semver). Body `LevelRequest` | `200 LevelResponse`                         | `400 {error:{code:"INVALID_REQUEST", message, issues}}` · `413` oversized body (see below) · `500 {error:{code:"INTERNAL"}}` |
+| `POST /api/v1/levels` | Headers `X-Device-Id` (UUID v4), `X-Client-Version` (semver). Body `LevelRequest` | `200 LevelResponse`                         | `400 {error:{code:"INVALID_REQUEST", message, issues}}` · `413` oversized body (see below) · `429 {error:{code:"RATE_LIMITED", retryAfterS}}` · `500 {error:{code:"INTERNAL"}}` |
 
-Out of scope here: `POST /api/v1/levels/:cacheKey/result` (B-09), `POST /api/v1/levels/:cacheKey/adapt` (post-MVP), `429 RATE_LIMITED` (B-06).
+Out of scope here: `POST /api/v1/levels/:cacheKey/result` (B-09), `POST /api/v1/levels/:cacheKey/adapt` (post-MVP).
 
 ---
 
@@ -87,17 +87,20 @@ Always **200** while the Node process is up. Used by the landing-page pre-warm a
 Architecture server semantics:
 
 1. Validate headers + body with zod (400 on failure).
-2. `seed = roomHash + "-" + date`. `cacheKey = sha256(roomHash\|date\|tier\|promptVersion)` as **hex**, then the **first 16 hex characters**. `promptVersion` is `PROMPT_VERSION` (`v1.0`).
-3. **Mock** (`DIRECTOR_MODE=mock`, the default): return the `synthetic_living_room` plan fixture from `@roomquest/fixtures`, parsed with `LevelPlan`. `source` is `"procedural"`. `model` is omitted. No LLM keys required.
-4. **Live** (`DIRECTOR_MODE=live`): LangChain director with a **7 s whole-request** budget (the client aborts `/levels` at 8 s). One `AbortSignal` is shared by every step, measured from request arrival. LLM work is aborted **250 ms** before the 7 s wall so `generatePlan` and the HTTP response still finish in time.
+2. `seed = roomHash + "-" + date` (the request `date` field, `YYYY-MM-DD`). `generatePlan` is deterministic for a given seed; the next date therefore yields a different seed. `cacheKey = sha256(roomHash\|date\|tier\|promptVersion)` as **hex**, then the **first 16 hex characters**. `promptVersion` is `PROMPT_VERSION` (`v1.0`).
+3. **Cache** (when `DATABASE_URL` is set and Postgres is reachable): look up `LevelCache` by `cacheKey`. On a hit, **always** re-run `level-core.validatePlan` against the **incoming** graph (roomHash only covers the 6 largest surfaces). If valid, return `source:"cache"` (this does **not** count against the per-device cache-miss budget). If validation fails, treat it as a miss, regenerate, and overwrite the row.
+4. **Mock** (`DIRECTOR_MODE=mock`, the default): return the `synthetic_living_room` plan fixture from `@roomquest/fixtures`, parsed with `LevelPlan`. `source` is `"procedural"`. `model` is omitted. No LLM keys required.
+5. **Live** (`DIRECTOR_MODE=live`): LangChain director with a **7 s whole-request** budget (the client aborts `/levels` at 8 s). One `AbortSignal` is shared by every step, measured from request arrival. LLM work is aborted **250 ms** before the 7 s wall so `generatePlan` and the HTTP response still finish in time.
    1. Primary: `ChatGoogleGenerativeAI` (`DIRECTOR_MODEL`, default `gemini-3.8-flash`), temperature 0.7, `thinkingConfig.thinkingLevel = LOW`, `.withStructuredOutput(LevelPlanLLM)`.
    2. Parse `LevelPlanLLM` → `clampParTimeMs` → `LevelPlan.parse` → `validatePlan(plan, graph)`.
    3. If invalid: local `repairPlan` first. If still invalid: **one** LLM repair call that includes the issue messages (same static system prefix), **skipped** when fewer than **2 s** of the LLM window remain.
    4. Provider error on the primary: try Anthropic `ChatAnthropic` (`FALLBACK_MODEL`, default `claude-haiku-4-5`) only when **≥ 3 s** of the LLM window remain and `ANTHROPIC_API_KEY` is set.
    5. Still invalid, out of time, or any remaining provider error: `generatePlan(graph, seed, tier)` with `source:"procedural"`.
-5. `source` is `"llm"` | `"llm_repaired"` | `"procedural"` (`"cache"` is B-06). `model` is set for LLM sources. `repairs` lists local repair actions (and `"llm-repair"` when the second call ran).
-6. `latencyMs` is server handling time in milliseconds.
-7. If `DIRECTOR_MODE=live` but `GOOGLE_API_KEY` is unset, the API logs a warning and serves a procedural plan so it still starts. CI and local mock runs need no key.
+6. After a successful director/procedural result, the plan is upserted into `LevelCache`. The write is bounded (~200 ms or whatever remains of the 7 s budget) so it cannot push the response past the wall; if the wait elapses the insert continues in the background.
+7. `source` is `"cache"` | `"llm"` | `"llm_repaired"` | `"procedural"`. `model` is set for LLM sources (and echoed from the cached row on a hit). `repairs` lists local repair actions (and `"llm-repair"` when the second call ran); cache hits return `repairs: []`.
+8. `latencyMs` is server handling time in milliseconds.
+9. If `DIRECTOR_MODE=live` but `GOOGLE_API_KEY` is unset, the API logs a warning and serves a procedural plan so it still starts. CI and local mock runs need no key.
+10. If `DATABASE_URL` is unset or Postgres is unreachable, `/levels` still returns 200 (director/procedural only, no cache) and logs a warning. Do not create Neon/Render resources for local or CI — use Docker Postgres 17 or the GitHub Actions postgres service.
 
 **Mock plan vs request graph:** the fixture plan’s surface ids (`s1`, `s2`, `s4`, …) belong to the synthetic living-room graph. They will **not** match an arbitrary client `SurfaceGraph`. The client must re-validate with `level-core` and fall back locally (architecture §6 client semantics). Live / procedural plans are validated against the request graph.
 
@@ -138,6 +141,29 @@ JSON bodies larger than 16 KB are rejected **before** zod parsing:
 
 Architecture §6 lists 400 / 429 / 500. 413 is the HTTP status for payload too large; the envelope still uses `INVALID_REQUEST`.
 
+### 429 Rate limited
+
+```json
+{
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "Too many requests",
+    "retryAfterS": 3540
+  }
+}
+```
+
+The `Retry-After` header is set to the same `retryAfterS` value (seconds).
+
+Two independent limiters (both **in-memory in this process** for the MVP — they reset on deploy / Render sleep; not shared across instances, no Redis):
+
+| Limiter | Key | Budget | Counts |
+| --- | --- | --- | --- |
+| `@nestjs/throttler` guard | client IP (`X-Forwarded-For` when `trust proxy` is on) | **60 / hour** | every `POST /api/v1/levels`, including cache hits |
+| Custom limiter in the levels service | `X-Device-Id` | **10 / hour** | **cache misses only** (a valid cache hit is free) |
+
+The 11th cache miss from one device in an hour is 429. Health is not throttled.
+
 ### 500 Internal
 
 ```json
@@ -169,6 +195,7 @@ Requests with no `Origin` (curl, server-side) are allowed. Blocked origins are n
 
 - **helmet** security headers.
 - **nestjs-pino** structured JSON logs (pino-pretty in `NODE_ENV=development`). Each request has an id (`X-Request-Id`).
+- **`@nestjs/throttler`** per-IP guard (60/h) on `POST /api/v1/levels`, plus the per-device cache-miss limiter (10/h). In-memory; see **429 Rate limited**.
 - Env is validated with a zod schema at startup (see **Environment variables** below). Extra keys are stripped. Missing optional keys use the documented defaults.
 
 ## Environment variables
@@ -188,9 +215,12 @@ None of these are required to start the API. CI does not set a database. Local D
 | `FALLBACK_MODEL` | optional | `claude-haiku-4-5` | `claude-haiku-4-5` | **staging** / **prod**; **local** only when exercising live director. |
 | `GOOGLE_API_KEY` | optional | unset | Gemini API key (never commit) | **staging** / **prod** when `DIRECTOR_MODE=live`; **local** only for live director tests. Blank → health `llm:"missing"`. |
 | `ANTHROPIC_API_KEY` | optional | unset | Anthropic API key (never commit) | **staging** / **prod** fallback; **local** only for live director tests. Either key makes health `llm:"configured"`. |
-| `DATABASE_URL` | optional | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **local** Docker Postgres 17 (runtime / pooled). **staging** / **prod**: Neon pooled URL — declared in `render.yaml`, values set later (M-10). Unset or unreachable → health `db:"down"`; process still 200. |
+| `DATABASE_URL` | optional | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **local** Docker Postgres 17 (runtime / pooled). **staging** / **prod**: Neon pooled URL — declared in `render.yaml`, values set later (M-10). Unset or unreachable → health `db:"down"`, `/levels` serves without cache (warning logged); process still 200. |
 | `DIRECT_URL` | optional | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **local** Docker (Prisma CLI / `pnpm --filter api db:migrate`). **staging** / **prod**: Neon unpooled URL for `migrate deploy` (GitHub Environments, L-03 / L-04). |
 | `NODE_VERSION` | Render build only (not read by Nest) | `22` in `render.yaml` | `22` | **staging** / **prod** Render native runtime. **local** uses `.nvmrc` (`22`). |
+| `TEST_DATABASE_URL` | tests only (not read by Nest) | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **CI** test job (GitHub Actions `postgres:17` service). **local** cache integration tests when Docker Postgres is up. When unset, those tests skip unless `CI=true` (then they fail). |
+
+No extra env knobs for rate limits: 60/h per IP and 10 cache-misses/h per device are constants. Counters live in process memory.
 
 `render.yaml` lists the staging/prod keys with `sync: false` so the blueprint never stores secret values. How to fill them later: `docs/deploy-api.md`.
 
