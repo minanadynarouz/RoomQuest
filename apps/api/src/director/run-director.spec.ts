@@ -6,9 +6,20 @@ import {
 import { LevelRequest, LevelResponse, type LevelPlan } from '@roomquest/schema';
 import { validatePlan } from '@roomquest/level-core';
 import { describe, expect, it } from 'vitest';
-import { PROMPT_VERSION } from './prompts';
+import {
+  DIRECTOR_BUDGET_MS,
+  DIRECTOR_LLM_WINDOW_MS,
+  FALLBACK_MIN_REMAINING_MS,
+  LLM_REPAIR_MIN_REMAINING_MS,
+  PROCEDURAL_RESERVE_MS,
+} from './director.constants';
 import { wrapChatModel } from './models';
+import { PROMPT_VERSION } from './prompts';
 import { runDirector } from './run-director';
+import {
+  settleWithDirectorFakeTime,
+  useDirectorFakeTimers,
+} from './test-clock';
 import {
   AfterGenerateFakeListChatModel,
   HangingFakeListChatModel,
@@ -111,72 +122,97 @@ describe('runDirector', () => {
     ]);
   });
 
-  it('falls back to procedural on timeout', async () => {
-    const fake = new HangingFakeListChatModel();
-    const budgetMs = 80;
-    const started = Date.now();
-    const outcome = await runDirector(request, {
-      primary: structuredFromFake(fake),
-      budgetMs,
-      proceduralReserveMs: 25,
-      logger: silentLogger,
-    });
-    expect(outcome.response.source).toBe('procedural');
-    expect(outcome.response.model).toBeUndefined();
-    expect(LevelResponse.parse(outcome.response).source).toBe('procedural');
-    expect(outcome.telemetry.some((row) => row.outcome === 'timeout')).toBe(
-      true
-    );
-    expect(outcome.response.latencyMs).toBeLessThan(budgetMs);
-    expect(Date.now() - started).toBeLessThan(budgetMs);
-  });
+  describe('budget', () => {
+    useDirectorFakeTimers();
 
-  it('skips the LLM repair call when fewer than 2 s of LLM window remain', async () => {
-    let t = 0;
-    const fake = new AfterGenerateFakeListChatModel({
-      responses: [startEqualsGoalJson(), validJson],
+    it('aborts hanging LLM work 250 ms before the 7 s whole-request deadline', async () => {
+      const fake = new HangingFakeListChatModel();
+      const outcome = await settleWithDirectorFakeTime(
+        runDirector(request, {
+          primary: structuredFromFake(fake),
+          logger: silentLogger,
+        })
+      );
+      expect(outcome.response.source).toBe('procedural');
+      expect(outcome.response.model).toBeUndefined();
+      expect(LevelResponse.parse(outcome.response).source).toBe('procedural');
+      expect(outcome.telemetry.some((row) => row.outcome === 'timeout')).toBe(
+        true
+      );
+      expect(outcome.response.latencyMs).toBe(DIRECTOR_LLM_WINDOW_MS);
+      expect(Date.now()).toBe(DIRECTOR_LLM_WINDOW_MS);
+      expect(Date.now()).toBeLessThan(DIRECTOR_BUDGET_MS);
     });
-    fake.onAfterGenerate = () => {
-      t = 5200;
-    };
-    const outcome = await runDirector(request, {
-      primary: structuredFromFake(fake),
-      budgetMs: 7000,
-      proceduralReserveMs: 250,
-      llmRepairMinRemainingMs: 2000,
-      now: () => t,
-      logger: silentLogger,
-    });
-    expect(outcome.response.source).toBe('procedural');
-    expect(outcome.telemetry).toHaveLength(1);
-    expect(outcome.telemetry[0]?.outcome).toBe('invalid');
-    expect(validatePlan(outcome.response.plan, request.graph).ok).toBe(true);
-  });
 
-  it('returns 200 procedural within the budget when first and repair calls are both slow', async () => {
-    const budgetMs = 250;
-    const fake = new SlowFakeListChatModel({
-      responses: [startEqualsGoalJson(), validJson],
-      delaysMs: [40, 2000],
+    it('skips the LLM repair call when fewer than 2 s of LLM window remain', async () => {
+      let t = 0;
+      const fake = new AfterGenerateFakeListChatModel({
+        responses: [startEqualsGoalJson(), validJson],
+      });
+      fake.onAfterGenerate = () => {
+        t = DIRECTOR_LLM_WINDOW_MS - LLM_REPAIR_MIN_REMAINING_MS + 1;
+      };
+      const outcome = await runDirector(request, {
+        primary: structuredFromFake(fake),
+        budgetMs: DIRECTOR_BUDGET_MS,
+        proceduralReserveMs: PROCEDURAL_RESERVE_MS,
+        llmRepairMinRemainingMs: LLM_REPAIR_MIN_REMAINING_MS,
+        now: () => t,
+        logger: silentLogger,
+      });
+      expect(outcome.response.source).toBe('procedural');
+      expect(outcome.telemetry).toHaveLength(1);
+      expect(outcome.telemetry[0]?.outcome).toBe('invalid');
+      expect(validatePlan(outcome.response.plan, request.graph).ok).toBe(true);
     });
-    const started = Date.now();
-    const outcome = await runDirector(request, {
-      primary: structuredFromFake(fake),
-      budgetMs,
-      proceduralReserveMs: 50,
-      llmRepairMinRemainingMs: 30,
-      logger: silentLogger,
+
+    it('returns procedural within the 7 s budget when first and repair calls are both slow', async () => {
+      const fake = new SlowFakeListChatModel({
+        responses: [startEqualsGoalJson(), validJson],
+        delaysMs: [3_000, 10_000],
+      });
+      const outcome = await settleWithDirectorFakeTime(
+        runDirector(request, {
+          primary: structuredFromFake(fake),
+          logger: silentLogger,
+        })
+      );
+      expect(outcome.response.source).toBe('procedural');
+      expect(LevelResponse.parse(outcome.response).source).toBe('procedural');
+      expect(validatePlan(outcome.response.plan, request.graph).ok).toBe(true);
+      expect(outcome.response.latencyMs).toBe(DIRECTOR_LLM_WINDOW_MS);
+      expect(outcome.response.latencyMs).toBeLessThan(DIRECTOR_BUDGET_MS);
+      expect(outcome.telemetry[0]?.outcome).toBe('invalid');
+      expect(outcome.telemetry.some((row) => row.outcome === 'timeout')).toBe(
+        true
+      );
     });
-    const elapsed = Date.now() - started;
-    expect(outcome.response.source).toBe('procedural');
-    expect(LevelResponse.parse(outcome.response).source).toBe('procedural');
-    expect(validatePlan(outcome.response.plan, request.graph).ok).toBe(true);
-    expect(outcome.response.latencyMs).toBeLessThan(budgetMs);
-    expect(elapsed).toBeLessThan(budgetMs);
-    expect(outcome.telemetry[0]?.outcome).toBe('invalid');
-    expect(outcome.telemetry.some((row) => row.outcome === 'timeout')).toBe(
-      true
-    );
+
+    it('skips the fallback model when fewer than 3 s remain', async () => {
+      let t = 0;
+      const primary = new ThrowingFakeListChatModel(new Error('gemini down'));
+      primary.onThrow = () => {
+        t = DIRECTOR_LLM_WINDOW_MS - FALLBACK_MIN_REMAINING_MS + 1;
+      };
+      const fallback = new FakeListChatModel({ responses: [validJson] });
+      const outcome = await runDirector(request, {
+        primary: structuredFromFake(primary),
+        fallback: structuredFromFake(
+          fallback,
+          'anthropic',
+          'claude-haiku-4-5'
+        ),
+        budgetMs: DIRECTOR_BUDGET_MS,
+        fallbackMinRemainingMs: FALLBACK_MIN_REMAINING_MS,
+        now: () => t,
+        logger: silentLogger,
+      });
+      expect(outcome.response.source).toBe('procedural');
+      expect(outcome.response.model).toBeUndefined();
+      expect(
+        outcome.telemetry.some((row) => row.provider === 'anthropic')
+      ).toBe(false);
+    });
   });
 
   it('falls back to the secondary model on a provider error when budget remains', async () => {
@@ -199,32 +235,6 @@ describe('runDirector', () => {
     expect(outcome.telemetry[0]?.provider).toBe('google');
     expect(outcome.telemetry[1]?.outcome).toBe('ok');
     expect(outcome.telemetry[1]?.provider).toBe('anthropic');
-  });
-
-  it('skips the fallback model when fewer than 3 s remain', async () => {
-    let t = 0;
-    const primary = new ThrowingFakeListChatModel(new Error('gemini down'));
-    primary.onThrow = () => {
-      t = 4500;
-    };
-    const fallback = new FakeListChatModel({ responses: [validJson] });
-    const outcome = await runDirector(request, {
-      primary: structuredFromFake(primary),
-      fallback: structuredFromFake(
-        fallback,
-        'anthropic',
-        'claude-haiku-4-5'
-      ),
-      budgetMs: 7000,
-      fallbackMinRemainingMs: 3000,
-      now: () => t,
-      logger: silentLogger,
-    });
-    expect(outcome.response.source).toBe('procedural');
-    expect(outcome.response.model).toBeUndefined();
-    expect(outcome.telemetry.some((row) => row.provider === 'anthropic')).toBe(
-      false
-    );
   });
 
   it('falls back to procedural after two invalid LLM plans', async () => {

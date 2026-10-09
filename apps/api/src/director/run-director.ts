@@ -144,7 +144,7 @@ export async function runDirector(
   request: LevelRequest,
   options: RunDirectorOptions
 ): Promise<DirectorOutcome> {
-  const now = options.now ?? Date.now;
+  const now = options.now ?? (() => Date.now());
   const startedMs = options.startedMs ?? now();
   const fallbackMin =
     options.fallbackMinRemainingMs ?? FALLBACK_MIN_REMAINING_MS;

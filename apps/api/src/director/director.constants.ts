@@ -24,6 +24,10 @@ export const LLM_REPAIR_MIN_REMAINING_MS = 2000;
  */
 export const PROCEDURAL_RESERVE_MS = 250;
 
+/** Simulated/real LLM abort offset: budget minus the procedural reserve. */
+export const DIRECTOR_LLM_WINDOW_MS =
+  DIRECTOR_BUDGET_MS - PROCEDURAL_RESERVE_MS;
+
 export const DEFAULT_DIRECTOR_MODEL = 'gemini-3.8-flash';
 export const DEFAULT_FALLBACK_MODEL = 'claude-haiku-4-5';
 

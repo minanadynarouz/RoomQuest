@@ -11,15 +11,24 @@ import { LevelRequest, LevelResponse, type LevelPlan } from '@roomquest/schema';
 import type { Server } from 'node:http';
 import { Logger } from 'nestjs-pino';
 import request from 'supertest';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/create-app';
+import {
+  DIRECTOR_BUDGET_MS,
+  DIRECTOR_LLM_WINDOW_MS,
+  FALLBACK_MIN_REMAINING_MS,
+} from '../src/director/director.constants';
 import {
   DIRECTOR_CHAT_FACTORY,
   DIRECTOR_RUNTIME,
   type DirectorChatFactory,
   type DirectorRuntime,
 } from '../src/director/models';
+import {
+  installDirectorFakeTimers,
+  settleWithDirectorFakeTime,
+} from '../src/director/test-clock';
 import {
   HangingFakeListChatModel,
   planToLlmJson,
@@ -113,6 +122,22 @@ describe('POST /api/v1/levels director contract (B-05 live)', () => {
     return LevelResponse.parse(res.body as unknown);
   }
 
+  async function expectValid200WithFakeTime(
+    factory: DirectorChatFactory,
+    runtime?: DirectorRuntime
+  ): Promise<LevelResponse> {
+    app = await bootLiveApp({ factory, runtime });
+    installDirectorFakeTimers();
+    try {
+      const res = await settleWithDirectorFakeTime(
+        levelsPost(app).send(validBody).expect(200)
+      );
+      return LevelResponse.parse(res.body as unknown);
+    } finally {
+      vi.useRealTimers();
+    }
+  }
+
   it('valid first try → 200 source llm', async () => {
     const fake = new FakeListChatModel({ responses: [validJson] });
     const parsed = await expectValid200({
@@ -148,16 +173,15 @@ describe('POST /api/v1/levels director contract (B-05 live)', () => {
   });
 
   it('timeout → 200 source procedural', async () => {
-    const parsed = await expectValid200(
-      {
-        createPrimary: () => new HangingFakeListChatModel(),
-        createFallback: () => new FakeListChatModel({ responses: ['{}'] }),
-      },
-      { budgetMs: 40 }
-    );
+    const parsed = await expectValid200WithFakeTime({
+      createPrimary: () => new HangingFakeListChatModel(),
+      createFallback: () => new FakeListChatModel({ responses: ['{}'] }),
+    });
     expect(parsed.source).toBe('procedural');
     expect(parsed.model).toBeUndefined();
     expect(parsed.plan.title).not.toBe('The Living Room Quest');
+    expect(parsed.latencyMs).toBe(DIRECTOR_LLM_WINDOW_MS);
+    expect(parsed.latencyMs).toBeLessThan(DIRECTOR_BUDGET_MS);
   });
 
   it('provider error → fallback model → 200 source llm', async () => {
@@ -174,14 +198,18 @@ describe('POST /api/v1/levels director contract (B-05 live)', () => {
     let t = 0;
     const throwing = new ThrowingFakeListChatModel(new Error('gemini down'));
     throwing.onThrow = () => {
-      t = 4500;
+      t = DIRECTOR_LLM_WINDOW_MS - FALLBACK_MIN_REMAINING_MS + 1;
     };
     const parsed = await expectValid200(
       {
         createPrimary: () => throwing,
         createFallback: () => new FakeListChatModel({ responses: [validJson] }),
       },
-      { budgetMs: 7000, fallbackMinRemainingMs: 3000, now: () => t }
+      {
+        budgetMs: DIRECTOR_BUDGET_MS,
+        fallbackMinRemainingMs: FALLBACK_MIN_REMAINING_MS,
+        now: () => t,
+      }
     );
     expect(parsed.source).toBe('procedural');
     expect(parsed.model).toBeUndefined();
@@ -200,29 +228,17 @@ describe('POST /api/v1/levels director contract (B-05 live)', () => {
   });
 
   it('slow first and repair calls → 200 procedural within the budget', async () => {
-    const budgetMs = 400;
     const fake = new SlowFakeListChatModel({
       responses: [startEqualsGoalJson(), validJson],
-      delaysMs: [40, 2000],
+      delaysMs: [3_000, 10_000],
     });
-    app = await bootLiveApp({
-      factory: {
-        createPrimary: () => fake,
-        createFallback: () => new FakeListChatModel({ responses: ['{}'] }),
-      },
-      runtime: {
-        budgetMs,
-        proceduralReserveMs: 50,
-        llmRepairMinRemainingMs: 30,
-      },
+    const parsed = await expectValid200WithFakeTime({
+      createPrimary: () => fake,
+      createFallback: () => new FakeListChatModel({ responses: ['{}'] }),
     });
-    const started = Date.now();
-    const res = await levelsPost(app).send(validBody).expect(200);
-    const elapsed = Date.now() - started;
-    const parsed = LevelResponse.parse(res.body as unknown);
     expect(parsed.source).toBe('procedural');
     expect(parsed.model).toBeUndefined();
-    expect(parsed.latencyMs).toBeLessThan(budgetMs);
-    expect(elapsed).toBeLessThan(budgetMs);
+    expect(parsed.latencyMs).toBe(DIRECTOR_LLM_WINDOW_MS);
+    expect(parsed.latencyMs).toBeLessThan(DIRECTOR_BUDGET_MS);
   });
 });
