@@ -1,17 +1,15 @@
 /**
- * Local generator + validator used until B-03/B-04 merge.
+ * Local generator used until B-04 merge.
  *
- * Swap points:
- * - B-03: replace `schemaValidate` with `level-core.validate`
- * - B-04: replace `stubGenerate` with `level-core.generate`
+ * Plan re-validation is `validatePlan` from `@roomquest/level-core` (B-03).
+ * B-04 replaces `stubGenerate` with `level-core.generate`.
  *
  * The stub is deterministic for (graph, seed, tier) and always returns a
  * schema-valid plan on any graph with ≥ 2 nodes, so the client can keep the
  * "always a valid plan in ≤ 8 s" guarantee without the generator package.
  */
 
-import { LevelPlan, type SurfaceGraph, type Tier } from '@roomquest/schema';
-import type { ValidateResult } from './types.js';
+import type { LevelPlan, SurfaceGraph, Tier } from '@roomquest/schema';
 
 const THEMES = ['forest', 'desert', 'snow', 'sky'] as const;
 
@@ -22,53 +20,6 @@ function hashSeed(seed: string): number {
     h = Math.imul(h, 16777619);
   }
   return h >>> 0;
-}
-
-/**
- * Schema parse plus surface-id checks against the local graph.
- * Does not run kit constraints or BFS solvability (those land with B-03).
- */
-export function schemaValidate(
-  plan: LevelPlan,
-  graph: SurfaceGraph
-): ValidateResult {
-  const parsed = LevelPlan.safeParse(plan);
-  if (!parsed.success) {
-    return {
-      ok: false,
-      issues: parsed.error.issues.map(
-        (issue) => `${issue.path.join('.')}: ${issue.message}`
-      ),
-    };
-  }
-
-  const ids = new Set(graph.nodes.map((node) => node.id));
-  const issues: string[] = [];
-
-  if (!ids.has(plan.start)) {
-    issues.push(`unknown start surface ${plan.start}`);
-  }
-  if (!ids.has(plan.goal)) {
-    issues.push(`unknown goal surface ${plan.goal}`);
-  }
-
-  for (const placement of plan.placements) {
-    if (!ids.has(placement.surface)) {
-      issues.push(
-        `placement ${placement.id} references unknown surface ${placement.surface}`
-      );
-    }
-    if (placement.to && !ids.has(placement.to)) {
-      issues.push(
-        `placement ${placement.id} references unknown to surface ${placement.to}`
-      );
-    }
-  }
-
-  if (issues.length > 0) {
-    return { ok: false, issues };
-  }
-  return { ok: true };
 }
 
 /**

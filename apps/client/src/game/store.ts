@@ -5,6 +5,7 @@
  */
 
 import { signal, computed } from '@preact/signals-core';
+import { clampParTimeMs, type Issue } from '@roomquest/level-core';
 import type { ErrorCode, LevelPlan, PlanSource } from '@roomquest/schema';
 import type { FallbackReason } from './director/types.js';
 import type {
@@ -86,6 +87,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
   const cacheKey = signal<string | null>(null);
   const fallbackReason = signal<FallbackReason | null>(null);
   const apiErrorCode = signal<ErrorCode | null>(null);
+  const validationIssues = signal<Issue[]>([]);
 
   // Computed values
   const state = computed<GameState>(() => ({
@@ -103,6 +105,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
     cacheKey: cacheKey.value,
     fallbackReason: fallbackReason.value,
     apiErrorCode: apiErrorCode.value,
+    validationIssues: validationIssues.value,
   }));
 
   // Helper to get current elapsed time (not a computed to avoid caching issues)
@@ -368,6 +371,9 @@ export function createGameStore(options: GameStoreOptions = {}) {
     get apiErrorCode() {
       return apiErrorCode.value;
     },
+    get validationIssues() {
+      return validationIssues.value;
+    },
 
     // Phase transitions
     requestLevel() {
@@ -383,14 +389,21 @@ export function createGameStore(options: GameStoreOptions = {}) {
     },
 
     startBuilding(levelPlan: LevelPlan, options?: StartBuildingOptions) {
-      plan.value = levelPlan;
-      parTimeMs.value = options?.parTimeMs ?? levelPlan.parTimeMs;
+      const clampedPar = clampParTimeMs(
+        options?.parTimeMs ?? levelPlan.parTimeMs
+      );
+      plan.value =
+        levelPlan.parTimeMs === clampedPar
+          ? levelPlan
+          : { ...levelPlan, parTimeMs: clampedPar };
+      parTimeMs.value = clampedPar;
       planSource.value = options?.source ?? null;
       directorLatencyMs.value = options?.latencyMs ?? null;
       repairs.value = options?.repairs ?? [];
       cacheKey.value = options?.cacheKey ?? null;
       fallbackReason.value = options?.fallbackReason ?? null;
       apiErrorCode.value = options?.apiErrorCode ?? null;
+      validationIssues.value = options?.issues ?? [];
       events.value = [];
       gemsCollected.value = 0;
       beatTimings.value = [];
@@ -462,6 +475,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
       cacheKey.value = null;
       fallbackReason.value = null;
       apiErrorCode.value = null;
+      validationIssues.value = [];
       events.value = [];
       gemsCollected.value = 0;
       beatTimings.value = [];

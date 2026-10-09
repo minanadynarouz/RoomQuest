@@ -3,10 +3,11 @@
  * Callers pass search string, storage, and fetch from the browser layer.
  */
 
+import { validatePlan } from '@roomquest/level-core';
 import { getOrCreateDeviceId } from './device-id.js';
 import { createDirectorClient } from './client.js';
 import { parseDirectorFlags } from './flags.js';
-import { schemaValidate, stubGenerate } from './fallback.js';
+import { stubGenerate } from './fallback.js';
 import {
   DEFAULT_CLIENT_VERSION,
   type DirectorClient,
@@ -41,7 +42,7 @@ export function createDirectorClientFromEnv(env: DirectorEnv): DirectorClient {
     deviceId,
     clientVersion: env.clientVersion ?? DEFAULT_CLIENT_VERSION,
     generate: env.generate ?? stubGenerate,
-    validate: env.validate ?? schemaValidate,
+    validate: env.validate ?? validatePlan,
     directorMode: flags.director,
     date: flags.date,
     seed: flags.seed,

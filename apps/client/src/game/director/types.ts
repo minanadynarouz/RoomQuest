@@ -3,6 +3,7 @@
  * Pure TypeScript, no DOM, IWSDK or Three.js imports
  */
 
+import type { Issue, ValidationResult } from '@roomquest/level-core';
 import type {
   ErrorCode,
   LevelPlan,
@@ -52,12 +53,12 @@ export type GenerateFn = (
   tier: Tier
 ) => LevelPlan | Promise<LevelPlan>;
 
-export type ValidateResult = { ok: true } | { ok: false; issues: string[] };
+export type ValidateResult = ValidationResult;
 
 export type ValidateFn = (
   plan: LevelPlan,
   graph: SurfaceGraph
-) => ValidateResult | Promise<ValidateResult>;
+) => ValidationResult | Promise<ValidationResult>;
 
 /**
  * Narrow fetch contract so tests can mock without a full Request polyfill.
@@ -108,6 +109,8 @@ export interface DirectorResult {
   fallbackReason?: FallbackReason;
   /** Set when the API returned `{error:{code}}` (INVALID_REQUEST / INTERNAL). */
   apiErrorCode?: ErrorCode;
+  /** Typed `validatePlan` issues for the debug overlay. */
+  issues?: Issue[];
 }
 
 export interface DirectorClient {

@@ -101,6 +101,7 @@ describe('createGameStore', () => {
       expect(store.cacheKey).toBeNull();
       expect(store.fallbackReason).toBeNull();
       expect(store.apiErrorCode).toBeNull();
+      expect(store.validationIssues).toEqual([]);
     });
   });
 
@@ -144,6 +145,14 @@ describe('createGameStore', () => {
       expect(store.cacheKey).toBe('procedural:test-seed');
       expect(store.fallbackReason).toBe('graph-mismatch');
       expect(store.apiErrorCode).toBeNull();
+    });
+
+    it('clamps par time from the plan with clampParTimeMs', () => {
+      const store = createGameStore({ clock: mockClock });
+      store.requestLevel();
+      store.startSurveying();
+      store.startBuilding(createMockPlan({ parTimeMs: 10 }));
+      expect(store.plan?.parTimeMs).toBe(60000);
     });
 
     it('allows building → playing', () => {
@@ -1021,6 +1030,7 @@ describe('createGameStore', () => {
       expect(store.cacheKey).toBeNull();
       expect(store.fallbackReason).toBeNull();
       expect(store.apiErrorCode).toBeNull();
+      expect(store.validationIssues).toEqual([]);
     });
   });
 });
