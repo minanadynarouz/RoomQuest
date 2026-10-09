@@ -3,6 +3,9 @@ import {
   LevelRequest,
   LevelResponse,
   ResultRequest,
+  ResultResponse,
+  ResultDeferred,
+  RESULT_TIME_MS_MAX,
   ApiError,
   RateLimitError,
 } from './api.js';
@@ -193,6 +196,7 @@ describe('API schemas', () => {
 
   describe('ResultRequest', () => {
     const validResult = {
+      deviceId: '550e8400-e29b-41d4-a716-446655440000',
       stars: 3,
       gems: 4,
       timeMs: 180000,
@@ -204,6 +208,16 @@ describe('API schemas', () => {
       const result = ResultRequest.parse(validResult);
       expect(result.stars).toBe(3);
       expect(result.gems).toBe(4);
+      expect(result.deviceId).toBe(validResult.deviceId);
+    });
+
+    it('requires a UUID v4 deviceId', () => {
+      expect(() =>
+        ResultRequest.parse({ ...validResult, deviceId: 'not-a-uuid' }),
+      ).toThrow();
+      expect(() =>
+        ResultRequest.parse({ ...validResult, deviceId: undefined }),
+      ).toThrow();
     });
 
     it('validates stars range (0..3)', () => {
@@ -221,31 +235,72 @@ describe('API schemas', () => {
       ).toThrow();
     });
 
-    it('validates gems range (0..5)', () => {
+    it('validates gems is a non-negative integer', () => {
       expect(() =>
         ResultRequest.parse({ ...validResult, gems: 0 }),
       ).not.toThrow();
       expect(() =>
-        ResultRequest.parse({ ...validResult, gems: 5 }),
+        ResultRequest.parse({ ...validResult, gems: 6 }),
       ).not.toThrow();
       expect(() =>
         ResultRequest.parse({ ...validResult, gems: -1 }),
       ).toThrow();
       expect(() =>
-        ResultRequest.parse({ ...validResult, gems: 6 }),
+        ResultRequest.parse({ ...validResult, gems: 1.5 }),
       ).toThrow();
     });
 
-    it('validates timeMs is non-negative integer', () => {
+    it('validates timeMs is a positive integer with a 1 hour max', () => {
+      expect(() =>
+        ResultRequest.parse({ ...validResult, timeMs: 1 }),
+      ).not.toThrow();
+      expect(() =>
+        ResultRequest.parse({ ...validResult, timeMs: RESULT_TIME_MS_MAX }),
+      ).not.toThrow();
       expect(() =>
         ResultRequest.parse({ ...validResult, timeMs: 0 }),
-      ).not.toThrow();
+      ).toThrow();
       expect(() =>
         ResultRequest.parse({ ...validResult, timeMs: -1 }),
       ).toThrow();
       expect(() =>
         ResultRequest.parse({ ...validResult, timeMs: 1.5 }),
       ).toThrow();
+      expect(() =>
+        ResultRequest.parse({
+          ...validResult,
+          timeMs: RESULT_TIME_MS_MAX + 1,
+        }),
+      ).toThrow();
+    });
+
+    it('accepts every LevelResponse source as planSource', () => {
+      for (const planSource of ['cache', 'llm', 'llm_repaired', 'procedural'] as const) {
+        expect(() =>
+          ResultRequest.parse({ ...validResult, planSource }),
+        ).not.toThrow();
+      }
+    });
+  });
+
+  describe('ResultResponse', () => {
+    it('accepts a stored id', () => {
+      const parsed = ResultResponse.parse({ id: 'clxyz0123456789' });
+      expect(parsed.id).toBe('clxyz0123456789');
+    });
+
+    it('rejects an empty id', () => {
+      expect(() => ResultResponse.parse({ id: '' })).toThrow();
+    });
+  });
+
+  describe('ResultDeferred', () => {
+    it('accepts stored:false', () => {
+      expect(ResultDeferred.parse({ stored: false }).stored).toBe(false);
+    });
+
+    it('rejects stored:true', () => {
+      expect(() => ResultDeferred.parse({ stored: true })).toThrow();
     });
   });
 

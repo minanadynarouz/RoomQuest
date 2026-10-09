@@ -46,4 +46,19 @@ describe('POST /api/v1/levels without a database', () => {
     const parsed = LevelResponse.parse(res.body as unknown);
     expect(parsed.source).toBe('procedural');
   });
+
+  it('POST /result returns 202 { stored:false }', async () => {
+    const res = await request(httpServer(app))
+      .post('/api/v1/levels/0123456789abcdef/result')
+      .send({
+        deviceId: DEVICE_ID,
+        stars: 3,
+        gems: 1,
+        timeMs: 50_000,
+        completed: true,
+        planSource: 'procedural',
+      });
+    expect(res.status).toBe(202);
+    expect(res.body).toEqual({ stored: false });
+  });
 });

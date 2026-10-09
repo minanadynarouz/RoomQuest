@@ -2,7 +2,12 @@ import { createHash } from 'node:crypto';
 import type { Server } from 'node:http';
 import type { INestApplication } from '@nestjs/common';
 import { SYNTHETIC_LIVING_ROOM } from '@roomquest/fixtures';
-import { LevelRequest, LevelResponse } from '@roomquest/schema';
+import {
+  LevelRequest,
+  LevelResponse,
+  ResultDeferred,
+  ResultRequest,
+} from '@roomquest/schema';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { JSON_BODY_LIMIT_BYTES, PROMPT_VERSION } from '../src/common/constants';
@@ -66,10 +71,32 @@ describe('API contract (B-02)', () => {
       expect(body.status).toBe('ok');
       expect(typeof body.version).toBe('string');
       expect(body.version.length).toBeGreaterThan(0);
-      expect(body.db).toBe('down');
+      expect(body.db).toBe('disabled');
       expect(body.llm === 'configured' || body.llm === 'missing').toBe(true);
       expect(typeof body.time).toBe('string');
       expect(Number.isNaN(Date.parse(body.time))).toBe(false);
+    });
+
+    it('echoes an incoming X-Request-Id', async () => {
+      const res = await request(httpServer(app))
+        .get('/api/health')
+        .set('X-Request-Id', 'client-req-123')
+        .expect(200);
+      expect(res.headers['x-request-id']).toBe('client-req-123');
+    });
+
+    it('generates a request id when the header is omitted', async () => {
+      const res = await request(httpServer(app)).get('/api/health').expect(200);
+      expect(res.headers['x-request-id']).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      );
+    });
+
+    it('sends helmet security headers', async () => {
+      const res = await request(httpServer(app)).get('/api/health').expect(200);
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+      expect(res.headers['x-frame-options']).toBe('SAMEORIGIN');
+      expect(res.headers['cross-origin-resource-policy']).toBe('cross-origin');
     });
   });
 
@@ -139,6 +166,53 @@ describe('API contract (B-02)', () => {
       const res = await levelsPost(app).send(oversized);
       const body = res.body as ErrorEnvelope;
 
+      expect(res.status).toBe(413);
+      expect(body.error.code).toBe('INVALID_REQUEST');
+      expect(body.error.message ?? '').toMatch(/16 KB/i);
+      expect(typeof res.headers['x-request-id']).toBe('string');
+    });
+  });
+
+  describe('POST /api/v1/levels/:cacheKey/result', () => {
+    const validResult = ResultRequest.parse({
+      deviceId: DEVICE_ID,
+      stars: 3,
+      gems: 2,
+      timeMs: 120_000,
+      completed: true,
+      planSource: 'procedural',
+    });
+
+    function resultPost(cacheKey: string) {
+      return request(httpServer(app)).post(
+        `/api/v1/levels/${cacheKey}/result`
+      );
+    }
+
+    it('returns 202 { stored:false } when there is no database', async () => {
+      const res = await resultPost('0123456789abcdef').send(validResult);
+      expect(res.status).toBe(202);
+      expect(ResultDeferred.parse(res.body as unknown)).toEqual({
+        stored: false,
+      });
+    });
+
+    it('returns 400 INVALID_REQUEST for a bad body', async () => {
+      const res = await resultPost('0123456789abcdef')
+        .send({ ...validResult, stars: 4 })
+        .expect(400);
+      const body = res.body as ErrorEnvelope;
+      expect(body.error.code).toBe('INVALID_REQUEST');
+      expect(Array.isArray(body.error.issues)).toBe(true);
+    });
+
+    it('rejects a JSON body over 16 KB', async () => {
+      const oversized = {
+        ...validResult,
+        pad: 'x'.repeat(JSON_BODY_LIMIT_BYTES),
+      };
+      const res = await resultPost('0123456789abcdef').send(oversized);
+      const body = res.body as ErrorEnvelope;
       expect(res.status).toBe(413);
       expect(body.error.code).toBe('INVALID_REQUEST');
       expect(body.error.message ?? '').toMatch(/16 KB/i);

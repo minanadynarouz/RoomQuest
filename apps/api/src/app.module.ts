@@ -2,26 +2,14 @@ import { Module, RequestMethod } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
-import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Options } from 'pino-http';
 import { ApiExceptionFilter } from './common/api-exception.filter';
+import { assignRequestId, requestIdFrom } from './common/request-id';
 import { validateEnv, type Env } from './config/env';
 import { HealthModule } from './health/health.module';
 import { LevelsModule } from './levels/levels.module';
 import { PrismaModule } from './prisma/prisma.module';
-
-function requestIdFrom(req: IncomingMessage): string {
-  const header = req.headers['x-request-id'];
-  if (typeof header === 'string' && header.length > 0) {
-    return header;
-  }
-  const first = Array.isArray(header) ? header[0] : undefined;
-  if (typeof first === 'string' && first.length > 0) {
-    return first;
-  }
-  return randomUUID();
-}
 
 @Module({
   imports: [
@@ -38,11 +26,11 @@ function requestIdFrom(req: IncomingMessage): string {
       useFactory: (config: ConfigService<Env, true>) => {
         const nodeEnv = config.get('NODE_ENV', { infer: true });
         const pinoHttp: Options = {
-          genReqId: (req: IncomingMessage, res: ServerResponse) => {
-            const id = requestIdFrom(req);
-            res.setHeader('X-Request-Id', id);
-            return id;
-          },
+          genReqId: (req: IncomingMessage, res: ServerResponse) =>
+            assignRequestId(req, res),
+          customProps: (req: IncomingMessage) => ({
+            requestId: requestIdFrom(req),
+          }),
           redact: {
             paths: ['req.headers.authorization', 'req.headers["x-api-key"]'],
           },

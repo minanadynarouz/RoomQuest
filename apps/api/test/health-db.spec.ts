@@ -32,11 +32,27 @@ describe('GET /api/health without DATABASE_URL', () => {
     vi.unstubAllEnvs();
   });
 
-  it("boots and reports db:'down'", async () => {
+  it("boots and reports db:'disabled'", async () => {
     const res = await request(httpServer(app)).get('/api/health').expect(200);
     const body = res.body as HealthBody;
     expect(body.status).toBe('ok');
-    expect(body.db).toBe('down');
+    expect(body.db).toBe('disabled');
+    expect(body.version.length).toBeGreaterThan(0);
+  });
+
+  it('POST /api/v1/levels/:cacheKey/result returns 202 stored:false', async () => {
+    const res = await request(httpServer(app))
+      .post('/api/v1/levels/0123456789abcdef/result')
+      .send({
+        deviceId: '550e8400-e29b-41d4-a716-446655440000',
+        stars: 1,
+        gems: 0,
+        timeMs: 1_000,
+        completed: false,
+        planSource: 'procedural',
+      });
+    expect(res.status).toBe(202);
+    expect(res.body).toEqual({ stored: false });
   });
 });
 
@@ -109,5 +125,20 @@ describe('GET /api/health with DATABASE_URL pointing at a closed port', () => {
       });
     expect(res.status).toBe(200);
     expect((res.body as { source: string }).source).toBe('procedural');
+  });
+
+  it('POST /api/v1/levels/:cacheKey/result returns 202 without throwing', async () => {
+    const res = await request(httpServer(app))
+      .post('/api/v1/levels/0123456789abcdef/result')
+      .send({
+        deviceId: '550e8400-e29b-41d4-a716-446655440000',
+        stars: 1,
+        gems: 0,
+        timeMs: 1_000,
+        completed: false,
+        planSource: 'procedural',
+      });
+    expect(res.status).toBe(202);
+    expect(res.body).toEqual({ stored: false });
   });
 });

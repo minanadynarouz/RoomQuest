@@ -29,7 +29,7 @@ Until then, use Docker Postgres 17 (section 4).
 
 Build: `corepack enable && pnpm i --frozen-lockfile && pnpm turbo run build --filter=api...`  
 Start: `node apps/api/dist/main.js`  
-Health: `GET /api/health` (always 200 if the process is up; `db` may be `"down"`).
+Health: `GET /api/health` (always 200 if the process is up; `db` may be `"up"`, `"down"`, or `"disabled"`).
 
 ## 3. Env vars (per Render service, later)
 
@@ -69,4 +69,4 @@ pnpm --filter api db:generate   # also runs as part of build / lint / typecheck 
 pnpm --filter api dev
 ```
 
-`GET /api/health` reports `db: "ok"` when `DATABASE_URL` points at a reachable Postgres, and `db: "down"` when the URL is unset or the database is unreachable. The process still starts either way; `POST /api/v1/levels` does not need a database (it skips the cache, logs a warning, and still returns 200).
+`GET /api/health` reports `db: "up"` when `DATABASE_URL` points at a reachable Postgres, `db: "disabled"` when the URL is unset, and `db: "down"` when the URL is set but the database is unreachable. The process still starts either way; `POST /api/v1/levels` does not need a database (it skips the cache, logs a warning, and still returns 200). `POST /api/v1/levels/:cacheKey/result` returns `202 { stored: false }` in those same no-DB cases.

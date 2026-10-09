@@ -1,6 +1,5 @@
 // Roomquest API — Prisma 7. LevelCache is the daily director cache (B-06).
-// SessionResult is stored by POST /levels/:cacheKey/result (B-09); the
-// table exists now so that ticket can insert without another migration.
+// SessionResult is written by POST /api/v1/levels/:cacheKey/result (B-09).
 
 generator client {
   provider     = "prisma-client"

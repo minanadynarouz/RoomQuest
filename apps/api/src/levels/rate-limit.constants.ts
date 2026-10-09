@@ -1,4 +1,4 @@
-/** Per-IP POST /api/v1/levels budget (`@nestjs/throttler`). */
+/** Per-IP POST /api/v1/levels budget (`@nestjs/throttler`), including /result. */
 export const IP_RATE_LIMIT = 60;
 export const IP_RATE_WINDOW_MS = 60 * 60 * 1000;
 

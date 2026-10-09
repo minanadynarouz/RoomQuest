@@ -3,6 +3,8 @@ import {
   SurfaceGraph,
   LevelRequest,
   LevelResponse,
+  ResultRequest,
+  ResultResponse,
   PIECE_IDS,
   KIT_CATALOG,
 } from '@roomquest/schema';
@@ -151,5 +153,17 @@ describe('Schema smoke test (api)', () => {
       repairs: [],
     };
     expect(() => LevelResponse.parse(response)).not.toThrow();
+
+    expect(() =>
+      ResultRequest.parse({
+        deviceId: '550e8400-e29b-41d4-a716-446655440000',
+        stars: 2,
+        gems: 1,
+        timeMs: 90_000,
+        completed: true,
+        planSource: 'procedural',
+      })
+    ).not.toThrow();
+    expect(() => ResultResponse.parse({ id: 'result_1' })).not.toThrow();
   });
 });
