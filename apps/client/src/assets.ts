@@ -75,6 +75,12 @@ export default defineAssets({
     type: AssetType.UIKitML,
     name: 'HUD Win',
   },
+  'debug-overlay': {
+    url: publicAssetUrl('ui/debug-overlay.uikitml'),
+    type: AssetType.UIKitML,
+    name: 'Debug Overlay',
+    priority: 'lazy',
+  },
   'webxr-banner': {
     url: publicAssetUrl('gltf/webxr-banner/banner.gltf'),
     type: AssetType.GLTF,

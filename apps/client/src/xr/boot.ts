@@ -3,6 +3,7 @@
  * X-03: LevelBuilderSystem, greybox kit, fixture / debug URL flags
  * F-04: spatial HUD panels (lazy-loaded with this XR module)
  * X-04: PlacementSystem pinch-place with snap
+ * F-05: debug overlay + window.__rq (dev or ?debug=1); overlay lazy-loads
  */
 
 import {
@@ -17,10 +18,17 @@ import {
   SYNTHETIC_LIVING_ROOM,
   SYNTHETIC_LIVING_ROOM_PLAN,
 } from '@roomquest/fixtures';
+import {
+  applyRqHooks,
+  createStatsGetter,
+  isOverlayReady,
+  type RqDebugHooks,
+} from '../debug/hooks.js';
+import { collectPerfStats } from '../debug/stats.js';
+import { parseUrlFlags, type UrlFlags } from '../debug/url-flags.js';
 import { createGameStore } from '../game/index.js';
 import { bindHudStore, HudSystem } from '../ui/HudSystem.js';
-import type { HudPanelId } from '../ui/visibility.js';
-import { readClientFlags, isSyntheticLivingRoomFixture } from './flags.js';
+import { isSyntheticLivingRoomFixture } from './flags.js';
 import { LevelBuilderSystem } from './systems/LevelBuilderSystem.js';
 import {
   PlacementSystem,
@@ -31,47 +39,78 @@ import { countDrawCalls } from './level/draw-calls.js';
 import type { LevelPlan, SurfaceGraph } from '@roomquest/schema';
 import type { SnapTarget } from './level/types.js';
 
+export type { RqDebugHooks, RqHudDebug } from '../debug/hooks.js';
+
 let worldInstance: World | null = null;
 const gameStore = createGameStore();
+let latestGraph: SurfaceGraph | null = null;
+let latestPlan: LevelPlan | null = null;
+let latestSnapTargets: readonly SnapTarget[] = [];
+let latestSceneDrawCalls = 0;
+let latestPlacement: PlacementDebugApi | null = null;
+let clientFlags: UrlFlags = parseUrlFlags('');
+let overlayRequested = false;
 
-export interface RqHudDebug {
-  ready: boolean;
-  visible: readonly HudPanelId[];
-}
-
-export interface RqDebugHooks {
-  store: ReturnType<typeof createGameStore>;
-  graph: SurfaceGraph | null;
-  plan: LevelPlan | null;
-  snapTargets: readonly SnapTarget[];
-  drawCalls: number;
-  hud?: RqHudDebug;
-  placement: PlacementDebugApi | null;
-}
-
-declare global {
-  interface Window {
-    __rq?: RqDebugHooks;
-  }
-}
+const statsGetter = createStatsGetter(() =>
+  collectPerfStats({
+    nowMs: 0,
+    fps: 0,
+    renderer: worldInstance?.renderer,
+    surfaceCount: latestGraph?.nodes.length ?? 0,
+    source: gameStore.planSource,
+    latencyMs: gameStore.directorLatencyMs,
+    repairs: gameStore.repairs,
+    fallbackReason: gameStore.fallbackReason,
+    validationIssues: gameStore.validationIssues.length,
+  })
+);
 
 function exposeHooks(
-  graph: SurfaceGraph | null,
-  plan: LevelPlan | null,
-  snapTargets: readonly SnapTarget[] = [],
-  drawCalls = 0,
-  placement: PlacementDebugApi | null = null
+  graph: SurfaceGraph | null = latestGraph,
+  plan: LevelPlan | null = latestPlan,
+  snapTargets: readonly SnapTarget[] = latestSnapTargets,
+  drawCalls = latestSceneDrawCalls,
+  placement: PlacementDebugApi | null = latestPlacement
 ): void {
+  latestGraph = graph;
+  latestPlan = plan;
+  latestSnapTargets = snapTargets;
+  latestSceneDrawCalls = drawCalls;
+  latestPlacement = placement;
   if (typeof window === 'undefined') return;
-  window.__rq = {
+  applyRqHooks(
+    clientFlags,
+    import.meta.env.DEV,
+    window,
+    (): RqDebugHooks => ({
+      store: gameStore,
+      graph: latestGraph,
+      plan: latestPlan,
+      snapTargets: latestSnapTargets,
+      drawCalls: latestSceneDrawCalls,
+      hud: window.__rq?.hud,
+      overlay: isOverlayReady() ? { ready: true } : window.__rq?.overlay,
+      placement: latestPlacement,
+      stats: statsGetter,
+      autoSolve: window.__rq?.autoSolve,
+    })
+  );
+}
+
+async function loadDebugOverlay(): Promise<void> {
+  if (overlayRequested || !clientFlags.debug || !worldInstance) return;
+  overlayRequested = true;
+  const { bindDebugOverlay, DebugOverlaySystem } = await import(
+    '../debug/DebugOverlaySystem.js'
+  );
+  bindDebugOverlay({
     store: gameStore,
-    graph,
-    plan,
-    snapTargets,
-    drawCalls,
-    hud: window.__rq?.hud,
-    placement,
-  };
+    getGraph: () => latestGraph,
+    refreshHooks: () => {
+      exposeHooks();
+    },
+  });
+  worldInstance.registerSystem(DebugOverlaySystem, { priority: -1 });
 }
 
 function addFixtureLights(world: World): void {
@@ -91,7 +130,10 @@ function addFixtureLights(world: World): void {
  * Grab config always uses `features.grabbing: { useHandPinchForGrab: true }`.
  */
 export async function launchXR(): Promise<World> {
-  const flags = readClientFlags();
+  clientFlags = parseUrlFlags(
+    typeof window === 'undefined' ? '' : window.location.search
+  );
+  const flags = clientFlags;
   const fixtureMode = isSyntheticLivingRoomFixture(flags);
 
   if (worldInstance) {
@@ -165,6 +207,7 @@ export async function launchXR(): Promise<World> {
   worldInstance.registerSystem(HudSystem, { priority: 0 });
   // After GrabSystem (-3) so the held world pose is current for the ghost.
   worldInstance.registerSystem(PlacementSystem, { priority: -2 });
+  await loadDebugOverlay();
 
   const builder = worldInstance.getSystem(LevelBuilderSystem);
   if (!builder) {

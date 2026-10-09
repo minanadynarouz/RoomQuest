@@ -3,6 +3,9 @@
  * Pure: takes a query string, never reads window.
  *
  * Flags: ?director=live|mock|off, ?seed=, ?date=YYYY-MM-DD
+ *
+ * `?debug=`, `?emulator=`, `?room=` and `?fixture=` live in
+ * `src/debug/url-flags.ts` so the landing chunk stays schema-free.
  */
 
 import type { DirectorFlags, DirectorMode } from './types.js';

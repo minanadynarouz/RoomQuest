@@ -201,7 +201,7 @@ test.describe('F-04 HUD surveying panel', () => {
       consoleLogs.push(msg.text());
     });
 
-    await page.goto('/?emulator=1&room=living_room');
+    await page.goto('/?emulator=1&room=living_room&debug=1');
     await page.waitForLoadState('networkidle');
 
     const button = page.locator('#enter-button');
@@ -276,3 +276,158 @@ test.describe('F-04 HUD surveying panel', () => {
     }
   });
 });
+
+const f05ScreenshotDir = path.join(__dirname, '../../../docs/screenshots/f05');
+
+test.describe('F-05 debug overlay', () => {
+  test('does not install __rq without ?debug=1 in production', async ({
+    page,
+  }) => {
+    const consoleLogs: string[] = [];
+    page.on('console', (msg) => {
+      consoleLogs.push(msg.text());
+    });
+
+    await page.goto('/?emulator=1&room=living_room');
+    await page.waitForLoadState('networkidle');
+
+    const button = page.locator('#enter-button');
+    for (let i = 0; i < 40; i++) {
+      if (await button.isEnabled()) break;
+      await page.waitForTimeout(500);
+    }
+    expect(await button.isEnabled()).toBe(true);
+    await button.click();
+
+    await expect
+      .poll(
+        async () =>
+          page
+            .locator('#landing-page')
+            .evaluate((el) => getComputedStyle(el).display),
+        { timeout: 20_000 }
+      )
+      .toBe('none');
+
+    await expect
+      .poll(
+        () =>
+          consoleLogs.some((line) =>
+            line.includes('[HUD] Spatial panels mounted')
+          ),
+        { timeout: 20_000 }
+      )
+      .toBe(true);
+
+    const hasHooks = await page.evaluate(
+      () => Boolean((window as unknown as { __rq?: unknown }).__rq)
+    );
+    expect(hasHooks).toBe(false);
+    expect(await page.locator('#rq-debug-overlay').count()).toBe(0);
+  });
+
+  test('shows perf overlay in the emulator with ?debug=1', async ({ page }) => {
+    const consoleLogs: string[] = [];
+    page.on('console', (msg) => {
+      consoleLogs.push(msg.text());
+    });
+
+    await page.goto('/?emulator=1&room=living_room&debug=1');
+    await page.waitForLoadState('networkidle');
+
+    const button = page.locator('#enter-button');
+    for (let i = 0; i < 40; i++) {
+      if (await button.isEnabled()) break;
+      await page.waitForTimeout(500);
+    }
+    expect(await button.isEnabled()).toBe(true);
+    await button.click();
+
+    await expect
+      .poll(
+        async () =>
+          page
+            .locator('#landing-page')
+            .evaluate((el) => getComputedStyle(el).display),
+        { timeout: 20_000 }
+      )
+      .toBe('none');
+
+    await page.waitForFunction(
+      () =>
+        Boolean(
+          (
+            window as unknown as {
+              __rq?: { overlay?: { ready?: boolean }; stats?: () => unknown };
+            }
+          ).__rq?.overlay?.ready
+        ),
+      { timeout: 25_000 }
+    );
+
+    await page.waitForTimeout(1200);
+
+    const snapshot = await page.evaluate(() => {
+      const rq = (
+        window as unknown as {
+          __rq?: {
+            overlay?: { ready?: boolean };
+            stats?: () => {
+              fps: number;
+              drawCalls: number;
+              triangles: number;
+              surfaces: number;
+              source: string | null;
+              latencyMs: number | null;
+              repairs: number;
+              fallbackReason: string | null;
+              validationIssues: number;
+            };
+            autoSolve?: () => void;
+            plan?: unknown;
+            store?: unknown;
+          };
+        }
+      ).__rq;
+      const panel = document.getElementById('rq-debug-overlay');
+      return {
+        overlayReady: rq?.overlay?.ready ?? false,
+        hasStore: Boolean(rq?.store),
+        hasPlanSlot: rq !== undefined && 'plan' in rq,
+        autoSolveType: typeof rq?.autoSolve,
+        stats: rq?.stats?.() ?? null,
+        domText: panel?.textContent ?? null,
+        domHidden: panel
+          ? getComputedStyle(panel).display === 'none'
+          : 'missing',
+      };
+    });
+
+    console.log('F-05 overlay state', snapshot, 'logs', consoleLogs.slice(-20));
+
+    expect(snapshot.overlayReady).toBe(true);
+    expect(snapshot.hasStore).toBe(true);
+    expect(snapshot.hasPlanSlot).toBe(true);
+    expect(snapshot.autoSolveType).toBe('undefined');
+    expect(snapshot.stats).not.toBeNull();
+    expect(snapshot.stats?.drawCalls).toBeGreaterThanOrEqual(0);
+    expect(snapshot.stats?.triangles).toBeGreaterThanOrEqual(0);
+    expect(typeof snapshot.stats?.fps).toBe('number');
+    expect(typeof snapshot.stats?.surfaces).toBe('number');
+    expect(typeof snapshot.stats?.repairs).toBe('number');
+    expect(typeof snapshot.stats?.validationIssues).toBe('number');
+
+    await page.screenshot({
+      path: path.join(f05ScreenshotDir, '01-debug-overlay.png'),
+      fullPage: true,
+    });
+
+    const canvas = page.locator('#scene-container canvas');
+    if (await canvas.count()) {
+      await canvas.first().screenshot({
+        path: path.join(f05ScreenshotDir, '02-debug-canvas.png'),
+      });
+    }
+  });
+});
+
