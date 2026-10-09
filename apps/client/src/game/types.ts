@@ -69,7 +69,13 @@ export type GameEvent =
       timestamp: number;
       beatIndex: number;
     }
-    | {
+  | {
+      type: 'slimeWoke';
+      placementId: string;
+      timestamp: number;
+      beatIndex: number;
+    }
+  | {
       type: 'gemCollected';
       placementId: string;
       timestamp: number;

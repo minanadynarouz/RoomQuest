@@ -589,6 +589,24 @@ describe('createGameStore', () => {
       expect(store.events[0]?.type).toBe('slimeStunned');
     });
 
+    it('emits slimeWoke event', () => {
+      const store = createGameStore({ clock: mockClock });
+      store.requestLevel();
+      store.startSurveying();
+      store.startBuilding(createMockPlan());
+      store.startPlaying();
+
+      mockTime = 4000;
+      store.slimeWoke('slime1');
+
+      expect(store.events[0]).toEqual({
+        type: 'slimeWoke',
+        placementId: 'slime1',
+        timestamp: 4000,
+        beatIndex: 0,
+      });
+    });
+
     it('emits gemCollected event and updates counter', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();

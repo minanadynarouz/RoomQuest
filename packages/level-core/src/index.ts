@@ -8,3 +8,4 @@ export * from './path';
 export * from './anchor';
 export * from './interact';
 export * from './platform';
+export * from './slime';

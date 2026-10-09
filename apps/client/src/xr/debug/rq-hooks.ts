@@ -21,6 +21,7 @@ import type { PlacementDebugApi } from '../systems/PlacementSystem.js';
 import type { GateLeverDebugApi } from '../systems/GateLeverSystem.js';
 import type { VillageAnchorDebugApi } from '../systems/VillageAnchorSystem.js';
 import type { PlatformDebugApi } from '../systems/PlatformRailSystem.js';
+import type { SlimeDebugApi } from '../systems/SlimeSystem.js';
 import type { RqPerfStats } from './stats.js';
 
 export interface RqHudDebug {
@@ -69,6 +70,7 @@ export interface RqHooks {
   /** X-09: village hut XRAnchor persist / restore status. */
   villageAnchor?: VillageAnchorDebugApi;
   gateLever?: GateLeverDebugApi | null;
+  slime?: SlimeDebugApi | null;
 }
 
 /** X-05 walker debug surface. `getWorldPosition` matches F-06's ExplorerTarget. */

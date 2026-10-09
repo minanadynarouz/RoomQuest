@@ -11,6 +11,7 @@
  * F-08: audio manager + CC0 SFX (unlocked on Enter, lazy with this chunk)
  * X-09: VillageAnchorSystem persist/restore (largest-table fallback)
  * X-07: PlatformRailSystem + PortalSystem (rail clamp, portal pair)
+ * X-08: SlimeSystem (patrol, poke / ray-tap stun, slimeStunned / slimeWoke)
  */
 
 import {
@@ -25,6 +26,7 @@ import {
   SYNTHETIC_LIVING_ROOM,
   SYNTHETIC_LIVING_ROOM_PLAN,
   SYNTHETIC_PLATFORM_PORTAL_PLAN,
+  SYNTHETIC_SLIME_PLAN,
 } from '@roomquest/fixtures';
 import {
   bindAudioStore,
@@ -56,6 +58,7 @@ import {
   isSyntheticFixture,
   isSyntheticLivingRoomFixture,
   isSyntheticPlatformPortalFixture,
+  isSyntheticSlimeFixture,
   readClientFlags,
   type ClientFlags,
 } from './flags.js';
@@ -67,6 +70,7 @@ import {
   type PlatformDebugApi,
 } from './systems/PlatformRailSystem.js';
 import { PortalSystem } from './systems/PortalSystem.js';
+import { SlimeSystem, type SlimeDebugApi } from './systems/SlimeSystem.js';
 import {
   PlacementSystem,
   type PlacementDebugApi,
@@ -92,6 +96,7 @@ let latestSnapTargets: readonly SnapTarget[] = [];
 let latestSceneDrawCalls = 0;
 let latestPlacement: PlacementDebugApi | null = null;
 let latestPlatform: PlatformDebugApi | null = null;
+let latestSlime: SlimeDebugApi | null = null;
 let clientFlags: ClientFlags = readClientFlags('');
 let overlayRequested = false;
 let autoSolveHookRegistered = false;
@@ -183,6 +188,7 @@ function registerAutoSolveHook(): void {
         plan: latestPlan,
         placement: latestPlacement,
         platform: latestPlatform,
+        slime: latestSlime,
       });
       return Promise.resolve();
     },
@@ -196,7 +202,8 @@ function exposeHooks(
   snapTargets: readonly SnapTarget[] = latestSnapTargets,
   drawCalls = latestSceneDrawCalls,
   placement: PlacementDebugApi | null = latestPlacement,
-  platform: PlatformDebugApi | null = latestPlatform
+  platform: PlatformDebugApi | null = latestPlatform,
+  slime: SlimeDebugApi | null = latestSlime
 ): void {
   latestGraph = graph;
   latestPlan = plan;
@@ -204,6 +211,7 @@ function exposeHooks(
   latestSceneDrawCalls = drawCalls;
   latestPlacement = placement;
   latestPlatform = platform;
+  latestSlime = slime;
   if (typeof window === 'undefined') return;
   registerAutoSolveHook();
   installRqHooks(
@@ -217,6 +225,7 @@ function exposeHooks(
       overlay: isOverlayReady() ? { ready: true } : window.__rq?.overlay,
       placement: latestPlacement,
       platform: latestPlatform,
+      slime: latestSlime,
       stats: statsGetter,
       playSynthetic: playSyntheticLevel,
     },
@@ -289,6 +298,12 @@ function resolveSyntheticFixture(flags: ClientFlags): {
       plan: SYNTHETIC_PLATFORM_PORTAL_PLAN,
     };
   }
+  if (isSyntheticSlimeFixture(flags)) {
+    return {
+      graph: SYNTHETIC_LIVING_ROOM,
+      plan: SYNTHETIC_SLIME_PLAN,
+    };
+  }
   if (isSyntheticLivingRoomFixture(flags)) {
     return {
       graph: SYNTHETIC_LIVING_ROOM,
@@ -316,6 +331,7 @@ function playSyntheticLevel(): boolean {
       .getSystem(ExplorerSystem)
       ?.begin(SYNTHETIC_LIVING_ROOM_PLAN, SYNTHETIC_LIVING_ROOM);
     world.getSystem(PlatformRailSystem)?.bindGraph(SYNTHETIC_LIVING_ROOM);
+    world.getSystem(SlimeSystem)?.bindGraph(SYNTHETIC_LIVING_ROOM);
   }
   if (gameStore.phase === 'building') {
     gameStore.startPlaying();
@@ -352,6 +368,7 @@ async function startPlayableLevel(
   builder.build(result.plan, graph);
   worldInstance?.getSystem(ExplorerSystem)?.begin(result.plan, graph);
   worldInstance?.getSystem(PlatformRailSystem)?.bindGraph(graph);
+  worldInstance?.getSystem(SlimeSystem)?.bindGraph(graph);
   gameStore.startPlaying();
   exposeHooks(
     graph,
@@ -490,6 +507,8 @@ export async function launchXR(): Promise<World> {
   worldInstance.registerSystem(PortalSystem, { priority: 4 });
   // X-09: after the hut exists; event-driven, not on the grab hot path.
   worldInstance.registerSystem(VillageAnchorSystem, { priority: 6 });
+  // X-08: after VillageAnchor (6); event-driven patrol, not on the grab hot path.
+  worldInstance.registerSystem(SlimeSystem, { priority: 7 });
   await loadDebugOverlay();
 
   const builder = worldInstance.getSystem(LevelBuilderSystem);
@@ -549,9 +568,20 @@ export async function launchXR(): Promise<World> {
     throw new Error('PortalSystem failed to register');
   }
   portals.configure({ builder, store: gameStore });
+  const slimes = worldInstance.getSystem(SlimeSystem);
+  if (!slimes) {
+    throw new Error('SlimeSystem failed to register');
+  }
+  slimes.configure({ builder, store: gameStore });
+  latestSlime = slimes.debugApi();
+  registerRqHook('slime', latestSlime, {
+    flags: clientFlags,
+    isDev: import.meta.env.DEV,
+  });
   builder.addEventListener('levelBuilt', () => {
     placement.onLevelRebuilt();
     gateLever.onLevelRebuilt();
+    slimes.onLevelRebuilt();
   });
 
   if (fixtureMode) {
@@ -570,6 +600,7 @@ export async function launchXR(): Promise<World> {
     builder.build(fixtureLevel.plan, fixtureLevel.graph);
     explorer.begin(fixtureLevel.plan, fixtureLevel.graph);
     platformRails.bindGraph(fixtureLevel.graph);
+    slimes.bindGraph(fixtureLevel.graph);
     if (flags.debug) {
       builder.setDebugGraph(fixtureLevel.graph);
     }
@@ -609,6 +640,7 @@ export async function launchXR(): Promise<World> {
           explorer.begin(gameStore.plan, graph);
         }
         platformRails.bindGraph(graph);
+        slimes.bindGraph(graph);
         exposeHooks(
           graph,
           gameStore.plan,

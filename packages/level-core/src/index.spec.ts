@@ -8,6 +8,9 @@ import {
   explorerPath,
   resolveLeverGates,
   applyLeverPull,
+  tickSlime,
+  stunSlime,
+  canExplorerPassSlime,
 } from './index';
 import { findNearestSnapTarget, SNAP_RADIUS_M } from './snap';
 import {
@@ -50,6 +53,12 @@ describe('level-core', () => {
   it('exports lever-gate link helpers', () => {
     expect(resolveLeverGates).toBeTypeOf('function');
     expect(applyLeverPull).toBeTypeOf('function');
+  });
+
+  it('exports slime patrol, stun, and pass-check helpers', () => {
+    expect(tickSlime).toBeTypeOf('function');
+    expect(stunSlime).toBeTypeOf('function');
+    expect(canExplorerPassSlime).toBeTypeOf('function');
   });
 });
 

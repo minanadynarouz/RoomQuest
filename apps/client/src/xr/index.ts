@@ -18,6 +18,7 @@ export { ExplorerSystem } from './systems/ExplorerSystem.js';
 export { GateLeverSystem } from './systems/GateLeverSystem.js';
 export { PlatformRailSystem } from './systems/PlatformRailSystem.js';
 export { PortalSystem } from './systems/PortalSystem.js';
+export { SlimeSystem } from './systems/SlimeSystem.js';
 export { SurfaceGraphSystem } from './systems/SurfaceGraphSystem.js';
 export { VillageAnchorSystem } from './systems/VillageAnchorSystem.js';
 export { mountGreyboxLevel } from './level/mount-level.js';

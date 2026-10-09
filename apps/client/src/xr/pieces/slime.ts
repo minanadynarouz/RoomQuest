@@ -1,5 +1,17 @@
-import type { BufferGeometry, Object3D } from '@iwsdk/core';
-import { box, mergePainted, sphere, type PieceFootprint } from './geometry.js';
+import {
+  Group,
+  Mesh,
+  type BufferGeometry,
+  type Object3D,
+} from '@iwsdk/core';
+import { SLIME_STAR_COUNT } from '@roomquest/level-core';
+import {
+  box,
+  mergePainted,
+  octahedron,
+  sphere,
+  type PieceFootprint,
+} from './geometry.js';
 import type { ToyPalette } from './palette.js';
 import type { GreyboxKit } from './kit.js';
 
@@ -23,6 +35,35 @@ export function createSlimeGeometry(palette: ToyPalette): BufferGeometry {
   ]);
 }
 
+/** Merged star used for the stunned orbit (vertex colours, shared geometry). */
+export function createSlimeStarGeometry(palette: ToyPalette): BufferGeometry {
+  return mergePainted([
+    octahedron(0.012, 0, 0.01, 0, palette.accent),
+    box(0.004, 0.022, 0.004, 0, 0.01, 0, palette.accent),
+    box(0.022, 0.004, 0.004, 0, 0.01, 0, palette.accent),
+  ]);
+}
+
 export function createSlime(kit: GreyboxKit): Object3D {
-  return kit.createMeshPiece('slime', SLIME_FOOTPRINT);
+  const root = kit.createMeshPiece('slime', SLIME_FOOTPRINT);
+  const body = root.children[0];
+  if (body) {
+    body.name = 'slime-body';
+    root.userData.body = body;
+  }
+  const stars = new Group();
+  stars.name = 'slime-stars';
+  stars.visible = false;
+  const starGeo = createSlimeStarGeometry(kit.palette);
+  for (let i = 0; i < SLIME_STAR_COUNT; i += 1) {
+    const star = new Mesh(starGeo, kit.material);
+    star.name = `slime-star-${String(i)}`;
+    star.castShadow = false;
+    star.receiveShadow = false;
+    stars.add(star);
+  }
+  stars.userData.starGeometry = starGeo;
+  root.add(stars);
+  root.userData.stars = stars;
+  return root;
 }

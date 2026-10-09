@@ -3,6 +3,7 @@ import {
   SYNTHETIC_LIVING_ROOM,
   SYNTHETIC_LIVING_ROOM_PLAN,
   SYNTHETIC_PLATFORM_PORTAL_PLAN,
+  SYNTHETIC_SLIME_PLAN,
 } from '@roomquest/fixtures';
 import { explorerPath } from '@roomquest/level-core';
 import { createGameStore } from '../../game/index.js';
@@ -81,5 +82,60 @@ describe('autoSolve', () => {
     expect(store.phase).toBe('won');
     expect(store.events.some((e) => e.type === 'portalUsed')).toBe(true);
     expect(walker.state).toBe('celebrating');
+  });
+
+  it('stuns slimes through emitSlimeStunned on the X-08 fixture', () => {
+    const store = createGameStore({
+      clock: {
+        now: () => 0,
+      },
+    });
+    store.requestLevel();
+    store.startSurveying();
+    store.startBuilding(SYNTHETIC_SLIME_PLAN);
+    store.startPlaying();
+
+    autoSolve({ store, plan: SYNTHETIC_SLIME_PLAN });
+
+    expect(
+      store.events.some(
+        (event) => event.type === 'slimeStunned' && event.placementId === 'p8'
+      )
+    ).toBe(true);
+  });
+
+  it('stuns slimes via the SlimeSystem stun hook when provided', () => {
+    const store = createGameStore({
+      clock: {
+        now: () => 0,
+      },
+    });
+    store.requestLevel();
+    store.startSurveying();
+    store.startBuilding(SYNTHETIC_SLIME_PLAN);
+    store.startPlaying();
+
+    const stunned: string[] = [];
+    autoSolve({
+      store,
+      plan: SYNTHETIC_SLIME_PLAN,
+      slime: {
+        stun: (id) => {
+          stunned.push(id);
+          store.slimeStunned(id);
+          return true;
+        },
+        boundCount: () => 1,
+        isAwake: () => false,
+        canPass: () => true,
+      },
+    });
+
+    expect(stunned).toEqual(['p8']);
+    expect(
+      store.events.some(
+        (event) => event.type === 'slimeStunned' && event.placementId === 'p8'
+      )
+    ).toBe(true);
   });
 });

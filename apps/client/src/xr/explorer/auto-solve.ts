@@ -3,12 +3,15 @@ import type { GameStore } from '../../game/index.js';
 import { pullLever } from '../lever/activate.js';
 import type { PlacementDebugApi } from '../systems/PlacementSystem.js';
 import type { PlatformDebugApi } from '../systems/PlatformRailSystem.js';
+import type { SlimeDebugApi } from '../systems/SlimeSystem.js';
+import { emitSlimeStunned } from '../slime/stun.js';
 
 export interface AutoSolveOptions {
   store: GameStore;
   plan: LevelPlan;
   placement?: PlacementDebugApi | null;
   platform?: PlatformDebugApi | null;
+  slime?: SlimeDebugApi | null;
 }
 
 /**
@@ -16,7 +19,7 @@ export interface AutoSolveOptions {
  * the explorer can finish the fixture unattended.
  */
 export function autoSolve(options: AutoSolveOptions): void {
-  const { store, plan, placement, platform } = options;
+  const { store, plan, placement, platform, slime } = options;
   const events = store.events;
 
   const hasEvent = (
@@ -40,11 +43,12 @@ export function autoSolve(options: AutoSolveOptions): void {
     ) {
       pullLever(store, plan, placementRow.id);
     }
-    if (
-      placementRow.piece === 'slime' &&
-      !hasEvent('slimeStunned', placementRow.id)
-    ) {
-      store.slimeStunned(placementRow.id);
+    if (placementRow.piece === 'slime') {
+      if (slime) {
+        slime.stun(placementRow.id);
+      } else if (!hasEvent('slimeStunned', placementRow.id)) {
+        emitSlimeStunned(store, placementRow.id);
+      }
     }
     if (
       placementRow.piece === 'moving_platform' &&

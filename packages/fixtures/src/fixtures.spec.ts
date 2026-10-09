@@ -3,6 +3,7 @@ import { SurfaceGraph, LevelPlan } from '@roomquest/schema';
 import { SYNTHETIC_LIVING_ROOM } from './graphs/synthetic-living-room.js';
 import { SYNTHETIC_LIVING_ROOM_PLAN } from './plans/synthetic-living-room-plan.js';
 import { SYNTHETIC_PLATFORM_PORTAL_PLAN } from './plans/synthetic-platform-portal-plan.js';
+import { SYNTHETIC_SLIME_PLAN } from './plans/synthetic-slime-plan.js';
 
 describe('Fixtures', () => {
   describe('SYNTHETIC_LIVING_ROOM', () => {
@@ -188,6 +189,27 @@ describe('Fixtures', () => {
     it('references only synthetic living-room surfaces', () => {
       const surfaceIds = SYNTHETIC_LIVING_ROOM.nodes.map((n) => n.id);
       SYNTHETIC_PLATFORM_PORTAL_PLAN.placements.forEach((placement) => {
+        expect(surfaceIds).toContain(placement.surface);
+        if (placement.to) {
+          expect(surfaceIds).toContain(placement.to);
+        }
+      });
+    });
+  });
+
+  describe('SYNTHETIC_SLIME_PLAN', () => {
+    it('is a valid LevelPlan with a slime on a ≥ 0.5 m² table', () => {
+      const result = LevelPlan.parse(SYNTHETIC_SLIME_PLAN);
+      const slime = result.placements.find((p) => p.piece === 'slime');
+      expect(slime).toBeDefined();
+      expect(slime?.surface).toBe('s1');
+      const table = SYNTHETIC_LIVING_ROOM.nodes.find((n) => n.id === 's1');
+      expect(table?.area).toBeGreaterThanOrEqual(0.5);
+    });
+
+    it('references only synthetic living-room surfaces', () => {
+      const surfaceIds = SYNTHETIC_LIVING_ROOM.nodes.map((n) => n.id);
+      SYNTHETIC_SLIME_PLAN.placements.forEach((placement) => {
         expect(surfaceIds).toContain(placement.surface);
         if (placement.to) {
           expect(surfaceIds).toContain(placement.to);
