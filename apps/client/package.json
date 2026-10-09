@@ -19,7 +19,6 @@
     "@pmndrs/uikit-horizon": "^1.0.74",
     "@pmndrs/uikit-lucide": "^1.0.74",
     "@preact/signals-core": "^1.14.4",
-    "zod": "^4.0.1",
     "@roomquest/fixtures": "workspace:*",
     "@roomquest/level-core": "workspace:*",
     "@roomquest/schema": "workspace:*",

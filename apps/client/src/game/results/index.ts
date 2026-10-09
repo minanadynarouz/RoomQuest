@@ -1,14 +1,17 @@
 /**
- * F-07 result posting. Local B-09 adapters until PR #28 merges.
+ * F-07 result posting. Level keys and the request body come from
+ * `@roomquest/schema` (B-09).
  */
 
-export { procLevelKey, PROC_LEVEL_KEY_RE, parseProcLevelKey } from './proc-key.js';
-export type { ProcTier, ProcLevelKeyParts } from './proc-key.js';
 export {
-  ResultRequestBody,
-  ResultLevelKey,
+  PROC_LEVEL_KEY_RE,
   RESULT_TIME_MS_MAX,
-} from './schema.js';
+  ResultLevelKey,
+  ResultRequest,
+  parseProcLevelKey,
+  procLevelKey,
+} from '@roomquest/schema';
+export type { ProcLevelKeyParts } from '@roomquest/schema';
 export {
   createResultPoster,
   resolveLevelKey,

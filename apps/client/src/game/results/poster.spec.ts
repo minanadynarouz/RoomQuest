@@ -4,8 +4,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { procLevelKey } from '@roomquest/schema';
 import { DEFAULT_CLIENT_VERSION, LEVELS_PATH } from '../director/types.js';
-import { procLevelKey } from './proc-key.js';
 import { createResultPoster, resolveLevelKey, type ResultFetch } from './poster.js';
 
 const DEVICE = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
@@ -63,17 +63,6 @@ describe('resolveLevelKey', () => {
         seed: null,
       })
     ).toBeNull();
-  });
-});
-
-describe('procLevelKey adapter', () => {
-  it('matches the B-09 proc:<seed>:<tier> format', () => {
-    expect(procLevelKey('daily-seed', 'easy')).toBe('proc:daily-seed:easy');
-    expect(procLevelKey(42, 'normal')).toBe('proc:42:normal');
-  });
-
-  it('rejects seeds that contain a colon', () => {
-    expect(() => procLevelKey('a:b', 'normal')).toThrow(/contain/);
   });
 });
 
@@ -137,6 +126,24 @@ describe('createResultPoster', () => {
       gems: 1,
       timeMs: 8_000,
       completed: false,
+      planSource: 'procedural',
+    });
+    expect(calls[0]?.url).toContain(encodeURIComponent(key));
+  });
+
+  it('always sends planSource "procedural" for a proc: key', async () => {
+    const key = procLevelKey('room-2026-10-09', 'easy');
+    await poster().post({
+      levelKey: key,
+      deviceId: DEVICE,
+      stars: 2,
+      gems: 1,
+      timeMs: 12_000,
+      completed: true,
+      planSource: 'llm',
+    });
+    expect(calls).toHaveLength(1);
+    expect(JSON.parse(calls[0]?.init.body ?? '{}')).toMatchObject({
       planSource: 'procedural',
     });
     expect(calls[0]?.url).toContain(encodeURIComponent(key));
