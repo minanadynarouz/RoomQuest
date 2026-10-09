@@ -18,7 +18,7 @@
     "dev": "tsup --watch",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --coverage",
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@roomquest/fixtures": "workspace:*",
+    "@vitest/coverage-v8": "^4.1.4",
     "eslint": "^9.16.0",
     "tsup": "^8.3.6",
     "typescript": "~5.9.3",
