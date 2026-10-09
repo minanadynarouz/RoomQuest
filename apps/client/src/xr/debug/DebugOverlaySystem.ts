@@ -15,7 +15,7 @@ import {
   UIKitMLAsset,
   type Entity,
 } from '@iwsdk/core';
-import type { GameStore } from '../game/index.js';
+import type { GameStore } from '../../game/index.js';
 import type { SurfaceGraph } from '@roomquest/schema';
 import { formatDebugBlock, formatDebugLines } from './format.js';
 import { setOverlayReady, writeLatestPerfStats } from './hooks.js';

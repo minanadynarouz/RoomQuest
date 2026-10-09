@@ -3,10 +3,10 @@
  * XR is loaded on demand via dynamic import of ./xr/index.js (X-01).
  */
 
-import { parseUrlFlags } from './debug/url-flags.js';
 import { initLanding } from './landing/index.js';
+import { readClientFlags } from './xr/flags.js';
 
-const bootFlags = parseUrlFlags(window.location.search);
+const bootFlags = readClientFlags(window.location.search);
 
 // X-03: `?fixture=` boots via dynamic import so it never joins the landing chunk.
 if (bootFlags.fixture === 'synthetic_living_room') {

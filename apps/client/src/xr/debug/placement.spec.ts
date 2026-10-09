@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkHudPose, leashedHudOffset } from '../ui/placement.js';
+import { checkHudPose, leashedHudOffset } from '../../ui/placement.js';
 import { DEBUG_PANEL_OFFSET } from './placement.js';
 
 describe('debug overlay placement', () => {

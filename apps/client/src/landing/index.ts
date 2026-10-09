@@ -5,8 +5,8 @@
 
 import {
   emulatorRoomFromFlags,
-  parseUrlFlags,
-} from '../debug/url-flags';
+  readClientFlags,
+} from '../xr/flags';
 import {
   checkImmersiveARSupport,
   type CapabilityResult,
@@ -15,7 +15,7 @@ import { loadEmulatorRuntime, waitForWebXRPolyfill } from './emulator-loader';
 import { getLandingUIElements, updateCapabilityUI } from './ui';
 import './styles.css';
 
-const flags = parseUrlFlags(window.location.search);
+const flags = readClientFlags(window.location.search);
 const IS_EMULATOR = flags.emulator;
 const ROOM = emulatorRoomFromFlags(flags);
 

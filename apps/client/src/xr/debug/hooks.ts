@@ -4,17 +4,20 @@
  * `autoSolve` is a typed slot for F-09; this ticket does not fill it in.
  */
 
-import type { GameStore } from '../game/index.js';
+import type { GameStore } from '../../game/index.js';
 import type { LevelPlan, SurfaceGraph } from '@roomquest/schema';
-import type { HudPanelId } from '../ui/visibility.js';
-import type { SnapTarget } from '../xr/level/types.js';
-import type { PlacementDebugApi } from '../xr/systems/PlacementSystem.js';
+import type { HudPanelId } from '../../ui/visibility.js';
+import type { SnapTarget } from '../level/types.js';
+import type { PlacementDebugApi } from '../systems/PlacementSystem.js';
+import {
+  shouldExposeDebugHooks,
+  type ClientFlags,
+} from '../flags.js';
 import type { RqPerfStats } from './stats.js';
 import { EMPTY_PERF_STATS } from './stats.js';
-import { shouldExposeDebugHooks, type UrlFlags } from './url-flags.js';
 
 export type { RqPerfStats } from './stats.js';
-export { shouldExposeDebugHooks } from './url-flags.js';
+export { shouldExposeDebugHooks } from '../flags.js';
 
 export interface RqHudDebug {
   ready: boolean;
@@ -109,7 +112,7 @@ export function createStatsGetter(
  * Returns whether hooks are live.
  */
 export function applyRqHooks(
-  flags: Pick<UrlFlags, 'debug'>,
+  flags: Pick<ClientFlags, 'debug'>,
   isDev: boolean,
   target: RqHookTarget,
   factory: () => RqDebugHooks

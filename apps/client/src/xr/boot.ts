@@ -18,17 +18,20 @@ import {
   SYNTHETIC_LIVING_ROOM,
   SYNTHETIC_LIVING_ROOM_PLAN,
 } from '@roomquest/fixtures';
+import { createGameStore } from '../game/index.js';
+import { bindHudStore, HudSystem } from '../ui/HudSystem.js';
 import {
   applyRqHooks,
   createStatsGetter,
   isOverlayReady,
   type RqDebugHooks,
-} from '../debug/hooks.js';
-import { collectPerfStats } from '../debug/stats.js';
-import { parseUrlFlags, type UrlFlags } from '../debug/url-flags.js';
-import { createGameStore } from '../game/index.js';
-import { bindHudStore, HudSystem } from '../ui/HudSystem.js';
-import { isSyntheticLivingRoomFixture } from './flags.js';
+} from './debug/hooks.js';
+import { collectPerfStats } from './debug/stats.js';
+import {
+  isSyntheticLivingRoomFixture,
+  readClientFlags,
+  type ClientFlags,
+} from './flags.js';
 import { LevelBuilderSystem } from './systems/LevelBuilderSystem.js';
 import {
   PlacementSystem,
@@ -39,7 +42,7 @@ import { countDrawCalls } from './level/draw-calls.js';
 import type { LevelPlan, SurfaceGraph } from '@roomquest/schema';
 import type { SnapTarget } from './level/types.js';
 
-export type { RqDebugHooks, RqHudDebug } from '../debug/hooks.js';
+export type { RqDebugHooks, RqHudDebug } from './debug/hooks.js';
 
 let worldInstance: World | null = null;
 const gameStore = createGameStore();
@@ -48,7 +51,7 @@ let latestPlan: LevelPlan | null = null;
 let latestSnapTargets: readonly SnapTarget[] = [];
 let latestSceneDrawCalls = 0;
 let latestPlacement: PlacementDebugApi | null = null;
-let clientFlags: UrlFlags = parseUrlFlags('');
+let clientFlags: ClientFlags = readClientFlags('');
 let overlayRequested = false;
 
 const statsGetter = createStatsGetter(() =>
@@ -101,7 +104,7 @@ async function loadDebugOverlay(): Promise<void> {
   if (overlayRequested || !clientFlags.debug || !worldInstance) return;
   overlayRequested = true;
   const { bindDebugOverlay, DebugOverlaySystem } = await import(
-    '../debug/DebugOverlaySystem.js'
+    './debug/DebugOverlaySystem.js'
   );
   bindDebugOverlay({
     store: gameStore,
@@ -130,7 +133,7 @@ function addFixtureLights(world: World): void {
  * Grab config always uses `features.grabbing: { useHandPinchForGrab: true }`.
  */
 export async function launchXR(): Promise<World> {
-  clientFlags = parseUrlFlags(
+  clientFlags = readClientFlags(
     typeof window === 'undefined' ? '' : window.location.search
   );
   const flags = clientFlags;

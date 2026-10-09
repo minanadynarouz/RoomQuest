@@ -5,11 +5,11 @@
  * In production, we need to load it dynamically when ?emulator=1 is present
  * to keep the landing bundle under 50KB.
  *
- * `?room=` is parsed once by `parseUrlFlags` (F-05) and passed in here.
+ * `?room=` is parsed once by `readClientFlags` in `xr/flags.ts` and passed in here.
  * This module owns the actual room JSON load; do not duplicate it.
  */
 
-import type { EmulatorRoom } from '../debug/url-flags';
+import type { EmulatorRoom } from '../xr/flags';
 
 export interface EmulatorConfig {
   device?: 'metaQuest2' | 'metaQuest3' | 'metaQuestPro' | 'oculusQuest1';

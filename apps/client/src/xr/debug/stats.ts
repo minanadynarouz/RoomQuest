@@ -3,7 +3,7 @@
  * Numbers for draws/tris come from `renderer.info.render`.
  */
 
-import type { FallbackReason } from '../game/director/types.js';
+import type { FallbackReason } from '../../game/director/types.js';
 import type { PlanSource } from '@roomquest/schema';
 import type { RollingFps } from './rolling-fps.js';
 
