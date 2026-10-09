@@ -25,6 +25,7 @@
     "@roomquest/schema": "workspace:*"
   },
   "devDependencies": {
+    "@roomquest/fixtures": "workspace:*",
     "eslint": "^9.16.0",
     "tsup": "^8.3.6",
     "typescript": "~5.9.3",
