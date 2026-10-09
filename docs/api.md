@@ -250,7 +250,7 @@ Manual **`workflow_dispatch` only** — it does **not** run on pull requests. Re
 | `GOOGLE_API_KEY`    | **required for live eval** | Gemini primary (`DIRECTOR_MODEL`, default `gemini-3.8-flash`)  |
 | `ANTHROPIC_API_KEY` | optional                   | Claude fallback (`FALLBACK_MODEL`, default `claude-haiku-4-5`) |
 
-The workflow also reads optional repository **variables** `DIRECTOR_MODEL` and `FALLBACK_MODEL` (blank → API defaults). Dispatch with `mock=true` to run FakeListChatModel and skip the live-key check. The markdown + JSON report is uploaded as the `director-eval-report` artifact.
+The workflow sets `DIRECTOR_MODE=live` and reads the API keys from those **exact** repository secret names (`GOOGLE_API_KEY`, `ANTHROPIC_API_KEY` — same as `apps/api/src/config/env.ts`). Optional repository **variables** `DIRECTOR_MODEL` and `FALLBACK_MODEL` override model ids when set (blank → API defaults). Dispatch with `mock=true` to run FakeListChatModel and skip the live-key check. The markdown + JSON report is uploaded as the `director-eval-report` artifact.
 
 ## Local run (no database)
 
