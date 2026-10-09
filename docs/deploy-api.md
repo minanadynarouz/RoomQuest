@@ -27,7 +27,7 @@ Until then, use Docker Postgres 17 (section 4).
 4. `autoDeploy` is **false**. Deploys are triggered later by GitHub deploy-hook URLs (do not turn auto-deploy on).
 5. After creation, copy each service’s **deploy hook** URL into GitHub Environments (`RENDER_DEPLOY_HOOK_STAGING` / `RENDER_DEPLOY_HOOK_PROD`).
 
-Build: `corepack enable && pnpm i --frozen-lockfile && pnpm turbo run build --filter=api...`  
+Build: `corepack enable && pnpm i --frozen-lockfile && pnpm turbo run build --filter=api... && pnpm --filter api db:migrate:deploy`  
 Start: `node apps/api/dist/main.js`  
 Health: `GET /api/health` (always 200 if the process is up; `db` may be `"up"`, `"down"`, or `"disabled"`).
 
@@ -55,7 +55,7 @@ GitHub Actions (not Render) also needs:
 - Environment **production**: `DIRECT_URL_PROD`, `RENDER_DEPLOY_HOOK_PROD`
 - Repository variables: `API_URL_STAGING`, `API_URL_PROD`
 
-Migrations run in CI (`prisma migrate deploy` with `DIRECT_URL`) before the Render deploy hook, not inside the web process.
+Migrations run at the **end of the Render build** (`pnpm --filter api db:migrate:deploy`). `apps/api/prisma.config.ts` prefers `DIRECT_URL` (Neon unpooled) over `DATABASE_URL`. `migrate deploy` is idempotent, so L-03 / L-04 may also run it in GitHub Actions before the deploy hook. The start command does not migrate.
 
 ## 4. Local Postgres 17 (this ticket)
 
@@ -70,3 +70,32 @@ pnpm --filter api dev
 ```
 
 `GET /api/health` reports `db: "up"` when `DATABASE_URL` points at a reachable Postgres, `db: "disabled"` when the URL is unset, and `db: "down"` when the URL is set but the database is unreachable. The process still starts either way; `POST /api/v1/levels` does not need a database (it skips the cache, logs a warning, and still returns 200). `POST /api/v1/levels/:cacheKey/result` returns `202 { stored: false }` in those same no-DB cases.
+
+## 5. HTTP smoke (`pnpm --filter api smoke`)
+
+Contract check against a **running** API. Engineering Lead can point this at staging/prod later. It does not start the process and does not create Render/Neon resources.
+
+```bash
+# local — API already listening the way Render starts it:
+#   NODE_ENV=production DIRECTOR_MODE=mock node apps/api/dist/main.js
+pnpm --filter api smoke
+
+# staging / prod
+BASE_URL=https://roomquest-api-staging.onrender.com pnpm --filter api smoke
+```
+
+`--base-url` overrides `BASE_URL`. Default is `http://localhost:3000`.
+
+| Check | Notes |
+| --- | --- |
+| `GET /api/health` | 200 with a non-empty `version` and `db:"up"` |
+| `POST /api/v1/levels` | Fixture graphs from `@roomquest/fixtures` (and `packages/fixtures/rooms/*.json` when present). Body parses as `LevelResponse`; `level-core.validatePlan` must succeed; `latencyMs` ≤ 7 s |
+| Repeat `/levels` | `source:"cache"` |
+| `POST /api/v1/levels/:cacheKey/result` | 201 `{id}` using the returned `cacheKey` |
+| Proc result | 201 using `procLevelKey(seed, tier)` with `planSource:"procedural"` |
+| CORS preflight | `OPTIONS` from the client Vercel preview origin pattern |
+| 429 | Per-device cache-miss limiter; body includes `retryAfterS` |
+
+**Postgres down (local only):** `SMOKE_STOP_POSTGRES=1 pnpm --filter api smoke` or `pnpm --filter api smoke -- --stop-postgres`. Stops the docker compose `postgres` service, asserts health `db:"down"` while `/levels` still returns 200 `procedural`, then starts Postgres again. Refused when `BASE_URL` is not loopback — never run this against staging/prod.
+
+CI job `smoke-api` runs the HTTP checks against a `postgres:17` service container (same production start command). It does **not** stop Postgres; that path stays a local script flag.

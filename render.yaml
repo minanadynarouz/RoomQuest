@@ -2,6 +2,8 @@
 # Roomquest API — staging + prod. Deploys are triggered by GitHub Actions
 # hooks (L-03 / L-04), so autoDeploy is off. Secret values are set in the
 # Render Dashboard (sync: false); nothing sensitive belongs in this file.
+# The build command ends with `pnpm --filter api db:migrate:deploy` so a
+# Render deploy applies Prisma migrations (uses DIRECT_URL).
 services:
   - type: web
     name: roomquest-api-staging
@@ -11,7 +13,7 @@ services:
     branch: revision_branch
     autoDeploy: false
     healthCheckPath: /api/health
-    buildCommand: corepack enable && pnpm i --frozen-lockfile && pnpm turbo run build --filter=api...
+    buildCommand: corepack enable && pnpm i --frozen-lockfile && pnpm turbo run build --filter=api... && pnpm --filter api db:migrate:deploy
     startCommand: node apps/api/dist/main.js
     envVars:
       - key: NODE_VERSION
@@ -45,7 +47,7 @@ services:
     branch: revision_branch
     autoDeploy: false
     healthCheckPath: /api/health
-    buildCommand: corepack enable && pnpm i --frozen-lockfile && pnpm turbo run build --filter=api...
+    buildCommand: corepack enable && pnpm i --frozen-lockfile && pnpm turbo run build --filter=api... && pnpm --filter api db:migrate:deploy
     startCommand: node apps/api/dist/main.js
     envVars:
       - key: NODE_VERSION

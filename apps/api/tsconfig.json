@@ -11,6 +11,6 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["src", "test", "eval", "*.ts"],
+  "include": ["src", "test", "eval", "smoke", "*.ts"],
   "exclude": ["node_modules", "dist"]
 }

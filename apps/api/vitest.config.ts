@@ -6,7 +6,12 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['./src/test-setup.ts'],
-    include: ['src/**/*.spec.ts', 'test/**/*.spec.ts', 'eval/**/*.spec.ts'],
+    include: [
+      'src/**/*.spec.ts',
+      'test/**/*.spec.ts',
+      'eval/**/*.spec.ts',
+      'smoke/**/*.spec.ts',
+    ],
     pool: 'forks',
     isolate: true,
     fileParallelism: true,
