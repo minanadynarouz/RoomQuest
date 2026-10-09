@@ -16,8 +16,13 @@ export {
   CHIRP_COOLDOWN_MS,
   setAudioClock,
 } from './manager.js';
-export { SOUND_FOR_EVENT, SOUND_IDS, type SoundId } from './mapping.js';
-export { SOUND_URLS } from './catalog.js';
+export {
+  SOUND_MANIFEST,
+  SOUND_KEYS,
+  soundPublicUrl,
+  type SoundKey,
+  type SoundEntry,
+} from './manifest.js';
 export {
   playSound,
   putAudioBuffer,

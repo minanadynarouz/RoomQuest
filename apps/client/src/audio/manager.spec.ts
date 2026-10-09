@@ -5,7 +5,7 @@ import {
   resetExplorerTarget,
   setExplorerTarget,
 } from '../ui/explorer-target.js';
-import { SOUND_FOR_EVENT } from './mapping.js';
+import { SOUND_MANIFEST } from './manifest.js';
 import {
   bindAudioStore,
   handleGameEvent,
@@ -106,15 +106,14 @@ describe('audio manager', () => {
     const { started } = installMockAudio();
     unlockAudio();
     const buffers = {
-      snap: { id: 'snap' },
-      gate: { id: 'gate' },
-      stun: { id: 'stun' },
-      gem: { id: 'gem' },
-      blocked: { id: 'blocked' },
-      beat: { id: 'beat' },
-      win: { id: 'win' },
-      lever: { id: 'lever' },
-      chirp: { id: 'chirp' },
+      pieceBuilt: { id: 'snap' },
+      gateOpened: { id: 'gate' },
+      slimeStunned: { id: 'stun' },
+      gemCollected: { id: 'gem' },
+      explorerBlocked: { id: 'blocked' },
+      beatCompleted: { id: 'beat' },
+      won: { id: 'win' },
+      leverPulled: { id: 'lever' },
     };
     for (const [id, buffer] of Object.entries(buffers)) {
       putAudioBuffer(id as keyof typeof buffers, buffer);
@@ -131,15 +130,15 @@ describe('audio manager', () => {
     store.win();
     store.leverPulled('lev1');
 
-    expect(started).toContain(buffers.snap);
-    expect(started).toContain(buffers.gate);
-    expect(started).toContain(buffers.stun);
-    expect(started).toContain(buffers.gem);
-    expect(started).toContain(buffers.blocked);
-    expect(started).toContain(buffers.beat);
-    expect(started).toContain(buffers.win);
-    expect(started).toContain(buffers.lever);
-    expect(SOUND_FOR_EVENT.pieceBuilt).toBe('snap');
+    expect(started).toContain(buffers.pieceBuilt);
+    expect(started).toContain(buffers.gateOpened);
+    expect(started).toContain(buffers.slimeStunned);
+    expect(started).toContain(buffers.gemCollected);
+    expect(started).toContain(buffers.explorerBlocked);
+    expect(started).toContain(buffers.beatCompleted);
+    expect(started).toContain(buffers.won);
+    expect(started).toContain(buffers.leverPulled);
+    expect(SOUND_MANIFEST.pieceBuilt.file).toBe('snap.ogg');
   });
 
   it('plays grab as a UI sound (not a store event)', () => {
@@ -154,7 +153,7 @@ describe('audio manager', () => {
   it('spatially chirps at the ExplorerTarget and respects cooldown', () => {
     const { panners, started } = installMockAudio();
     unlockAudio();
-    putAudioBuffer('chirp', { id: 'chirp' });
+    putAudioBuffer('explorerOutOfView', { id: 'chirp' });
     setExplorerTarget({
       getWorldPosition(out) {
         out.x = 3;

@@ -7,6 +7,7 @@ import {
   resetAudioEngine,
   setMasterVolume,
 } from './engine.js';
+import { SOUND_MANIFEST } from './manifest.js';
 import { resetAudioUnlock, unlockAudio } from './unlock.js';
 
 interface Started {
@@ -100,9 +101,9 @@ describe('audio engine', () => {
   it('applies master volume to the gain node', () => {
     const { gains } = installMockAudio();
     unlockAudio();
-    putAudioBuffer('snap', { id: 'snap-buf' });
+    putAudioBuffer('pieceBuilt', { id: 'snap-buf' });
     setMasterVolume(0.4);
-    playSound('snap');
+    playSound('pieceBuilt');
     expect(getMasterVolume()).toBe(0.4);
     expect(gains[0]?.gain.value).toBe(0.4);
   });
@@ -117,20 +118,36 @@ describe('audio engine', () => {
   });
 
   it('plays through a PannerNode when a position is given', () => {
-    const { panners, starts } = installMockAudio();
+    const { panners } = installMockAudio();
     unlockAudio();
-    putAudioBuffer('chirp', { id: 'chirp-buf' });
-    playSound('chirp', { x: 1.5, y: 0.8, z: -2 });
+    putAudioBuffer('explorerOutOfView', { id: 'chirp-buf' });
+    playSound('explorerOutOfView', { x: 1.5, y: 0.8, z: -2 });
     expect(panners).toHaveLength(1);
     expect(panners[0]?.setPosition).toHaveBeenCalledWith(1.5, 0.8, -2);
     expect(panners[0]?.panningModel).toBe('HRTF');
-    expect(starts.some((s) => s.destination === 'panner')).toBe(true);
+  });
+
+  it('applies the manifest per-clip gain', () => {
+    const { gains } = installMockAudio();
+    unlockAudio();
+    putAudioBuffer('pieceBuilt', { id: 'snap-buf' });
+    playSound('pieceBuilt');
+    const clipGains = gains.map((g) => g.gain.value);
+    expect(clipGains).toContain(SOUND_MANIFEST.pieceBuilt.gain);
+  });
+
+  it('ignores a position when the manifest says the clip is not spatial', () => {
+    const { panners } = installMockAudio();
+    unlockAudio();
+    putAudioBuffer('pieceBuilt', { id: 'snap-buf' });
+    playSound('pieceBuilt', { x: 9, y: 9, z: 9 });
+    expect(panners).toHaveLength(0);
   });
 
   it('does not throw when audio is unavailable', () => {
     delete (window as unknown as { AudioContext?: unknown }).AudioContext;
     delete (window as unknown as { webkitAudioContext?: unknown })
       .webkitAudioContext;
-    expect(() => playSound('win')).not.toThrow();
+    expect(() => playSound('won')).not.toThrow();
   });
 });

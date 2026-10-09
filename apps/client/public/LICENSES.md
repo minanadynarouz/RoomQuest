@@ -21,7 +21,11 @@ This project uses the following third-party assets and libraries:
 
 ## Audio Assets
 
-All F-08 game SFX are **CC0 1.0 (Creative Commons Zero)** from Kenney's
+F-08 gameplay SFX are **placeholders**. Final art and sound direction will
+come from the design lead. Swap a clip by replacing the file named in
+`apps/client/src/audio/manifest.ts` (or by changing only that manifest).
+
+Current placeholders are **CC0 1.0** from Kenney's
 [Interface Sounds](https://kenney.nl/assets/interface-sounds) pack
 (also mirrored on [OpenGameArt](https://opengameart.org/content/interface-sounds)).
 Licence: https://creativecommons.org/publicdomain/zero/1.0/

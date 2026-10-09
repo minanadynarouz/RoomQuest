@@ -5,10 +5,16 @@
  * the player head), but AudioUtils.createOneShot does not attach a transform
  * so positioned one-shots cannot use it. This engine is the F-08 player:
  * unlock on Enter, silent failure, PannerNode at ExplorerTarget.
+ *
+ * Clip file, gain, and spatial flag come only from `manifest.ts`.
  */
 
-import { SOUND_URLS } from './catalog.js';
-import type { SoundId } from './mapping.js';
+import {
+  SOUND_KEYS,
+  SOUND_MANIFEST,
+  soundPublicUrl,
+  type SoundKey,
+} from './manifest.js';
 import {
   getAudioContext,
   isAudioBlocked,
@@ -58,8 +64,8 @@ export const DEFAULT_MASTER_VOLUME = 0.85;
 
 let masterVolume = DEFAULT_MASTER_VOLUME;
 let masterGain: GainLike | null = null;
-const buffers = new Map<SoundId, unknown>();
-const loading = new Map<SoundId, Promise<unknown>>();
+const buffers = new Map<string, unknown>();
+const loading = new Map<string, Promise<unknown>>();
 let fetchImpl: typeof fetch | null = null;
 
 export function resetAudioEngine(): void {
@@ -124,74 +130,81 @@ function placePanner(panner: PannerLike, position: AudioPosition): void {
 function startSource(
   audio: PlaybackContext,
   buffer: unknown,
+  gain: number,
   position?: AudioPosition
 ): void {
-  const gain = masterNode(audio);
-  if (!gain) return;
+  const master = masterNode(audio);
+  if (!master) return;
   const source = audio.createBufferSource();
   source.buffer = buffer;
+  const clip = audio.createGain();
+  clip.gain.value = gain;
+  source.connect(clip);
   if (position) {
     const panner = audio.createPanner();
     placePanner(panner, position);
-    source.connect(panner);
-    panner.connect(gain);
+    clip.connect(panner);
+    panner.connect(master);
   } else {
-    source.connect(gain);
+    clip.connect(master);
   }
   source.start(audio.currentTime);
 }
 
-async function decodeSound(id: SoundId): Promise<unknown> {
-  const cached = buffers.get(id);
+async function decodeFile(file: string): Promise<unknown> {
+  const cached = buffers.get(file);
   if (cached) return cached;
-  const inflight = loading.get(id);
+  const inflight = loading.get(file);
   if (inflight) return inflight;
   const work = (async () => {
     try {
       const loader = fetchImpl ?? fetch;
-      const response = await loader(SOUND_URLS[id]);
+      const response = await loader(soundPublicUrl(file));
       if (!response.ok) return null;
       const bytes = await response.arrayBuffer();
       const audio = asPlayback(getAudioContext());
       if (!audio) return null;
       const buffer = await audio.decodeAudioData(bytes);
-      buffers.set(id, buffer);
+      buffers.set(file, buffer);
       return buffer;
     } catch {
       return null;
     } finally {
-      loading.delete(id);
+      loading.delete(file);
     }
   })();
-  loading.set(id, work);
+  loading.set(file, work);
   return work;
 }
 
-export function putAudioBuffer(id: SoundId, buffer: unknown): void {
-  buffers.set(id, buffer);
+export function putAudioBuffer(key: SoundKey, buffer: unknown): void {
+  const entry = SOUND_MANIFEST[key];
+  buffers.set(entry.file, buffer);
 }
 
-export function playSound(id: SoundId, position?: AudioPosition): void {
+export function playSound(key: SoundKey, position?: AudioPosition): void {
   try {
     if (isAudioBlocked()) return;
     unlockAudio();
+    const entry = SOUND_MANIFEST[key];
     const audio = asPlayback(getAudioContext());
     if (!audio) return;
-    const buffer = buffers.get(id);
+    const spatialPos = entry.spatial ? position : undefined;
+    const buffer = buffers.get(entry.file);
     if (!buffer) {
-      void decodeSound(id).then((decoded) => {
+      void decodeFile(entry.file).then((decoded) => {
         if (!decoded) return;
         try {
           const later = asPlayback(getAudioContext());
           if (!later || isAudioBlocked()) return;
-          startSource(later, decoded, position);
+          startSource(later, decoded, entry.gain, spatialPos);
         } catch {
           // Audio is best-effort.
         }
       });
       return;
     }
-    startSource(audio, buffer, position);
+    startSource(audio, buffer, entry.gain, spatialPos);
   } catch {
     // Audio is best-effort.
   }
@@ -201,8 +214,8 @@ export async function preloadSounds(): Promise<void> {
   try {
     if (isAudioBlocked()) return;
     getAudioContext();
-    const ids = Object.keys(SOUND_URLS) as SoundId[];
-    await Promise.all(ids.map((id) => decodeSound(id)));
+    const files = [...new Set(SOUND_KEYS.map((key) => SOUND_MANIFEST[key].file))];
+    await Promise.all(files.map((file) => decodeFile(file)));
   } catch {
     // Preload failure must not block play.
   }
