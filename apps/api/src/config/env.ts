@@ -34,6 +34,10 @@ export const envSchema = z.object({
     }),
   GOOGLE_API_KEY: optionalKey,
   ANTHROPIC_API_KEY: optionalKey,
+  DATABASE_URL: optionalKey,
+  DIRECT_URL: optionalKey,
+  DIRECTOR_MODEL: optionalKey,
+  FALLBACK_MODEL: optionalKey,
 });
 
 export type Env = z.infer<typeof envSchema>;

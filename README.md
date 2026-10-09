@@ -55,11 +55,20 @@ cp .env.example .env
 For the client, set `VITE_API_BASE_URL` (defaults to `http://localhost:3000`).
 
 For the API (see `apps/api/.env.example` for full details):
-- `DATABASE_URL` - PostgreSQL connection string (pooled)
+- `DATABASE_URL` - PostgreSQL connection string (pooled). Optional; the API boots without it.
 - `DIRECT_URL` - Direct PostgreSQL connection (for migrations)
 - `GOOGLE_API_KEY` - Google AI API key for Gemini
 - `ANTHROPIC_API_KEY` - Anthropic API key (fallback)
 - `DIRECTOR_MODE` - `mock` (default for local dev) or `live`
+
+Optional local Postgres 17:
+
+```bash
+docker compose up -d
+pnpm --filter api db:migrate
+```
+
+API hosting notes (Render blueprint + Neon branches) are in `docs/deploy-api.md`.
 
 ### 3. Development
 
@@ -148,6 +157,7 @@ Comprehensive documentation is available in the `docs/` directory:
 - `PRD.md` - Product Requirements Document
 - `ARCHITECTURE-AND-PLAN.md` - Technical architecture and 2-week development plan
 - `api.md` - API contract and endpoint documentation
+- `deploy-api.md` - Render blueprint, Neon branches, and env vars
 - Additional docs will be added as development progresses
 
 ## License

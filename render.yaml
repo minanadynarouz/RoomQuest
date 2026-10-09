@@ -1,0 +1,72 @@
+# yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+# Roomquest API — staging + prod. Deploys are triggered by GitHub Actions
+# hooks (L-03 / L-04), so autoDeploy is off. Secret values are set in the
+# Render Dashboard (sync: false); nothing sensitive belongs in this file.
+services:
+  - type: web
+    name: roomquest-api-staging
+    runtime: node
+    region: oregon
+    plan: free
+    branch: revision_branch
+    autoDeploy: false
+    healthCheckPath: /api/health
+    buildCommand: corepack enable && pnpm i --frozen-lockfile && pnpm turbo run build --filter=api...
+    startCommand: node apps/api/dist/main.js
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: DIRECTOR_MODE
+        sync: false
+      - key: DIRECTOR_MODEL
+        sync: false
+      - key: FALLBACK_MODEL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: NODE_ENV
+        sync: false
+      - key: GIT_SHA
+        sync: false
+
+  - type: web
+    name: roomquest-api-prod
+    runtime: node
+    region: oregon
+    plan: free
+    branch: revision_branch
+    autoDeploy: false
+    healthCheckPath: /api/health
+    buildCommand: corepack enable && pnpm i --frozen-lockfile && pnpm turbo run build --filter=api...
+    startCommand: node apps/api/dist/main.js
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: DIRECTOR_MODE
+        sync: false
+      - key: DIRECTOR_MODEL
+        sync: false
+      - key: FALLBACK_MODEL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: NODE_ENV
+        sync: false
+      - key: GIT_SHA
+        sync: false

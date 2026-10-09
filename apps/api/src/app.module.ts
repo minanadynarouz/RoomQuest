@@ -9,6 +9,7 @@ import { ApiExceptionFilter } from './common/api-exception.filter';
 import { validateEnv, type Env } from './config/env';
 import { HealthModule } from './health/health.module';
 import { LevelsModule } from './levels/levels.module';
+import { PrismaModule } from './prisma/prisma.module';
 
 function requestIdFrom(req: IncomingMessage): string {
   const header = req.headers['x-request-id'];
@@ -27,9 +28,11 @@ function requestIdFrom(req: IncomingMessage): string {
     ConfigModule.forRoot({
       isGlobal: true,
       cache: true,
+      ignoreEnvFile: process.env.NODE_ENV === 'test',
       validate: (config: Record<string, unknown>) => validateEnv(config),
       envFilePath: ['.env', '../../.env'],
     }),
+    PrismaModule,
     LoggerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService<Env, true>) => {

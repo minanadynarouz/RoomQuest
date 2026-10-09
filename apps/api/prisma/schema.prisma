@@ -1,0 +1,14 @@
+// Roomquest API — Prisma 7. Application models (LevelCache, SessionResult)
+// land in B-06. This file exists so generate/migrate tooling works against
+// Neon and local Postgres 17 with no tables yet.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  runtime      = "nodejs"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}

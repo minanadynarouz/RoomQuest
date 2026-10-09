@@ -48,6 +48,7 @@ export default tseslint.config(
       '**/tsup.config.ts',
       '**/vitest.config.ts',
       '**/vite.config.ts',
+      '**/src/generated/**',
     ],
   }
 );
