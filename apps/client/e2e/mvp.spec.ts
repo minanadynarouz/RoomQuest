@@ -1,6 +1,9 @@
 /**
  * Oct 20 MVP path: production/preview `/?emulator=1` through win HUD.
  *
+ * Covers all 5 IWER rooms. Walker win after slime stun (not forceWin).
+ * office_small also covers Replay/Done; living_room covers pause/resume.
+ *
  * Requires the production emulator SEM + SurfaceGraph getVectorView +
  * `__rq.replay` / `__rq.exit` fixes. Run against `vite preview`:
  *   MVP_BASE_URL=https://127.0.0.1:4173 pnpm --filter client e2e:mvp
@@ -25,7 +28,7 @@ interface RqWindow {
         seed?: string;
         placements?: { id: string; piece: string; playerBuilt: boolean }[];
       };
-      events?: { type: string }[];
+      events?: { type: string; placementId?: string }[];
       result?: { stars?: number; gems?: number; timeMs?: number } | null;
     };
     hud?: { ready?: boolean; visible?: string[] };
@@ -181,163 +184,185 @@ function levelKeyOf(url: string): string {
   return match?.[1] ? decodeURIComponent(match[1]) : '';
 }
 
+const MVP_ROOMS: {
+  room:
+    | 'living_room'
+    | 'meeting_room'
+    | 'music_room'
+    | 'office_large'
+    | 'office_small';
+  director: 'mock' | 'off';
+}[] = [
+  { room: 'living_room', director: 'off' },
+  { room: 'meeting_room', director: 'mock' },
+  { room: 'music_room', director: 'off' },
+  { room: 'office_large', director: 'mock' },
+  { room: 'office_small', director: 'mock' },
+];
+
+async function autoSolveAndWin(page: Page): Promise<void> {
+  await interactPieces(page);
+  const auto = await page.evaluate(() => {
+    const rq = (window as unknown as RqWindow).__rq;
+    if (typeof rq?.autoSolve !== 'function') return false;
+    void rq.autoSolve();
+    return true;
+  });
+  expect(auto).toBe(true);
+  await page.waitForFunction(
+    () => (window as unknown as RqWindow).__rq?.store?.phase === 'won',
+    null,
+    { timeout: 90_000 }
+  );
+}
+
+async function readWinSnapshot(page: Page) {
+  return page.evaluate(() => {
+    const rq = (window as unknown as RqWindow).__rq;
+    const events = rq?.store?.events ?? [];
+    const slimes =
+      rq?.store?.plan?.placements?.filter((row) => row.piece === 'slime') ?? [];
+    const stunnedById: Record<string, number> = {};
+    for (const event of events) {
+      if (event.type !== 'slimeStunned') continue;
+      const id = event.placementId;
+      if (!id) continue;
+      stunnedById[id] = (stunnedById[id] ?? 0) + 1;
+    }
+    return {
+      phase: rq?.store?.phase ?? null,
+      visible: rq?.hud?.visible ?? [],
+      stars: rq?.store?.result?.stars ?? null,
+      events: events.map((event) => event.type),
+      slimeCount: slimes.length,
+      stunnedById,
+    };
+  });
+}
+
 test.describe('e2e-mvp emulator flow', () => {
-  test('office_small mock: place, lever, platform, slime, win, replay, done', async ({
-    page,
-  }) => {
-    test.setTimeout(120_000);
-    const posts: ResultPost[] = [];
-    captureResultPosts(page, posts);
-    await mockApi(page);
-    await enterSession(page, 'room=office_small&director=mock', 'office_small');
-    await waitPlaying(page);
+  for (const spec of MVP_ROOMS) {
+    test(`${spec.room} director=${spec.director}: place, stun, walker win`, async ({
+      page,
+    }) => {
+      test.setTimeout(120_000);
+      const posts: ResultPost[] = [];
+      captureResultPosts(page, posts);
+      await mockApi(page);
+      await enterSession(
+        page,
+        `room=${spec.room}&director=${spec.director}`,
+        spec.room
+      );
+      await waitPlaying(page);
 
-    const loaded = await page.evaluate(() => {
-      const w = window as unknown as RqWindow;
-      return {
-        phase: w.__rq?.store?.phase ?? null,
-        source: w.__rq?.store?.planSource ?? null,
-        hasIwer: Boolean(w.IWER_DEVICE),
-        hudReady: w.__rq?.hud?.ready ?? false,
-      };
-    });
-    expect(loaded.phase).toBe('playing');
-    expect(loaded.source).toBe('procedural');
-    expect(loaded.hasIwer).toBe(true);
-    expect(loaded.hudReady).toBe(true);
+      const loaded = await page.evaluate(() => {
+        const w = window as unknown as RqWindow;
+        return {
+          phase: w.__rq?.store?.phase ?? null,
+          source: w.__rq?.store?.planSource ?? null,
+          fallback: w.__rq?.store?.fallbackReason ?? null,
+          hasIwer: Boolean(w.IWER_DEVICE),
+          hudReady: w.__rq?.hud?.ready ?? false,
+        };
+      });
+      expect(loaded.phase).toBe('playing');
+      expect(loaded.source).toBe('procedural');
+      expect(loaded.hasIwer).toBe(true);
+      expect(loaded.hudReady).toBe(true);
+      if (spec.director === 'off') {
+        expect(loaded.fallback).toBe('director-off');
+      }
 
-    await interactPieces(page);
-    const auto = await page.evaluate(() => {
-      const rq = (window as unknown as RqWindow).__rq;
-      if (typeof rq?.autoSolve !== 'function') return false;
-      void rq.autoSolve();
-      return true;
-    });
-    expect(auto).toBe(true);
+      if (spec.room === 'living_room') {
+        await page.evaluate(() => {
+          (window as unknown as RqWindow).__rq?.guidance?.skipOnboarding?.();
+          (window as unknown as RqWindow).__rq?.pause?.();
+        });
+        await expect
+          .poll(async () =>
+            page.evaluate(
+              () => (window as unknown as RqWindow).__rq?.store?.phase ?? null
+            )
+          )
+          .toBe('paused');
+        await page.evaluate(() => {
+          (window as unknown as RqWindow).__rq?.resume?.();
+        });
+        await expect
+          .poll(async () =>
+            page.evaluate(
+              () => (window as unknown as RqWindow).__rq?.store?.phase ?? null
+            )
+          )
+          .toBe('playing');
+      }
 
-    await page.waitForFunction(
-      () => (window as unknown as RqWindow).__rq?.store?.phase === 'won',
-      null,
-      { timeout: 90_000 }
-    );
+      await autoSolveAndWin(page);
+      const win = await readWinSnapshot(page);
+      await page.screenshot({
+        path: path.join(screenshotDir, `${spec.room}-02-win.png`),
+        fullPage: true,
+      });
+      expect(win.phase).toBe('won');
+      expect(win.visible).toContain('win');
+      if (win.slimeCount > 0) {
+        expect(win.events).toContain('slimeStunned');
+        for (const count of Object.values(win.stunnedById)) {
+          expect(count).toBe(1);
+        }
+      }
 
-    const win = await page.evaluate(() => {
-      const rq = (window as unknown as RqWindow).__rq;
-      const events = (rq?.store?.events ?? []).map((event) => event.type);
-      return {
-        phase: rq?.store?.phase ?? null,
-        visible: rq?.hud?.visible ?? [],
-        stars: rq?.store?.result?.stars ?? null,
-        gems: rq?.store?.result?.gems ?? 0,
-        timeMs: rq?.store?.result?.timeMs ?? null,
-        events,
-      };
-    });
-    await page.screenshot({
-      path: path.join(screenshotDir, 'office_small-02-win.png'),
-      fullPage: true,
-    });
-    expect(win.phase).toBe('won');
-    expect(win.visible).toContain('win');
-    expect(win.stars).toBeGreaterThan(0);
-    expect(win.events).toContain('leverPulled');
-    expect(win.events).toContain('gateOpened');
-    expect(win.events).toContain('slimeStunned');
-    expect(win.events).toContain('platformAligned');
-    expect(win.events).toContain('gemCollected');
+      const winPost = posts.find((post) => post.body?.completed === true);
+      expect(winPost, 'completed result POST').toBeTruthy();
+      expect(levelKeyOf(winPost?.url ?? '')).toMatch(/^proc:[^:]+:/);
 
-    const replayed = await page.evaluate(() => {
-      const rq = (window as unknown as RqWindow).__rq;
-      rq?.replay?.();
-      return typeof rq?.replay === 'function';
-    });
-    expect(replayed).toBe(true);
-    await expect
-      .poll(async () =>
-        page.evaluate(
-          () => (window as unknown as RqWindow).__rq?.store?.phase ?? null
+      if (spec.room !== 'office_small') return;
+
+      expect(win.stars).toBeGreaterThan(0);
+      expect(win.events).toContain('leverPulled');
+      expect(win.events).toContain('gateOpened');
+      expect(win.events).toContain('slimeStunned');
+      expect(win.events).toContain('platformAligned');
+      expect(win.events).toContain('gemCollected');
+
+      const replayed = await page.evaluate(() => {
+        const rq = (window as unknown as RqWindow).__rq;
+        rq?.replay?.();
+        return typeof rq?.replay === 'function';
+      });
+      expect(replayed).toBe(true);
+      await expect
+        .poll(async () =>
+          page.evaluate(
+            () => (window as unknown as RqWindow).__rq?.store?.phase ?? null
+          )
         )
-      )
-      .toBe('playing');
+        .toBe('playing');
 
-    const exited = await page.evaluate(() => {
-      const rq = (window as unknown as RqWindow).__rq;
-      rq?.exit?.();
-      return typeof rq?.exit === 'function';
-    });
-    expect(exited).toBe(true);
-    await expect
-      .poll(async () =>
-        page
-          .locator('#landing-page')
-          .evaluate((el) => getComputedStyle(el).display !== 'none')
-      )
-      .toBe(true);
+      const replayEvents = await page.evaluate(() => {
+        const events =
+          (window as unknown as RqWindow).__rq?.store?.events ?? [];
+        return events.map((event) => event.type);
+      });
+      expect(replayEvents).not.toContain('slimeStunned');
 
-    const winPost = posts.find((post) => post.body?.completed === true);
-    expect(winPost, 'completed result POST').toBeTruthy();
-    expect(winPost?.body?.stars).toBeGreaterThan(0);
-    expect(winPost?.body?.planSource).toBe('procedural');
-    expect(levelKeyOf(winPost?.url ?? '')).toMatch(/^proc:[^:]+:/);
-  });
-
-  test('living_room director=off loads procedural fallback, pause, forceWin', async ({
-    page,
-  }) => {
-    test.setTimeout(90_000);
-    const posts: ResultPost[] = [];
-    captureResultPosts(page, posts);
-    await mockApi(page);
-    await enterSession(page, 'room=living_room&director=off', 'living_room_off');
-    await waitPlaying(page);
-
-    const loaded = await page.evaluate(() => {
-      const rq = (window as unknown as RqWindow).__rq;
-      return {
-        phase: rq?.store?.phase ?? null,
-        fallback: rq?.store?.fallbackReason ?? null,
-        source: rq?.store?.planSource ?? null,
-      };
-    });
-    expect(loaded.phase).toBe('playing');
-    expect(loaded.source).toBe('procedural');
-    expect(loaded.fallback).toBe('director-off');
-
-    await page.evaluate(() => {
-      (window as unknown as RqWindow).__rq?.guidance?.skipOnboarding?.();
-      (window as unknown as RqWindow).__rq?.pause?.();
-    });
-    await expect
-      .poll(async () =>
-        page.evaluate(
-          () => (window as unknown as RqWindow).__rq?.store?.phase ?? null
+      const exited = await page.evaluate(() => {
+        const rq = (window as unknown as RqWindow).__rq;
+        rq?.exit?.();
+        return typeof rq?.exit === 'function';
+      });
+      expect(exited).toBe(true);
+      await expect
+        .poll(async () =>
+          page
+            .locator('#landing-page')
+            .evaluate((el) => getComputedStyle(el).display !== 'none')
         )
-      )
-      .toBe('paused');
-    await page.evaluate(() => {
-      (window as unknown as RqWindow).__rq?.resume?.();
-    });
-    await expect
-      .poll(async () =>
-        page.evaluate(
-          () => (window as unknown as RqWindow).__rq?.store?.phase ?? null
-        )
-      )
-      .toBe('playing');
+        .toBe(true);
 
-    await page.evaluate(() => {
-      (window as unknown as RqWindow).__rq?.forceWin?.();
+      expect(winPost?.body?.stars).toBeGreaterThan(0);
+      expect(winPost?.body?.planSource).toBe('procedural');
     });
-    await expect
-      .poll(async () =>
-        page.evaluate(
-          () => (window as unknown as RqWindow).__rq?.store?.phase ?? null
-        )
-      )
-      .toBe('won');
-
-    const winPost = posts.find((post) => post.body?.completed === true);
-    expect(winPost).toBeTruthy();
-    expect(levelKeyOf(winPost?.url ?? '')).toMatch(/^proc:[^:]+:/);
-  });
+  }
 });
