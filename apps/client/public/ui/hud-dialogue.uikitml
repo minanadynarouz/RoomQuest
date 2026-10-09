@@ -1,0 +1,33 @@
+<style>
+  .panel-root {
+    flex-direction: column;
+    width: 180px;
+  }
+
+  .panel-content {
+    align-items: center;
+    flex-direction: column;
+    padding-top: 12px;
+    padding-bottom: 14px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .line {
+    color: #272727;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 18px;
+    text-align: center;
+    width: 100%;
+  }
+
+  .line:dark {
+    color: rgba(255, 255, 255, 0.9);
+  }
+</style>
+<Panel class="panel-root">
+  <div class="panel-content">
+    <div id="dialogue-line" class="line">Help me get there!</div>
+  </div>
+</Panel>

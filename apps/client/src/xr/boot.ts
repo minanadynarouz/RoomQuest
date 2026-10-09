@@ -1,6 +1,7 @@
 /**
  * XR session initialization and launch
  * X-03: LevelBuilderSystem, greybox kit, fixture / debug URL flags
+ * F-04: spatial HUD panels (lazy-loaded with this XR module)
  */
 
 import {
@@ -16,6 +17,8 @@ import {
   SYNTHETIC_LIVING_ROOM_PLAN,
 } from '@roomquest/fixtures';
 import { createGameStore } from '../game/index.js';
+import { bindHudStore, HudSystem } from '../ui/HudSystem.js';
+import type { HudPanelId } from '../ui/visibility.js';
 import { readClientFlags, isSyntheticLivingRoomFixture } from './flags.js';
 import { LevelBuilderSystem } from './systems/LevelBuilderSystem.js';
 import { SurfaceGraphSystem } from './systems/SurfaceGraphSystem.js';
@@ -26,12 +29,18 @@ import type { SnapTarget } from './level/types.js';
 let worldInstance: World | null = null;
 const gameStore = createGameStore();
 
+export interface RqHudDebug {
+  ready: boolean;
+  visible: readonly HudPanelId[];
+}
+
 export interface RqDebugHooks {
   store: ReturnType<typeof createGameStore>;
   graph: SurfaceGraph | null;
   plan: LevelPlan | null;
   snapTargets: readonly SnapTarget[];
   drawCalls: number;
+  hud?: RqHudDebug;
 }
 
 declare global {
@@ -53,6 +62,7 @@ function exposeHooks(
     plan,
     snapTargets,
     drawCalls,
+    hud: window.__rq?.hud,
   };
 }
 
@@ -101,7 +111,9 @@ export async function launchXR(): Promise<World> {
           physics: false,
           sceneUnderstanding: false,
           environmentRaycast: false,
-          spatialUI: false,
+          spatialUI: {
+            kit: 'horizon' as const,
+          },
         },
         render: {
           ...projectOptions.render,
@@ -141,6 +153,8 @@ export async function launchXR(): Promise<World> {
 
   worldInstance = await World.create(container, xrOptions);
   worldInstance.registerSystem(LevelBuilderSystem, { priority: 5 });
+  bindHudStore(gameStore);
+  worldInstance.registerSystem(HudSystem, { priority: 0 });
 
   const builder = worldInstance.getSystem(LevelBuilderSystem);
   if (!builder) {
@@ -174,6 +188,7 @@ export async function launchXR(): Promise<World> {
   } else {
     gameStore.requestLevel();
     gameStore.startSurveying();
+    exposeHooks(null, null);
     worldInstance.registerSystem(SurfaceGraphSystem, { priority: 10 });
     const graphSystem = worldInstance.getSystem(SurfaceGraphSystem);
     if (graphSystem) {
