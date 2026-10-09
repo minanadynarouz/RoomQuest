@@ -154,11 +154,29 @@ async function launchBrowser(): Promise<Browser> {
 }
 
 async function waitForRq(page: Page, timeout = 45_000): Promise<void> {
-  await page.waitForFunction(
-    () => Boolean((window as unknown as RqWindow).__rq?.explorer),
-    null,
-    { timeout }
-  );
+  try {
+    await page.waitForFunction(
+      () => Boolean((window as unknown as RqWindow).__rq?.explorer),
+      null,
+      { timeout }
+    );
+  } catch (error) {
+    const debug = await page.evaluate(() => {
+      const w = window as unknown as RqWindow;
+      return {
+        href: location.href,
+        title: document.title,
+        hasRq: Boolean(w.__rq),
+        rqKeys: w.__rq ? Object.keys(w.__rq) : [],
+        hasIwer: Boolean(w.IWER_DEVICE),
+        overlay: Boolean(document.querySelector('vite-error-overlay')),
+        bodyStart: document.body.innerText.slice(0, 400),
+      };
+    });
+    throw new Error(
+      `waitForRq failed: ${JSON.stringify(debug)} original=${String(error)}`
+    );
+  }
 }
 
 async function dismissViteOverlay(page: Page): Promise<void> {
@@ -482,10 +500,11 @@ async function rayPinchSlime(
       if (!input || !slime) {
         return { ok: false as const, reason: 'missing hand or slime' };
       }
+      // Side-on ~2 m so the explorer at the hut does not eat the ray.
       const far = {
-        x: handedness === 'left' ? -0.22 : 0.22,
-        y: 1.4,
-        z: 1.2,
+        x: 2.35,
+        y: 1.05,
+        z: -1.0,
       };
       const dx = slime.x - far.x;
       const dy = slime.y - far.y;
@@ -505,49 +524,77 @@ async function rayPinchSlime(
     );
   }
 
-  const rot = lookRotation(prepared.dx, prepared.dy, prepared.dz);
-  await page.evaluate(
-    ({ handedness, far, rot: q }) => {
-      const input = (window as unknown as RqWindow).IWER_DEVICE?.hands[
-        handedness
-      ];
-      if (!input) return;
-      input.poseId = 'default';
-      input.updatePinchValue(0);
-      input.setPinchValueImmediate?.(0);
-      input.position.set(far.x, far.y, far.z);
-      input.quaternion.set(q.x, q.y, q.z, q.w);
-    },
-    { handedness: hand, far: prepared.far, rot }
-  );
-  await sleep(700);
-
-  await page.evaluate((handedness) => {
-    const input = (window as unknown as RqWindow).IWER_DEVICE?.hands[
-      handedness
-    ];
-    if (!input) return;
-    input.poseId = 'pinch';
-    input.setPinchValueImmediate?.(1);
-    input.updatePinchValue(1);
-  }, hand);
-
-  try {
-    await page.waitForFunction(
-      (slimeId) => {
-        const events =
-          (window as unknown as RqWindow).__rq?.store.events ?? [];
-        return events.some(
-          (e) => e.type === 'slimeStunned' && e.placementId === slimeId
-        );
+  let lastAim: Record<string, unknown> = prepared;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const aim = await page.evaluate(
+      ({ handedness, slimeId, far }) => {
+        const w = window as unknown as RqWindow;
+        const input = w.IWER_DEVICE?.hands[handedness];
+        const slime = w.__rq?.placement?.pieceWorldPose(slimeId);
+        if (!input || !slime) {
+          return { ok: false as const, reason: 'missing hand or slime' };
+        }
+        const dx = slime.x - far.x;
+        const dy = slime.y + 0.05 - far.y;
+        const dz = slime.z - far.z;
+        const dist = Math.hypot(dx, dy, dz);
+        return { ok: true as const, slime, dist, dx, dy, dz };
       },
-      SLIME_ID,
-      { timeout: 12_000 }
+      { handedness: hand, slimeId: SLIME_ID, far: prepared.far }
     );
-  } catch {
+    if (!aim.ok) {
+      throw new Error(`${hand} far re-aim failed: ${JSON.stringify(aim)}`);
+    }
+    lastAim = aim;
+    const rot = lookRotation(aim.dx, aim.dy, aim.dz);
+    await page.evaluate(
+      ({ handedness, far, rot: q, pinch }) => {
+        const input = (window as unknown as RqWindow).IWER_DEVICE?.hands[
+          handedness
+        ];
+        if (!input) return;
+        input.poseId = pinch ? 'pinch' : 'default';
+        input.position.set(far.x, far.y, far.z);
+        input.quaternion.set(q.x, q.y, q.z, q.w);
+        if (pinch) {
+          input.setPinchValueImmediate?.(1);
+          input.updatePinchValue(1);
+        } else {
+          input.updatePinchValue(0);
+          input.setPinchValueImmediate?.(0);
+        }
+      },
+      {
+        handedness: hand,
+        far: prepared.far,
+        rot,
+        pinch: attempt > 0,
+      }
+    );
+    await sleep(attempt === 0 ? 500 : 280);
+    if (attempt === 0) {
+      await page.evaluate((handedness) => {
+        const input = (window as unknown as RqWindow).IWER_DEVICE?.hands[
+          handedness
+        ];
+        if (!input) return;
+        input.poseId = 'pinch';
+        input.setPinchValueImmediate?.(1);
+        input.updatePinchValue(1);
+      }, hand);
+      await sleep(350);
+    }
+    if (await slimeWasStunned(page)) break;
+  }
+
+  if (!(await slimeWasStunned(page))) {
     const summary = await slimeSummary(page);
     throw new Error(
-      `${hand} far ray+pinch failed: ${JSON.stringify({ prepared, summary })}`
+      `${hand} far ray+pinch failed: ${JSON.stringify({
+        prepared,
+        lastAim,
+        summary,
+      })}`
     );
   }
 

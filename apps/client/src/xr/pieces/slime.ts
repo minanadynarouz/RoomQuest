@@ -1,4 +1,5 @@
 import {
+  BoxGeometry,
   Group,
   Mesh,
   type BufferGeometry,
@@ -65,5 +66,17 @@ export function createSlime(kit: GreyboxKit): Object3D {
   stars.userData.starGeometry = starGeo;
   root.add(stars);
   root.userData.stars = stars;
+
+  const hitGeo = new BoxGeometry(0.2, 0.14, 0.2);
+  const hit = new Mesh(hitGeo, kit.material);
+  hit.name = 'slime-hit';
+  hit.visible = false;
+  hit.castShadow = false;
+  hit.receiveShadow = false;
+  hit.position.set(0, 0.07, 0);
+  hit.pointerEvents = 'auto';
+  root.add(hit);
+  root.userData.hit = hit;
+  root.userData.hitGeometry = hitGeo;
   return root;
 }
