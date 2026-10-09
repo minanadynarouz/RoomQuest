@@ -102,4 +102,16 @@ describe('ExplorerWalker blockers', () => {
     tick(4);
     expect(walker.reason).not.toBe('awakeSlime');
   });
+
+  it('writes world position into a caller-owned out vector', () => {
+    const { walker } = playing();
+    const out = { x: 9, y: 9, z: 9 };
+    const returned = walker.getWorldPosition(out);
+    expect(returned).toBe(out);
+    expect(out).toEqual({
+      x: walker.pose.x,
+      y: walker.pose.y,
+      z: walker.pose.z,
+    });
+  });
 });

@@ -71,6 +71,7 @@ export class ExplorerSystem extends createSystem({}, {}) {
     this.syncModel(0);
   }
 
+  /** F-06 `ExplorerTarget` shape. `boot.ts` calls `setExplorerTarget(explorer)`. */
   getWorldPosition(out: { x: number; y: number; z: number }): {
     x: number;
     y: number;
