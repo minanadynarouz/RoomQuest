@@ -130,6 +130,8 @@ async function launchBrowser(): Promise<Browser> {
     headless: false,
     args: [
       '--ignore-certificate-errors',
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
       '--use-gl=angle',
       '--use-angle=swiftshader',
       '--enable-webgl',
