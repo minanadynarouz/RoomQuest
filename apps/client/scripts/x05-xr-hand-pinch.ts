@@ -73,9 +73,15 @@ interface RqWindow {
       pose: () => { x: number; y: number; z: number; yaw: number };
     };
     autoSolve?: () => void;
-    gateLever?: { pull: (id: string) => boolean };
+    gateLever?: { pull: (id: string) => boolean; boundCount?: () => number };
   };
 }
+
+/** IWER `point` pose index-finger-tip offset from targetRaySpace (right x mirrored). */
+const INDEX_TIP_POINT = {
+  left: { x: 0.031, y: 0.063, z: -0.041 },
+  right: { x: -0.031, y: 0.063, z: -0.041 },
+} as const;
 
 const IWER_APIS_USED = [
   'window.IWER_DEVICE',
@@ -530,6 +536,41 @@ async function connectHand(page: Page, hand: 'left' | 'right'): Promise<void> {
   }
 }
 
+async function setHandPose(
+  page: Page,
+  hand: 'left' | 'right',
+  pose: {
+    x: number;
+    y: number;
+    z: number;
+    poseId?: string;
+    qx?: number;
+    qy?: number;
+    qz?: number;
+    qw?: number;
+  }
+): Promise<void> {
+  await page.evaluate(
+    ({ handedness, pose: next }) => {
+      const input = (window as unknown as RqWindow).IWER_DEVICE?.hands[
+        handedness
+      ];
+      if (!input) return;
+      input.poseId = next.poseId ?? 'default';
+      input.updatePinchValue(0);
+      input.setPinchValueImmediate?.(0);
+      input.quaternion.set(
+        next.qx ?? 0,
+        next.qy ?? 0,
+        next.qz ?? 0,
+        next.qw ?? 1
+      );
+      input.position.set(next.x, next.y, next.z);
+    },
+    { handedness: hand, pose }
+  );
+}
+
 async function pokeLever(
   page: Page,
   hand: 'left' | 'right'
@@ -544,52 +585,70 @@ async function pokeLever(
     throw new Error('missing lever p4 world pose');
   }
 
-  const offsets = [-0.08, 0, 0.08];
-  for (const ox of offsets) {
-    for (const oy of offsets) {
-      for (const oz of offsets) {
-        await page.evaluate(
-          ({ handedness, x, y, z }) => {
-            const input = (window as unknown as RqWindow).IWER_DEVICE?.hands[
-              handedness
-            ];
-            if (!input) return;
-            input.poseId = 'point';
-            input.updatePinchValue(0);
-            input.setPinchValueImmediate?.(0);
-            input.quaternion.set(0, 0, 0, 1);
-            input.position.set(x, y, z);
-          },
-          {
-            handedness: hand,
-            x: lever.x + ox,
-            y: lever.y + 0.06 + oy,
-            z: lever.z + oz,
-          }
-        );
-        await sleep(90);
-        const hit = await page.evaluate(() => {
-          const events =
-            (window as unknown as RqWindow).__rq?.store.events ?? [];
-          return events.some(
-            (e) => e.type === 'leverPulled' && e.placementId === 'p4'
-          );
-        });
-        if (hit) {
-          const summary = await leverGateSummary(page);
-          console.log(`[X-06 e2e] ${hand} near poke`, summary);
-          return summary;
-        }
-      }
+  const tip = INDEX_TIP_POINT[hand];
+  const hitY = lever.y + 0.2;
+  const wristAt = (tx: number, ty: number, tz: number) => ({
+    x: tx - tip.x,
+    y: ty - tip.y,
+    z: tz - tip.z,
+    poseId: 'point',
+  });
+
+  // Park away so grab/ray selection can release before the poke approach.
+  await setHandPose(page, hand, wristAt(lever.x, hitY + 0.55, lever.z));
+  await sleep(450);
+
+  // Approach from above (outside the 0.2 m poke hover sphere) then hold on
+  // the hit volume so a slow CI XR frame still sees a stable Pressed.
+  const heights = [0.45, 0.28, 0.14, 0.04, 0];
+  for (const dy of heights) {
+    await setHandPose(page, hand, wristAt(lever.x, hitY + dy, lever.z));
+    await sleep(280);
+    if (await leverWasPulled(page)) {
+      const summary = await leverGateSummary(page);
+      console.log(`[X-06 e2e] ${hand} near poke`, summary);
+      return summary;
     }
   }
 
-  throw new Error(
-    `${hand} poke never emitted leverPulled. ${JSON.stringify({
-      lever,
-      ...(await leverGateSummary(page)),
-    })}`
-  );
+  try {
+    await page.waitForFunction(
+      () => {
+        const events =
+          (window as unknown as RqWindow).__rq?.store.events ?? [];
+        return events.some(
+          (e) => e.type === 'leverPulled' && e.placementId === 'p4'
+        );
+      },
+      null,
+      { timeout: 12_000 }
+    );
+  } catch {
+    const summary = await leverGateSummary(page);
+    const bound = await page.evaluate(() => {
+      return (window as unknown as RqWindow).__rq?.gateLever?.boundCount?.();
+    });
+    throw new Error(
+      `${hand} poke never emitted leverPulled. ${JSON.stringify({
+        lever,
+        bound,
+        ...summary,
+      })}`
+    );
+  }
+
+  const summary = await leverGateSummary(page);
+  console.log(`[X-06 e2e] ${hand} near poke`, summary);
+  return summary;
+}
+
+async function leverWasPulled(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const events = (window as unknown as RqWindow).__rq?.store.events ?? [];
+    return events.some(
+      (e) => e.type === 'leverPulled' && e.placementId === 'p4'
+    );
+  });
 }
 
 async function rayPinchLever(
@@ -640,7 +699,7 @@ async function rayPinchLever(
     },
     { handedness: hand, seated: prepared.seated, rot }
   );
-  await sleep(500);
+  await sleep(700);
 
   await page.evaluate((handedness) => {
     const input = (window as unknown as RqWindow).IWER_DEVICE?.hands[
@@ -651,7 +710,28 @@ async function rayPinchLever(
     input.setPinchValueImmediate?.(1);
     input.updatePinchValue(1);
   }, hand);
-  await sleep(700);
+
+  try {
+    await page.waitForFunction(
+      () => {
+        const events =
+          (window as unknown as RqWindow).__rq?.store.events ?? [];
+        return (
+          events.some(
+            (e) => e.type === 'leverPulled' && e.placementId === 'p4'
+          ) &&
+          events.some((e) => e.type === 'gateOpened' && e.placementId === 'p3')
+        );
+      },
+      null,
+      { timeout: 12_000 }
+    );
+  } catch {
+    const summary = await leverGateSummary(page);
+    throw new Error(
+      `${hand} far ray+pinch failed: ${JSON.stringify({ prepared, summary })}`
+    );
+  }
 
   await page.evaluate((handedness) => {
     const input = (window as unknown as RqWindow).IWER_DEVICE?.hands[
@@ -662,14 +742,9 @@ async function rayPinchLever(
     input.setPinchValueImmediate?.(0);
     input.poseId = 'default';
   }, hand);
-  await sleep(300);
+  await sleep(200);
 
   const summary = await leverGateSummary(page);
-  if (!summary.leverPulled || !summary.gateOpened) {
-    throw new Error(
-      `${hand} far ray+pinch failed: ${JSON.stringify({ prepared, summary })}`
-    );
-  }
   console.log(`[X-06 e2e] ${hand} far ray+pinch`, {
     dist: prepared.dist,
     summary,

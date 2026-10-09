@@ -49,14 +49,15 @@ export function createLever(kit: GreyboxKit): Object3D {
   }
 
   const hitGeo = kit.cachedGeometry('lever-hit', () => {
-    const geo = new BoxGeometry(0.22, 0.26, 0.22);
-    geo.translate(0, 0.13, 0);
+    const geo = new BoxGeometry(0.36, 0.4, 0.36);
+    geo.translate(0, 0.2, 0);
     return geo;
   });
   const hit = new Mesh(hitGeo, kit.interactHitMaterial());
   hit.name = 'lever-hit';
   hit.castShadow = false;
   hit.receiveShadow = false;
+  hit.pointerEvents = 'auto';
   root.add(hit);
   return root;
 }

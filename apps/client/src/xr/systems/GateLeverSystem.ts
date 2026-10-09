@@ -29,6 +29,7 @@ interface AxisAnim {
 
 export interface GateLeverDebugApi {
   pull: (leverId: string) => boolean;
+  boundCount: () => number;
 }
 
 /**
@@ -46,6 +47,7 @@ export class GateLeverSystem extends createSystem(
   private eventCursor = 0;
   private readonly anims = new Map<string, AxisAnim>();
   private readonly boundLevers = new Set<Entity>();
+  private readonly leverDown = new Map<Entity, () => void>();
 
   configure(options: { builder: LevelBuilderSystem; store: GameStore }): void {
     this.builder = options.builder;
@@ -58,7 +60,7 @@ export class GateLeverSystem extends createSystem(
     });
     this.cleanupFuncs.push(() => {
       this.anims.clear();
-      this.boundLevers.clear();
+      this.unbindLevers();
     });
   }
 
@@ -69,6 +71,7 @@ export class GateLeverSystem extends createSystem(
   debugApi(): GateLeverDebugApi {
     return {
       pull: (leverId) => this.activateLever(leverId),
+      boundCount: () => this.boundLevers.size,
     };
   }
 
@@ -80,21 +83,44 @@ export class GateLeverSystem extends createSystem(
   private onLevelBuilt(): void {
     this.anims.clear();
     this.eventCursor = 0;
-    this.boundLevers.clear();
+    this.unbindLevers();
     const mounted = this.builder?.getMounted();
     if (!mounted) return;
     for (const piece of mounted.pieces) {
       if (piece.placement.piece !== 'lever') continue;
       const entity = this.builder?.getPieceEntity(piece.placement.id);
       if (!entity) continue;
-      if (!entity.hasComponent(RayInteractable)) {
-        entity.addComponent(RayInteractable);
-      }
-      if (!entity.hasComponent(PokeInteractable)) {
-        entity.addComponent(PokeInteractable);
-      }
-      this.boundLevers.add(entity);
+      this.bindLever(entity);
     }
+  }
+
+  private unbindLevers(): void {
+    for (const [entity, handler] of this.leverDown) {
+      entity.object3D?.removeEventListener('pointerdown', handler);
+    }
+    this.leverDown.clear();
+    this.boundLevers.clear();
+  }
+
+  private bindLever(entity: Entity): void {
+    if (!entity.hasComponent(RayInteractable)) {
+      entity.addComponent(RayInteractable);
+    }
+    if (!entity.hasComponent(PokeInteractable)) {
+      entity.addComponent(PokeInteractable);
+    }
+    const object3D = entity.object3D;
+    if (object3D) {
+      object3D.pointerEvents = 'auto';
+      object3D.pointerEventsOrder = 8;
+      const onDown = (): void => {
+        const id = object3D.userData.placementId;
+        if (typeof id === 'string') this.activateLever(id);
+      };
+      object3D.addEventListener('pointerdown', onDown);
+      this.leverDown.set(entity, onDown);
+    }
+    this.boundLevers.add(entity);
   }
 
   private onPressed(entity: Entity): void {
