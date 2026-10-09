@@ -183,6 +183,7 @@ describe('explorerPath', () => {
     );
     expect(ride).toBeDefined();
     expect(ride?.placementId).toBe('p2');
+    expect(ride?.blocker).toBe('unalignedPlatform');
   });
 
   it('tags an awake slime as a blocker', () => {

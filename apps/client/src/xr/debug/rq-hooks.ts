@@ -20,6 +20,7 @@ import type { SnapTarget } from '../level/types.js';
 import type { PlacementDebugApi } from '../systems/PlacementSystem.js';
 import type { GateLeverDebugApi } from '../systems/GateLeverSystem.js';
 import type { VillageAnchorDebugApi } from '../systems/VillageAnchorSystem.js';
+import type { PlatformDebugApi } from '../systems/PlatformRailSystem.js';
 import type { RqPerfStats } from './stats.js';
 
 export interface RqHudDebug {
@@ -53,6 +54,7 @@ export interface RqHooks {
   overlay?: RqOverlayDebug;
   guidance?: RqGuidanceDebug;
   placement?: PlacementDebugApi | null;
+  platform?: PlatformDebugApi | null;
   stats?: () => RqPerfStats;
   autoSolve?: () => Promise<void>;
   /** Debug/e2e: force the synthetic living-room plan into `playing`. */
@@ -79,6 +81,7 @@ export interface RqExplorerDebug {
     y: number;
     z: number;
   };
+  activePlacementId?: () => string | undefined;
 }
 
 export type RqHookName = keyof RqHooks;

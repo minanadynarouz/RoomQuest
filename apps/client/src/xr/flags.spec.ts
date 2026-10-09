@@ -56,6 +56,12 @@ describe('client URL flags', () => {
     expect(emulatorRoomFromFlags(flags)).toBe('living_room');
   });
 
+  it('reads the platform-portal fixture and xr session', () => {
+    const flags = readClientFlags('?fixture=synthetic_platform_portal&xr=1');
+    expect(flags.fixture).toBe('synthetic_platform_portal');
+    expect(isFixtureXrSession(flags)).toBe(true);
+  });
+
   it('does not import schema, director, or IWSDK', async () => {
     const source = await readFile(
       join(process.cwd(), 'src', 'xr', 'flags.ts'),

@@ -19,6 +19,7 @@ import type {
   GameResult,
   StuckPlayerSignal,
   StartBuildingOptions,
+  ExplorerBlockReason,
 } from './types.js';
 import { defaultClock } from './types.js';
 import { calculateStars } from './stars.js';
@@ -303,10 +304,13 @@ export function createGameStore(options: GameStoreOptions = {}) {
     | { type: 'gemCollected'; placementId: string }
     | {
         type: 'explorerBlocked';
-        reason: 'unbuiltGap' | 'closedGate' | 'awakeSlime';
+        reason: ExplorerBlockReason;
       }
     | { type: 'explorerOutOfView' }
     | { type: 'won' }
+    | { type: 'pieceMoved'; placementId: string; aligned: boolean }
+    | { type: 'platformAligned'; placementId: string }
+    | { type: 'portalUsed'; placementId: string }
     | {
         type: 'beatCompleted';
         beatIndex: number;
@@ -534,12 +538,24 @@ export function createGameStore(options: GameStoreOptions = {}) {
       emitEvent({ type: 'gemCollected' as const, placementId });
     },
 
-    explorerBlocked(reason: 'unbuiltGap' | 'closedGate' | 'awakeSlime') {
+    explorerBlocked(reason: ExplorerBlockReason) {
       emitEvent({ type: 'explorerBlocked' as const, reason });
     },
 
     explorerOutOfView() {
       emitEvent({ type: 'explorerOutOfView' as const });
+    },
+
+    pieceMoved(placementId: string, aligned: boolean) {
+      emitEvent({ type: 'pieceMoved' as const, placementId, aligned });
+    },
+
+    platformAligned(placementId: string) {
+      emitEvent({ type: 'platformAligned' as const, placementId });
+    },
+
+    portalUsed(placementId: string) {
+      emitEvent({ type: 'portalUsed' as const, placementId });
     },
 
     /**

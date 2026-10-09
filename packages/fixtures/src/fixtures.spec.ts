@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { SurfaceGraph, LevelPlan } from '@roomquest/schema';
 import { SYNTHETIC_LIVING_ROOM } from './graphs/synthetic-living-room.js';
 import { SYNTHETIC_LIVING_ROOM_PLAN } from './plans/synthetic-living-room-plan.js';
+import { SYNTHETIC_PLATFORM_PORTAL_PLAN } from './plans/synthetic-platform-portal-plan.js';
 
 describe('Fixtures', () => {
   describe('SYNTHETIC_LIVING_ROOM', () => {
@@ -170,6 +171,28 @@ describe('Fixtures', () => {
       expect(SYNTHETIC_LIVING_ROOM_PLAN.seed).toContain(
         SYNTHETIC_LIVING_ROOM.roomHash,
       );
+    });
+  });
+
+  describe('SYNTHETIC_PLATFORM_PORTAL_PLAN', () => {
+    it('is a valid LevelPlan with a platform and one portal pair', () => {
+      const result = LevelPlan.parse(SYNTHETIC_PLATFORM_PORTAL_PLAN);
+      expect(result.placements.some((p) => p.piece === 'moving_platform')).toBe(
+        true
+      );
+      const portals = result.placements.filter((p) => p.piece === 'portal');
+      expect(portals).toHaveLength(2);
+      expect(portals[0]?.links).toContain(portals[1]?.id);
+    });
+
+    it('references only synthetic living-room surfaces', () => {
+      const surfaceIds = SYNTHETIC_LIVING_ROOM.nodes.map((n) => n.id);
+      SYNTHETIC_PLATFORM_PORTAL_PLAN.placements.forEach((placement) => {
+        expect(surfaceIds).toContain(placement.surface);
+        if (placement.to) {
+          expect(surfaceIds).toContain(placement.to);
+        }
+      });
     });
   });
 });

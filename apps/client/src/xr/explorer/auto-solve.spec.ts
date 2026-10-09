@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   SYNTHETIC_LIVING_ROOM,
   SYNTHETIC_LIVING_ROOM_PLAN,
+  SYNTHETIC_PLATFORM_PORTAL_PLAN,
 } from '@roomquest/fixtures';
 import { explorerPath } from '@roomquest/level-core';
 import { createGameStore } from '../../game/index.js';
@@ -45,6 +46,40 @@ describe('autoSolve', () => {
       SYNTHETIC_LIVING_ROOM_PLAN.beats.length
     );
     expect(store.events.some((e) => e.type === 'gemCollected')).toBe(true);
+    expect(walker.state).toBe('celebrating');
+  });
+
+  it('aligns platforms on the platform-portal fixture and reaches won', () => {
+    let now = 0;
+    const store = createGameStore({
+      clock: {
+        now: () => now,
+      },
+    });
+    store.requestLevel();
+    store.startSurveying();
+    store.startBuilding(SYNTHETIC_PLATFORM_PORTAL_PLAN);
+    store.startPlaying();
+
+    const walker = new ExplorerWalker();
+    walker.begin(
+      explorerPath(SYNTHETIC_PLATFORM_PORTAL_PLAN, SYNTHETIC_LIVING_ROOM),
+      SYNTHETIC_PLATFORM_PORTAL_PLAN,
+      store
+    );
+
+    autoSolve({ store, plan: SYNTHETIC_PLATFORM_PORTAL_PLAN });
+
+    expect(store.events.some((e) => e.type === 'platformAligned')).toBe(true);
+
+    for (let i = 0; i < 120; i += 1) {
+      now += 1000;
+      walker.update(1, now / 1000);
+      if (store.phase === 'won') break;
+    }
+
+    expect(store.phase).toBe('won');
+    expect(store.events.some((e) => e.type === 'portalUsed')).toBe(true);
     expect(walker.state).toBe('celebrating');
   });
 });

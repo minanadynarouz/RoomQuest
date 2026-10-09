@@ -59,7 +59,8 @@ All events carry:
 Event types:
 
 - `pieceBuilt`, `leverPulled`, `gateOpened`, `slimeStunned`, `gemCollected`: Game actions
-- `explorerBlocked`: Blocked with reason (`unbuiltGap`, `closedGate`, `awakeSlime`)
+- `pieceMoved`, `platformAligned`, `portalUsed`: Moving platform and portal (X-07)
+- `explorerBlocked`: Blocked with reason (`unbuiltGap`, `closedGate`, `awakeSlime`, `unalignedPlatform`)
 - `explorerOutOfView`: Explorer outside player FoV
 - `beatCompleted`: Beat finished with duration
 - `won`: Level completed

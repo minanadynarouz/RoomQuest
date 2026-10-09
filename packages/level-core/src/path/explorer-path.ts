@@ -229,12 +229,15 @@ function linkBlocker(
   if (kind === 'gate') {
     return 'closedGate';
   }
+  if (kind === 'moving_platform') {
+    if (placement?.playerBuilt) {
+      return 'unbuiltGap';
+    }
+    return 'unalignedPlatform';
+  }
   if (
     placement?.playerBuilt &&
-    (kind === 'plank_bridge' ||
-      kind === 'ramp' ||
-      kind === 'portal' ||
-      kind === 'moving_platform')
+    (kind === 'plank_bridge' || kind === 'ramp' || kind === 'portal')
   ) {
     return 'unbuiltGap';
   }

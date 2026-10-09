@@ -161,6 +161,29 @@ export const SOUND_MANIFEST: Record<SoundKey, SoundEntry> = {
     pitchHz: 1046.5,
     duration: 0.45,
   },
+  pieceMoved: {
+    synth: 'woodClick',
+    gain: 0.16,
+    spatial: false,
+    pitchHz: 980,
+    duration: 0.04,
+  },
+  platformAligned: {
+    synth: 'marimbaRise',
+    gain: 0.22,
+    spatial: false,
+    pitchHz: 493.88,
+    duration: 0.16,
+    intervals: [0, 4],
+  },
+  portalUsed: {
+    synth: 'marimbaRise',
+    gain: 0.22,
+    spatial: false,
+    pitchHz: 783.99,
+    duration: 0.18,
+    intervals: [0, 7],
+  },
 };
 
 export const SOUND_KEYS = Object.keys(SOUND_MANIFEST) as SoundKey[];

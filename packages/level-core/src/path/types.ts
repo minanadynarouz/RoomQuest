@@ -5,7 +5,11 @@ export type TraversalKind =
   'walk' | 'plank_bridge' | 'ramp' | 'gate' | 'portal' | 'moving_platform';
 
 /** Runtime blocker the explorer waits on before crossing a segment. */
-export type PathBlocker = 'unbuiltGap' | 'closedGate' | 'awakeSlime';
+export type PathBlocker =
+  | 'unbuiltGap'
+  | 'closedGate'
+  | 'awakeSlime'
+  | 'unalignedPlatform';
 
 /** A world-space stop on the explorer's route. */
 export interface ExplorerWaypoint {
