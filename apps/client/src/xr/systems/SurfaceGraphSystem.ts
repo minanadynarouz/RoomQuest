@@ -22,6 +22,28 @@ const VALID_LABELS: readonly SurfaceLabel[] = [
   'other',
 ];
 
+/** IWSDK Vec3 fields must be read with getVectorView, never getValue. */
+export function copyVec3(view: unknown): [number, number, number] | undefined {
+  if (view === null || view === undefined || typeof view !== 'object') {
+    return undefined;
+  }
+  const record = view as Record<string, unknown>;
+  const x = record['0'];
+  const y = record['1'];
+  const z = record['2'];
+  if (
+    typeof x !== 'number' ||
+    typeof y !== 'number' ||
+    typeof z !== 'number' ||
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    !Number.isFinite(z)
+  ) {
+    return undefined;
+  }
+  return [x, y, z];
+}
+
 /**
  * Normalize native semantic label to schema SurfaceLabel
  */
@@ -119,7 +141,18 @@ export class SurfaceGraphSystem extends createSystem(
       return;
     }
 
-    const descriptors = this.extractDescriptors();
+    let descriptors: SurfaceDescriptor[];
+    try {
+      descriptors = this.extractDescriptors();
+    } catch (error: unknown) {
+      console.error(
+        '[SurfaceGraphSystem] extractDescriptors threw; cannot build graph',
+        error
+      );
+      this.stabilized = true;
+      this.eventEmitter.dispatchEvent(new CustomEvent('noSurfaces'));
+      return;
+    }
 
     if (descriptors.length < 2) {
       this.stabilized = true;
@@ -212,8 +245,9 @@ export class SurfaceGraphSystem extends createSystem(
     for (const entity of this.queries.meshes.entities) {
       const isBounded = Boolean(entity.getValue(XRMesh, 'isBounded3D'));
       const semanticLabel = entity.getValue(XRMesh, 'semanticLabel') ?? 'other';
-      const min = entity.getValue(XRMesh, 'min');
-      const max = entity.getValue(XRMesh, 'max');
+      // elics throws if Vec3 fields are read with getValue (see PlaneTestSystem).
+      const min = copyVec3(entity.getVectorView(XRMesh, 'min'));
+      const max = copyVec3(entity.getVectorView(XRMesh, 'max'));
 
       const obj = entity.object3D;
       if (!obj) continue;
@@ -229,7 +263,7 @@ export class SurfaceGraphSystem extends createSystem(
         tmpQuat.w,
       ];
 
-      let adjustedPos = pos;
+      let adjustedPos: [number, number, number] = [pos[0], pos[1], pos[2]];
       if (isBounded && max) {
         adjustedPos = [pos[0], pos[1] + max[1], pos[2]];
       }
