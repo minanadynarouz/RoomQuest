@@ -1,0 +1,254 @@
+{
+  "planeCount": 24,
+  "meshCount": 14,
+  "planes": [
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.0292224884033203,
+      "area": 1.4648580459120524
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.2163325548171997,
+      "area": 4.151880379708814
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.212132453918457,
+      "area": 9.21635964043162
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.2176097631454468,
+      "area": 2.14433975736965
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.4718828201293945,
+      "area": 2.3749990701676325
+    },
+    {
+      "label": "PLANE",
+      "orientation": "HORIZONTAL",
+      "height": 0.7673649191856384,
+      "area": 0.4219051320496874
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.6358379125595093,
+      "area": 0.49454616951152275
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.522356390953064,
+      "area": 1.7944159111877411
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.4329766035079956,
+      "area": 0.23404631783918717
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.2142256498336792,
+      "area": 1.8132942414380437
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.4674321413040161,
+      "area": 1.782792327802781
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.0248407125473022,
+      "area": 1.4853283088857552
+    },
+    {
+      "label": "PLANE",
+      "orientation": "HORIZONTAL",
+      "height": 0.0017685890197753906,
+      "area": 17.171768329332963
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.212735652923584,
+      "area": 7.566105550518614
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.2162305116653442,
+      "area": 9.139519145096926
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.218163013458252,
+      "area": 3.637049953133271
+    },
+    {
+      "label": "PLANE",
+      "orientation": "HORIZONTAL",
+      "height": 0.7562332153320312,
+      "area": 0.7474425629350208
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.4570790529251099,
+      "area": 0.16701748580830156
+    },
+    {
+      "label": "PLANE",
+      "orientation": "HORIZONTAL",
+      "height": 0.772670567035675,
+      "area": 0.8724493777808675
+    },
+    {
+      "label": "PLANE",
+      "orientation": "HORIZONTAL",
+      "height": 0.36626768112182617,
+      "area": 0.744100830423065
+    },
+    {
+      "label": "PLANE",
+      "orientation": "HORIZONTAL",
+      "height": 2.431033134460449,
+      "area": 17.17010881803435
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 0.5080059766769409,
+      "area": 2.070000116825099
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.5825525522232056,
+      "area": 0.45690712095094455
+    },
+    {
+      "label": "PLANE",
+      "orientation": "VERTICAL",
+      "height": 1.218231439590454,
+      "area": 4.090837112280269
+    }
+  ],
+  "meshes": [
+    {
+      "label": "SCREEN",
+      "isBounded3D": true,
+      "width": 0.35665082931518555,
+      "height": 0.0771021842956543,
+      "depth": 0.6757669448852539
+    },
+    {
+      "label": "COUCH",
+      "isBounded3D": true,
+      "width": 1.6949377059936523,
+      "height": 0.8204970359802246,
+      "depth": 0.8200631141662598
+    },
+    {
+      "label": "TABLE",
+      "isBounded3D": true,
+      "width": 1.1606035232543945,
+      "height": 0.7517201900482178,
+      "depth": 0.7606220245361328
+    },
+    {
+      "label": "SCREEN",
+      "isBounded3D": true,
+      "width": 0.7066726684570312,
+      "height": 0.08940327167510986,
+      "depth": 0.42268067598342896
+    },
+    {
+      "label": "LAMP",
+      "isBounded3D": true,
+      "width": 0.3024168014526367,
+      "height": 0.2872605323791504,
+      "depth": 0.2641409635543823
+    },
+    {
+      "label": "TABLE",
+      "isBounded3D": true,
+      "width": 0.8490605354309082,
+      "height": 0.49690771102905273,
+      "depth": 0.7537343502044678
+    },
+    {
+      "label": "SCREEN",
+      "isBounded3D": true,
+      "width": 0.7290103435516357,
+      "height": 0.1100001335144043,
+      "depth": 0.3993188142776489
+    },
+    {
+      "label": "LAMP",
+      "isBounded3D": true,
+      "width": 0.19932079315185547,
+      "height": 0.09049725532531738,
+      "depth": 0.18564993143081665
+    },
+    {
+      "label": "TABLE",
+      "isBounded3D": true,
+      "width": 0.6723582744598389,
+      "height": 1.1116725206375122,
+      "depth": 0.7561019062995911
+    },
+    {
+      "label": "LAMP",
+      "isBounded3D": true,
+      "width": 0.21944975852966309,
+      "height": 0.2313249111175537,
+      "depth": 1.800398826599121
+    },
+    {
+      "label": "PLANT",
+      "isBounded3D": true,
+      "width": 0.25079965591430664,
+      "height": 0.261106014251709,
+      "depth": 0.4454936981201172
+    },
+    {
+      "label": "OTHER",
+      "isBounded3D": true,
+      "width": 5.915209770202637,
+      "height": 4.186337947845459,
+      "depth": 2.434530258178711
+    },
+    {
+      "label": "SHELF",
+      "isBounded3D": true,
+      "width": 0.37407422065734863,
+      "height": 0.7511727213859558,
+      "depth": 1.4657702445983887
+    },
+    {
+      "label": "SHELF",
+      "isBounded3D": true,
+      "width": 2.9298081398010254,
+      "height": 0.4202265739440918,
+      "depth": 0.7647325992584229
+    }
+  ],
+  "interactionFired": {
+    "rayPinch": false,
+    "poke": false
+  }
+}

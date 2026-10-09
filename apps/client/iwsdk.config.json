@@ -11,8 +11,9 @@
   "world": {
     "xr": {
       "mode": "ar",
-      "offer": "always",
+      "offer": "none",
       "features": {
+        "gazeTracking": true,
         "handTracking": true,
         "anchors": true,
         "planeDetection": true,
@@ -36,7 +37,12 @@
     },
     "features": {
       "locomotion": false,
-      "grabbing": true,
+      "grabbing": {
+        "useHandPinchForGrab": true
+      },
+      "gaze": {
+        "logDiagnostics": true
+      },
       "physics": false,
       "sceneUnderstanding": true,
       "environmentRaycast": true,
@@ -48,7 +54,7 @@
   "dev": {
     "emulator": {
       "device": "metaQuest3",
-      "environment": "living_room"
+      "environment": "office_large"
     }
   }
 }

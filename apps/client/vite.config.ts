@@ -32,13 +32,16 @@ export default defineConfig({
     ],
   },
   optimizeDeps: {
-    exclude: ['@babylonjs/havok'],
-    include: [
-      'three',
+    exclude: [
+      '@babylonjs/havok',
+      '@zappar/msdf-generator',
       '@pmndrs/uikit',
       '@pmndrs/uikit-horizon',
       '@pmndrs/uikit-lucide',
       '@drawcall/uikitml',
+    ],
+    include: [
+      'three',
     ],
     esbuildOptions: { target: 'esnext' },
   },
