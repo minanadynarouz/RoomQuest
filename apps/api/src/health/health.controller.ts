@@ -6,7 +6,7 @@ export class HealthController {
   constructor(@Inject(HealthService) private readonly health: HealthService) {}
 
   @Get()
-  getHealth(): HealthResponse {
+  getHealth(): Promise<HealthResponse> {
     return this.health.getHealth();
   }
 }

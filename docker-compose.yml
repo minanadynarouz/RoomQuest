@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: roomquest-postgres
+    restart: unless-stopped
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: roomquest
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d roomquest']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - roomquest_pgdata:/var/lib/postgresql/data
+
+volumes:
+  roomquest_pgdata:

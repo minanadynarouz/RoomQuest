@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { isLlmConfigured, type Env } from '../config/env';
+import { PrismaService } from '../prisma/prisma.service';
 
 export interface HealthResponse {
   status: 'ok';
@@ -14,10 +15,11 @@ export interface HealthResponse {
 @Injectable()
 export class HealthService {
   constructor(
-    @Inject(ConfigService) private readonly config: ConfigService<Env, true>
+    @Inject(ConfigService) private readonly config: ConfigService<Env, true>,
+    @Inject(PrismaService) private readonly prisma: PrismaService
   ) {}
 
-  getHealth(): HealthResponse {
+  async getHealth(): Promise<HealthResponse> {
     const env = {
       GOOGLE_API_KEY: this.config.get('GOOGLE_API_KEY', { infer: true }),
       ANTHROPIC_API_KEY: this.config.get('ANTHROPIC_API_KEY', { infer: true }),
@@ -26,9 +28,7 @@ export class HealthService {
     return {
       status: 'ok',
       version: this.config.get('GIT_SHA', { infer: true }),
-      // No Prisma/DB in B-02 (B-06 / B-10). Always report down while the
-      // process is up so the landing-page pre-warm stays a 200.
-      db: 'down',
+      db: (await this.prisma.ping()) ? 'ok' : 'down',
       llm: isLlmConfigured(env) ? 'configured' : 'missing',
       time: new Date().toISOString(),
     };
