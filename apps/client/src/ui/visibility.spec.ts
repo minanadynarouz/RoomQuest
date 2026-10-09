@@ -4,6 +4,7 @@ import type { LevelPlan } from '@roomquest/schema';
 import { HUD_COPY } from './copy.js';
 import {
   mapStoreToHud,
+  selectGazeHint,
   snapshotGameStore,
   visiblePanelIds,
 } from './visibility.js';
@@ -172,6 +173,7 @@ describe('store-to-panel visibility mapping', () => {
     expect(view.beatGoal.goal).toBe('Bridge the gap');
     expect(view.beatGoal.beatLabel).toBe('Beat 1 of 2');
     expect(view.dialogue.line).toBe('The crystal fell onto the couch.');
+    expect(view.dialogue.skipVisible).toBe(false);
     expect(view.pause.visible).toBe(false);
     expect(view.win.visible).toBe(false);
     expect(view.surveying.visible).toBe(false);
@@ -243,6 +245,40 @@ describe('store-to-panel visibility mapping', () => {
       );
       expect(modals.length).toBeLessThanOrEqual(1);
     }
+  });
+
+  it('lets onboarding overlay the intro without hiding the beat chip', () => {
+    const { store, today } = storeAt('playing');
+    const view = mapStoreToHud(snapshotGameStore(store, today), {
+      line: HUD_COPY.onboardingFallback,
+      skipVisible: true,
+    });
+    expect(view.dialogue.line).toBe(HUD_COPY.onboardingFallback);
+    expect(view.dialogue.skipVisible).toBe(true);
+    expect(view.dialogue.skipLabel).toBe(HUD_COPY.skip);
+    expect(view.beatGoal.visible).toBe(true);
+    expect(view.beatGoal.goal).toBe('Bridge the gap');
+  });
+
+  it('shows the gaze hint overlay after onboarding', () => {
+    const { store, today } = storeAt('playing');
+    const plan = store.plan;
+    const view = mapStoreToHud(snapshotGameStore(store, today), {
+      line: selectGazeHint(plan),
+      skipVisible: false,
+    });
+    expect(view.dialogue.line).toBe(HUD_COPY.gazeFallback);
+    expect(view.dialogue.skipVisible).toBe(false);
+  });
+
+  it('picks the plan gaze line for hints', () => {
+    const plan = mockPlan({
+      dialogue: [
+        { trigger: 'intro', line: 'Go.' },
+        { trigger: 'gaze', line: 'Pinch a plank for the gap.' },
+      ],
+    });
+    expect(selectGazeHint(plan)).toBe('Pinch a plank for the gap.');
   });
 
   it('reads beat index and result only through the public store API', () => {

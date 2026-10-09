@@ -35,7 +35,12 @@ export interface HudStoreSnapshot {
 
 export interface HudPanelContent {
   surveying: { visible: boolean; title: string; body: string };
-  dialogue: { visible: boolean; line: string };
+  dialogue: {
+    visible: boolean;
+    line: string;
+    skipVisible: boolean;
+    skipLabel: string;
+  };
   beatGoal: {
     visible: boolean;
     goal: string;
@@ -81,6 +86,19 @@ function surveyingBody(phase: GamePhase): string {
 function currentBeatGoal(plan: LevelPlan | null, beatIndex: number): string {
   const goal = plan?.beats[beatIndex]?.goal.trim();
   return goal && goal.length > 0 ? goal : HUD_COPY.beatFallback;
+}
+
+export interface DialogueOverlay {
+  line?: string | null;
+  skipVisible?: boolean;
+}
+
+/**
+ * Current beat's gaze hint (plan `gaze` line, else a short fallback).
+ */
+export function selectGazeHint(plan: LevelPlan | null): string {
+  const gaze = plan?.dialogue.find((line) => line.trigger === 'gaze')?.line.trim();
+  return gaze && gaze.length > 0 ? gaze : HUD_COPY.gazeFallback;
 }
 
 /**
@@ -138,7 +156,10 @@ export function snapshotGameStore(
   };
 }
 
-export function mapStoreToHud(snapshot: HudStoreSnapshot): HudPanelContent {
+export function mapStoreToHud(
+  snapshot: HudStoreSnapshot,
+  overlay?: DialogueOverlay
+): HudPanelContent {
   const { phase, plan, currentBeatIndex, events, result, todayIso } = snapshot;
   const surveyingVisible = SURVEYING_PHASES.has(phase);
   const playing = phase === 'playing';
@@ -146,12 +167,14 @@ export function mapStoreToHud(snapshot: HudStoreSnapshot): HudPanelContent {
   const won = phase === 'won';
   const noSurfaces = phase === 'noSurfaces';
 
-  const dialogueLine = selectDialogueLine(
+  const storeLine = selectDialogueLine(
     phase,
     plan,
     currentBeatIndex,
     events
   );
+  const overlayLine = playing ? overlay?.line ?? null : null;
+  const dialogueLine = overlayLine && overlayLine.length > 0 ? overlayLine : storeLine;
   const beatCount = plan?.beats.length ?? 0;
 
   const stars = result?.stars ?? 1;
@@ -170,6 +193,8 @@ export function mapStoreToHud(snapshot: HudStoreSnapshot): HudPanelContent {
     dialogue: {
       visible: playing && dialogueLine !== null,
       line: dialogueLine ?? '',
+      skipVisible: playing && Boolean(overlay?.skipVisible),
+      skipLabel: HUD_COPY.skip,
     },
     beatGoal: {
       visible: playing,

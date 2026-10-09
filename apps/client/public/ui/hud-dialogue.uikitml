@@ -25,9 +25,20 @@
   .line:dark {
     color: rgba(255, 255, 255, 0.9);
   }
+
+  .skip {
+    justify-content: center;
+    margin-left: 20px;
+    margin-right: 20px;
+    margin-top: 8px;
+    margin-bottom: 10px;
+  }
 </style>
 <Panel class="panel-root">
   <div class="panel-content">
     <div id="dialogue-line" class="line">Help me get there!</div>
   </div>
+  <Button id="dialogue-skip" class="skip">
+    <ButtonLabel>Skip</ButtonLabel>
+  </Button>
 </Panel>

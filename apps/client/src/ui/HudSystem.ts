@@ -20,6 +20,8 @@ import {
   type Object3D,
 } from '@iwsdk/core';
 import type { GameStore } from '../game/index.js';
+import { asExplorerTarget, setExplorerTarget, setFallbackExplorerTarget } from './explorer-target.js';
+import { readGuidanceOverlay } from './guidance/overlay.js';
 import { createExplorerStub } from './explorer-stub.js';
 import {
   DIALOGUE_HEIGHT_M,
@@ -53,6 +55,7 @@ export function bindHudStore(store: GameStore): void {
  */
 export function setExplorerAnchor(object: Object3D | null): void {
   explorerAnchor = object;
+  setExplorerTarget(object ? asExplorerTarget(object) : null);
 }
 
 interface TextLike {
@@ -91,6 +94,7 @@ function viewSignature(view: HudPanelContent): string {
     view.surveying.body,
     view.dialogue.visible,
     view.dialogue.line,
+    view.dialogue.skipVisible,
     view.beatGoal.visible,
     view.beatGoal.goal,
     view.beatGoal.beatLabel,
@@ -121,6 +125,7 @@ export class HudSystem extends createSystem({}) {
   private mounted = false;
   private lastSignature = '';
   private usingStub = true;
+  private stubPinned = false;
 
   init(): void {
     this.cleanupFuncs.push(() => {
@@ -156,7 +161,11 @@ export class HudSystem extends createSystem({}) {
     }
     this.syncStubPose();
     this.billboardDialogue();
-    const view = mapStoreToHud(snapshotGameStore(boundStore));
+    const overlay = readGuidanceOverlay();
+    const view = mapStoreToHud(snapshotGameStore(boundStore), {
+      line: overlay.line,
+      skipVisible: overlay.skipVisible,
+    });
     const signature = viewSignature(view);
     if (signature === this.lastSignature) return;
     this.lastSignature = signature;
@@ -206,6 +215,7 @@ export class HudSystem extends createSystem({}) {
     });
     this.applyExplorerAnchor(explorerAnchor);
     stub.visible = this.usingStub;
+    setFallbackExplorerTarget(asExplorerTarget(stub));
 
     const ids: HudPanelId[] = [
       'surveying',
@@ -267,6 +277,11 @@ export class HudSystem extends createSystem({}) {
       });
     };
 
+    if (id === 'dialogue') {
+      click('dialogue-skip', () => {
+        readGuidanceOverlay().skipOnboarding();
+      });
+    }
     if (id === 'beatGoal') {
       click('beat-pause', () => {
         store.pause();
@@ -322,6 +337,12 @@ export class HudSystem extends createSystem({}) {
     const dialogue = this.panels.get('dialogue');
     if (dialogue && view.dialogue.visible) {
       setText(dialogue.asset, 'dialogue-line', view.dialogue.line);
+      const skip = dialogue.asset.getElementById('dialogue-skip') as
+        | { setProperties: (props: { display?: string }) => void }
+        | null;
+      skip?.setProperties({
+        display: view.dialogue.skipVisible ? 'flex' : 'none',
+      });
     }
 
     const beat = this.panels.get('beatGoal');
@@ -365,6 +386,10 @@ export class HudSystem extends createSystem({}) {
 
   private syncStubPose(): void {
     if (!this.usingStub || !this.explorerObject) return;
+    const phase = boundStore?.phase;
+    const playing = phase === 'playing' || phase === 'paused';
+    if (playing && this.stubPinned) return;
+    if (!playing) this.stubPinned = false;
     if (this.renderer.xr.isPresenting) {
       this.player.head.getWorldPosition(this.tmpHead);
       this.player.head.getWorldDirection(this.tmpFwd);
@@ -376,6 +401,7 @@ export class HudSystem extends createSystem({}) {
     this.tmpPos.addScaledVector(this.tmpFwd, EXPLORER_STUB_DISTANCE_M);
     this.tmpPos.y = this.tmpHead.y - EXPLORER_STUB_DROP_M;
     this.explorerObject.position.copy(this.tmpPos);
+    if (playing) this.stubPinned = true;
   }
 
   private billboardDialogue(): void {

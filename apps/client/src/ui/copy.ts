@@ -20,7 +20,20 @@ export const HUD_COPY = {
   replay: 'Replay',
   pause: 'Pause',
   beatFallback: 'Help the explorer onward',
+  gazeFallback: 'Pinch a plank from the tray, then snap it on a gap.',
+  onboardingFallback: 'Hi! Help me cross your room.',
+  skip: 'Skip',
 } as const;
+
+/** 30-second first-run intro, spoken as explorer lines (F-06). */
+export const ONBOARDING_DURATION_MS = 30_000;
+
+export const ONBOARDING_STEPS: readonly { atMs: number; line: string }[] = [
+  { atMs: 0, line: 'Hi! Help me cross your room.' },
+  { atMs: 7_500, line: 'Pinch a plank. Drop it on a gap.' },
+  { atMs: 15_000, line: 'Look at me for a hint.' },
+  { atMs: 22_500, line: 'If I wander, follow the arrow.' },
+];
 
 export function formatHudTime(timeMs: number): string {
   const totalSeconds = Math.max(0, Math.floor(timeMs / 1000));

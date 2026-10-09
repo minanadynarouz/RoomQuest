@@ -431,3 +431,172 @@ test.describe('F-05 debug overlay', () => {
   });
 });
 
+const f06ScreenshotDir = path.join(__dirname, '../../../docs/screenshots/f06');
+
+test.describe('F-06 onboarding and edge arrow', () => {
+  test('shows the onboarding bubble then an edge arrow when looking away', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      try {
+        window.localStorage.removeItem('rq.onboarding.v1');
+      } catch {
+        /* private mode */
+      }
+    });
+
+    const consoleLogs: string[] = [];
+    page.on('console', (msg) => {
+      consoleLogs.push(msg.text());
+    });
+
+    await page.goto('/?emulator=1&room=living_room&debug=1&director=mock');
+    await page.waitForLoadState('networkidle');
+
+    const button = page.locator('#enter-button');
+    for (let i = 0; i < 40; i++) {
+      if (await button.isEnabled()) break;
+      await page.waitForTimeout(500);
+    }
+    expect(await button.isEnabled()).toBe(true);
+    await button.click();
+
+    await expect
+      .poll(
+        async () =>
+          page
+            .locator('#landing-page')
+            .evaluate((el) => getComputedStyle(el).display),
+        { timeout: 20_000 }
+      )
+      .toBe('none');
+
+    await page.waitForFunction(
+      () =>
+        Boolean(
+          (
+            window as unknown as {
+              __rq?: { hud?: { ready?: boolean } };
+            }
+          ).__rq?.hud?.ready
+        ),
+      { timeout: 25_000 }
+    );
+
+    await page.waitForFunction(
+      () => {
+        const rq = (
+          window as unknown as {
+            __rq?: {
+              store?: { phase?: string };
+              guidance?: { ready?: boolean; onboardingActive?: boolean };
+            };
+          }
+        ).__rq;
+        return (
+          rq?.store?.phase === 'playing' &&
+          rq.guidance?.ready === true &&
+          rq.guidance.onboardingActive === true
+        );
+      },
+      { timeout: 45_000 }
+    );
+
+    const onboard = await page.evaluate(() => {
+      const rq = (
+        window as unknown as {
+          __rq?: {
+            store?: { phase?: string };
+            hud?: { visible?: string[] };
+            guidance?: {
+              onboardingActive?: boolean;
+              line?: string | null;
+              arrowVisible?: boolean;
+            };
+          };
+        }
+      ).__rq;
+      return {
+        phase: rq?.store?.phase ?? null,
+        visible: rq?.hud?.visible ?? [],
+        onboardingActive: rq?.guidance?.onboardingActive ?? false,
+        line: rq?.guidance?.line ?? null,
+        arrowVisible: rq?.guidance?.arrowVisible ?? false,
+      };
+    });
+
+    console.log('F-06 onboarding', onboard, 'logs', consoleLogs.slice(-24));
+
+    expect(onboard.phase).toBe('playing');
+    expect(onboard.visible).toContain('dialogue');
+    expect(onboard.visible).toContain('beatGoal');
+    expect(onboard.onboardingActive).toBe(true);
+    expect(onboard.line).toBeTruthy();
+    expect(onboard.arrowVisible).toBe(false);
+
+    await page.screenshot({
+      path: path.join(f06ScreenshotDir, '01-onboarding-bubble.png'),
+      fullPage: true,
+    });
+
+    await page.evaluate(() => {
+      (
+        window as unknown as {
+          __rq?: { guidance?: { placeTargetAtAngle?: (deg: number) => void } };
+        }
+      ).__rq?.guidance?.placeTargetAtAngle?.(90);
+    });
+
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() => {
+            const rq = (
+              window as unknown as {
+                __rq?: { guidance?: { arrowVisible?: boolean } };
+              }
+            ).__rq;
+            return rq?.guidance?.arrowVisible === true;
+          }),
+        { timeout: 8_000 }
+      )
+      .toBe(true);
+
+    const away = await page.evaluate(() => {
+      const store = (
+        window as unknown as {
+          __rq?: {
+            store?: { events?: { type: string }[] };
+            guidance?: { arrowVisible?: boolean; angleDeg?: number };
+          };
+        }
+      ).__rq;
+      return {
+        arrowVisible: store?.guidance?.arrowVisible ?? false,
+        angleDeg: store?.guidance?.angleDeg ?? 0,
+        outOfViewEvent: (store?.store?.events ?? []).some(
+          (event) => event.type === 'explorerOutOfView'
+        ),
+      };
+    });
+
+    console.log('F-06 look-away', away);
+
+    expect(away.arrowVisible).toBe(true);
+    expect(away.angleDeg).toBeGreaterThan(50);
+    expect(away.outOfViewEvent).toBe(true);
+
+    await page.screenshot({
+      path: path.join(f06ScreenshotDir, '02-edge-arrow.png'),
+      fullPage: true,
+    });
+
+    const canvas = page.locator('#scene-container canvas');
+    if (await canvas.count()) {
+      await canvas.first().screenshot({
+        path: path.join(f06ScreenshotDir, '03-edge-arrow-canvas.png'),
+      });
+    }
+  });
+});
+
