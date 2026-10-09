@@ -4,12 +4,12 @@
  */
 
 import { initLanding } from './landing/index.js';
+import { readClientFlags } from './xr/flags.js';
+
+const bootFlags = readClientFlags(window.location.search);
 
 // X-03: `?fixture=` boots via dynamic import so it never joins the landing chunk.
-if (
-  new URLSearchParams(window.location.search).get('fixture') ===
-  'synthetic_living_room'
-) {
+if (bootFlags.fixture === 'synthetic_living_room') {
   void import('./xr/index.js')
     .then(({ launchXR }) => launchXR())
     .catch((error: unknown) => {

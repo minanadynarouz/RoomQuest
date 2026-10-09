@@ -1,0 +1,56 @@
+<style>
+  .panel-root {
+    flex-direction: column;
+    width: 210px;
+  }
+
+  .panel-content {
+    flex-direction: column;
+    padding-top: 12px;
+    padding-bottom: 14px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .heading {
+    text-align: left;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 20px;
+    color: #272727;
+    width: 100%;
+  }
+
+  .heading:dark {
+    color: rgba(255, 255, 255, 0.92);
+  }
+
+  .row {
+    color: #272727;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 16px;
+    text-align: left;
+    width: 100%;
+    margin-top: 4px;
+  }
+
+  .row:dark {
+    color: rgba(232, 244, 255, 0.95);
+  }
+</style>
+<Panel class="panel-root">
+  <div class="panel-content">
+    <div id="debug-title" class="heading">PERF</div>
+    <Divider></Divider>
+    <div id="debug-fps" class="row">fps        -</div>
+    <div id="debug-draws" class="row">draws      0</div>
+    <div id="debug-tris" class="row">tris       0</div>
+    <div id="debug-surfaces" class="row">surfaces   0</div>
+    <div id="debug-source" class="row">source     -</div>
+    <div id="debug-latency" class="row">latency    -</div>
+    <div id="debug-repairs" class="row">repairs    0</div>
+    <div id="debug-fallback" class="row">fallback   -</div>
+    <div id="debug-issues" class="row">issues     0</div>
+  </div>
+</Panel>

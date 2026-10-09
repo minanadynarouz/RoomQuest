@@ -3,6 +3,11 @@
  * Pure: takes a query string, never reads window.
  *
  * Flags: ?director=live|mock|off, ?seed=, ?date=YYYY-MM-DD
+ *
+ * `?debug=`, `?emulator=`, `?room=` and `?fixture=` live in `xr/flags.ts`.
+ * They are not folded in here: `readClientFlags` defaults to `window`, and
+ * director types pull `@roomquest/schema`, which would break F-02 purity
+ * (`game/` must not depend on DOM or `xr/`) and bloat the landing chunk.
  */
 
 import type { DirectorFlags, DirectorMode } from './types.js';

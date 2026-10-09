@@ -19,7 +19,11 @@ describe('landing isolation from HUD', () => {
       if (
         source.includes("from '../ui/") ||
         source.includes('HudSystem') ||
-        source.includes('uikitml')
+        source.includes('uikitml') ||
+        source.includes('DebugOverlaySystem') ||
+        source.includes('rolling-fps') ||
+        /from ['"]\.\.\/debug\//.test(source) ||
+        /from ['"]\.\.\/xr\/(?!flags)/.test(source)
       ) {
         violations.push(path);
       }
@@ -30,7 +34,9 @@ describe('landing isolation from HUD', () => {
       'utf8'
     );
     expect(entry).toContain("import('./xr/index.js')");
+    expect(entry).toContain("from './xr/flags.js'");
     expect(entry).not.toContain('HudSystem');
+    expect(entry).not.toContain('DebugOverlaySystem');
     expect(violations).toEqual([]);
   });
 });
