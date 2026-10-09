@@ -37,12 +37,13 @@ export class DirectorService {
   }
 
   async run(request: LevelRequest): Promise<DirectorOutcome> {
-    const startedMs = Date.now();
+    const now = this.runtime?.now ?? Date.now;
+    const startedMs = now();
     const mode = this.config.get('DIRECTOR_MODE', { infer: true });
     const promptVersion = PROMPT_VERSION;
 
     if (mode === 'mock') {
-      return this.mockOutcome(request, startedMs, promptVersion);
+      return this.mockOutcome(request, startedMs, promptVersion, now);
     }
 
     const googleKey = this.config.get('GOOGLE_API_KEY', { infer: true });
@@ -50,13 +51,7 @@ export class DirectorService {
       this.logger.warn(
         'DIRECTOR_MODE=live but GOOGLE_API_KEY is unset; falling back to a procedural plan'
       );
-      return proceduralOutcome(
-        request,
-        startedMs,
-        [],
-        promptVersion,
-        Date.now
-      );
+      return proceduralOutcome(request, startedMs, [], promptVersion, now);
     }
 
     const directorModel = this.config.get('DIRECTOR_MODEL', { infer: true });
@@ -93,14 +88,18 @@ export class DirectorService {
       logger: this.logger,
       budgetMs: this.runtime?.budgetMs,
       fallbackMinRemainingMs: this.runtime?.fallbackMinRemainingMs,
-      now: this.runtime?.now,
+      llmRepairMinRemainingMs: this.runtime?.llmRepairMinRemainingMs,
+      proceduralReserveMs: this.runtime?.proceduralReserveMs,
+      now,
+      startedMs,
     });
   }
 
   private mockOutcome(
     request: LevelRequest,
     startedMs: number,
-    promptVersion: string
+    promptVersion: string,
+    now: () => number
   ): DirectorOutcome {
     const plan = LevelPlan.parse(SYNTHETIC_LIVING_ROOM_PLAN);
     return {
@@ -114,7 +113,7 @@ export class DirectorService {
           promptVersion
         ),
         promptVersion,
-        latencyMs: Math.max(0, Date.now() - startedMs),
+        latencyMs: Math.max(0, now() - startedMs),
         repairs: [],
       }),
       telemetry: [],

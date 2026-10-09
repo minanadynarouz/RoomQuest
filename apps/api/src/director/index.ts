@@ -3,6 +3,8 @@ export { DirectorService } from './director.service';
 export {
   DIRECTOR_BUDGET_MS,
   FALLBACK_MIN_REMAINING_MS,
+  LLM_REPAIR_MIN_REMAINING_MS,
+  PROCEDURAL_RESERVE_MS,
   DEFAULT_DIRECTOR_MODEL,
   DEFAULT_FALLBACK_MODEL,
 } from './director.constants';

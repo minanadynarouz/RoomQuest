@@ -20,6 +20,26 @@ export function isTimeoutError(err: unknown): boolean {
   return false;
 }
 
+export async function abortableDelay(
+  ms: number,
+  signal: AbortSignal
+): Promise<void> {
+  if (signal.aborted) {
+    throw new DirectorTimeoutError();
+  }
+  await new Promise<void>((resolve, reject) => {
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      reject(new DirectorTimeoutError());
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 export async function raceAbort<T>(
   promise: Promise<T>,
   signal: AbortSignal

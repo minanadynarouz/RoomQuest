@@ -23,6 +23,7 @@ import {
 import {
   HangingFakeListChatModel,
   planToLlmJson,
+  SlowFakeListChatModel,
   ThrowingFakeListChatModel,
 } from '../src/director/test-fakes';
 
@@ -196,5 +197,32 @@ describe('POST /api/v1/levels director contract (B-05 live)', () => {
     });
     expect(parsed.source).toBe('procedural');
     expect(parsed.plan.title).not.toBe('The Living Room Quest');
+  });
+
+  it('slow first and repair calls → 200 procedural within the budget', async () => {
+    const budgetMs = 400;
+    const fake = new SlowFakeListChatModel({
+      responses: [startEqualsGoalJson(), validJson],
+      delaysMs: [40, 2000],
+    });
+    app = await bootLiveApp({
+      factory: {
+        createPrimary: () => fake,
+        createFallback: () => new FakeListChatModel({ responses: ['{}'] }),
+      },
+      runtime: {
+        budgetMs,
+        proceduralReserveMs: 50,
+        llmRepairMinRemainingMs: 30,
+      },
+    });
+    const started = Date.now();
+    const res = await levelsPost(app).send(validBody).expect(200);
+    const elapsed = Date.now() - started;
+    const parsed = LevelResponse.parse(res.body as unknown);
+    expect(parsed.source).toBe('procedural');
+    expect(parsed.model).toBeUndefined();
+    expect(parsed.latencyMs).toBeLessThan(budgetMs);
+    expect(elapsed).toBeLessThan(budgetMs);
   });
 });

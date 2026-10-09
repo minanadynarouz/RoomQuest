@@ -11,9 +11,10 @@ import {
   type LevelRequest,
 } from '@roomquest/schema';
 import { makeCacheKey } from '../levels/cache-key';
+import { createDirectorDeadline } from './deadline';
 import {
-  DIRECTOR_BUDGET_MS,
   FALLBACK_MIN_REMAINING_MS,
+  LLM_REPAIR_MIN_REMAINING_MS,
 } from './director.constants';
 import { isTimeoutError } from './errors';
 import { tryParseLlmPlan } from './parse-plan';
@@ -42,7 +43,11 @@ export interface RunDirectorOptions {
   fallback?: StructuredChat;
   budgetMs?: number;
   fallbackMinRemainingMs?: number;
+  llmRepairMinRemainingMs?: number;
+  proceduralReserveMs?: number;
   now?: () => number;
+  /** Request-arrival timestamp; defaults to `now()` when omitted. */
+  startedMs?: number;
   promptVersion?: string;
   logger: DirectorLogger;
 }
@@ -140,19 +145,19 @@ export async function runDirector(
   options: RunDirectorOptions
 ): Promise<DirectorOutcome> {
   const now = options.now ?? Date.now;
-  const startedMs = now();
-  const budgetMs = options.budgetMs ?? DIRECTOR_BUDGET_MS;
+  const startedMs = options.startedMs ?? now();
   const fallbackMin =
     options.fallbackMinRemainingMs ?? FALLBACK_MIN_REMAINING_MS;
+  const repairMin =
+    options.llmRepairMinRemainingMs ?? LLM_REPAIR_MIN_REMAINING_MS;
   const promptVersion = options.promptVersion ?? PROMPT_VERSION;
   const telemetry: LlmCallTelemetry[] = [];
-  const controller = new AbortController();
-  const timer = setTimeout(() => {
-    controller.abort();
-  }, budgetMs);
-
-  const remainingMs = (): number =>
-    Math.max(0, budgetMs - (now() - startedMs));
+  const deadline = createDirectorDeadline({
+    budgetMs: options.budgetMs,
+    proceduralReserveMs: options.proceduralReserveMs,
+    now,
+    startedMs,
+  });
 
   const record = (
     chat: StructuredChat,
@@ -179,14 +184,14 @@ export async function runDirector(
     phase: 'draft' | 'repair'
   ): Promise<Attempt> => {
     const callStarted = now();
-    if (controller.signal.aborted || remainingMs() <= 0) {
+    if (!deadline.canStartLlm(1)) {
       record(chat, callStarted, 'timeout');
       return { kind: 'timeout' };
     }
     try {
       const { parsed, raw } = await chat.invokeStructured(
         messages,
-        controller.signal
+        deadline.signal
       );
       const parsedPlan = tryParseLlmPlan(parsed);
       if (parsedPlan.plan !== undefined) {
@@ -228,7 +233,7 @@ export async function runDirector(
         ],
       };
     } catch (err) {
-      if (isTimeoutError(err) || remainingMs() <= 0) {
+      if (isTimeoutError(err) || deadline.remainingForLlm() <= 0) {
         record(chat, callStarted, 'timeout');
         return { kind: 'timeout' };
       }
@@ -259,7 +264,7 @@ export async function runDirector(
 
     if (draft.kind === 'error') {
       const fallback = options.fallback;
-      if (fallback !== undefined && remainingMs() >= fallbackMin) {
+      if (fallback !== undefined && deadline.canStartLlm(fallbackMin)) {
         chat = fallback;
         draft = await attempt(chat, draftMessages, 'draft');
       }
@@ -307,7 +312,10 @@ export async function runDirector(
       );
     }
 
-    if (controller.signal.aborted || remainingMs() <= 0) {
+    if (!deadline.canStartLlm(repairMin)) {
+      options.logger.debug(
+        `director.skip_llm_repair remainingForLlm=${String(deadline.remainingForLlm())} min=${String(repairMin)}`
+      );
       return proceduralOutcome(
         request,
         startedMs,
@@ -368,6 +376,6 @@ export async function runDirector(
       now
     );
   } finally {
-    clearTimeout(timer);
+    deadline.dispose();
   }
 }

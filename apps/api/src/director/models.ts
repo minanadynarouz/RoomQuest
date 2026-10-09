@@ -14,10 +14,12 @@ import type { LlmProvider } from './telemetry';
 export const DIRECTOR_CHAT_FACTORY = Symbol('DIRECTOR_CHAT_FACTORY');
 export const DIRECTOR_RUNTIME = Symbol('DIRECTOR_RUNTIME');
 
-/** Optional test/eval overrides for the 7 s budget. Production leaves this empty. */
+/** Optional test/eval overrides for the 7 s whole-request budget. Production leaves this empty. */
 export interface DirectorRuntime {
   budgetMs?: number;
   fallbackMinRemainingMs?: number;
+  llmRepairMinRemainingMs?: number;
+  proceduralReserveMs?: number;
   now?: () => number;
 }
 

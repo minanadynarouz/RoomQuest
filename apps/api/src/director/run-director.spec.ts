@@ -10,9 +10,11 @@ import { PROMPT_VERSION } from './prompts';
 import { wrapChatModel } from './models';
 import { runDirector } from './run-director';
 import {
+  AfterGenerateFakeListChatModel,
   HangingFakeListChatModel,
   planToLlmJson,
   silentLogger,
+  SlowFakeListChatModel,
   structuredFromFake,
   ThrowingFakeListChatModel,
   UsageFakeListChatModel,
@@ -111,14 +113,67 @@ describe('runDirector', () => {
 
   it('falls back to procedural on timeout', async () => {
     const fake = new HangingFakeListChatModel();
+    const budgetMs = 80;
+    const started = Date.now();
     const outcome = await runDirector(request, {
       primary: structuredFromFake(fake),
-      budgetMs: 30,
+      budgetMs,
+      proceduralReserveMs: 25,
       logger: silentLogger,
     });
     expect(outcome.response.source).toBe('procedural');
     expect(outcome.response.model).toBeUndefined();
     expect(LevelResponse.parse(outcome.response).source).toBe('procedural');
+    expect(outcome.telemetry.some((row) => row.outcome === 'timeout')).toBe(
+      true
+    );
+    expect(outcome.response.latencyMs).toBeLessThan(budgetMs);
+    expect(Date.now() - started).toBeLessThan(budgetMs);
+  });
+
+  it('skips the LLM repair call when fewer than 2 s of LLM window remain', async () => {
+    let t = 0;
+    const fake = new AfterGenerateFakeListChatModel({
+      responses: [startEqualsGoalJson(), validJson],
+    });
+    fake.onAfterGenerate = () => {
+      t = 5200;
+    };
+    const outcome = await runDirector(request, {
+      primary: structuredFromFake(fake),
+      budgetMs: 7000,
+      proceduralReserveMs: 250,
+      llmRepairMinRemainingMs: 2000,
+      now: () => t,
+      logger: silentLogger,
+    });
+    expect(outcome.response.source).toBe('procedural');
+    expect(outcome.telemetry).toHaveLength(1);
+    expect(outcome.telemetry[0]?.outcome).toBe('invalid');
+    expect(validatePlan(outcome.response.plan, request.graph).ok).toBe(true);
+  });
+
+  it('returns 200 procedural within the budget when first and repair calls are both slow', async () => {
+    const budgetMs = 250;
+    const fake = new SlowFakeListChatModel({
+      responses: [startEqualsGoalJson(), validJson],
+      delaysMs: [40, 2000],
+    });
+    const started = Date.now();
+    const outcome = await runDirector(request, {
+      primary: structuredFromFake(fake),
+      budgetMs,
+      proceduralReserveMs: 50,
+      llmRepairMinRemainingMs: 30,
+      logger: silentLogger,
+    });
+    const elapsed = Date.now() - started;
+    expect(outcome.response.source).toBe('procedural');
+    expect(LevelResponse.parse(outcome.response).source).toBe('procedural');
+    expect(validatePlan(outcome.response.plan, request.graph).ok).toBe(true);
+    expect(outcome.response.latencyMs).toBeLessThan(budgetMs);
+    expect(elapsed).toBeLessThan(budgetMs);
+    expect(outcome.telemetry[0]?.outcome).toBe('invalid');
     expect(outcome.telemetry.some((row) => row.outcome === 'timeout')).toBe(
       true
     );

@@ -89,11 +89,11 @@ Architecture server semantics:
 1. Validate headers + body with zod (400 on failure).
 2. `seed = roomHash + "-" + date`. `cacheKey = sha256(roomHash\|date\|tier\|promptVersion)` as **hex**, then the **first 16 hex characters**. `promptVersion` is `PROMPT_VERSION` (`v1.0`).
 3. **Mock** (`DIRECTOR_MODE=mock`, the default): return the `synthetic_living_room` plan fixture from `@roomquest/fixtures`, parsed with `LevelPlan`. `source` is `"procedural"`. `model` is omitted. No LLM keys required.
-4. **Live** (`DIRECTOR_MODE=live`): LangChain director with a **7 s** `AbortSignal` budget.
+4. **Live** (`DIRECTOR_MODE=live`): LangChain director with a **7 s whole-request** budget (the client aborts `/levels` at 8 s). One `AbortSignal` is shared by every step, measured from request arrival. LLM work is aborted **250 ms** before the 7 s wall so `generatePlan` and the HTTP response still finish in time.
    1. Primary: `ChatGoogleGenerativeAI` (`DIRECTOR_MODEL`, default `gemini-3.8-flash`), temperature 0.7, `thinkingConfig.thinkingLevel = LOW`, `.withStructuredOutput(LevelPlanLLM)`.
    2. Parse `LevelPlanLLM` → `clampParTimeMs` → `LevelPlan.parse` → `validatePlan(plan, graph)`.
-   3. If invalid: local `repairPlan` first. If still invalid: **one** LLM repair call that includes the issue messages (same static system prefix).
-   4. Provider error on the primary: try Anthropic `ChatAnthropic` (`FALLBACK_MODEL`, default `claude-haiku-4-5`) only when **≥ 3 s** of budget remain and `ANTHROPIC_API_KEY` is set.
+   3. If invalid: local `repairPlan` first. If still invalid: **one** LLM repair call that includes the issue messages (same static system prefix), **skipped** when fewer than **2 s** of the LLM window remain.
+   4. Provider error on the primary: try Anthropic `ChatAnthropic` (`FALLBACK_MODEL`, default `claude-haiku-4-5`) only when **≥ 3 s** of the LLM window remain and `ANTHROPIC_API_KEY` is set.
    5. Still invalid, out of time, or any remaining provider error: `generatePlan(graph, seed, tier)` with `source:"procedural"`.
 5. `source` is `"llm"` | `"llm_repaired"` | `"procedural"` (`"cache"` is B-06). `model` is set for LLM sources. `repairs` lists local repair actions (and `"llm-repair"` when the second call ran).
 6. `latencyMs` is server handling time in milliseconds.
