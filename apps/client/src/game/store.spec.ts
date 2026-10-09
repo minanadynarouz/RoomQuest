@@ -250,14 +250,24 @@ describe('createGameStore', () => {
     });
 
     it('allows any phase → error', () => {
-      const phases = ['landing', 'requesting', 'surveying', 'building', 'playing'] as const;
-      
+      const phases = [
+        'landing',
+        'requesting',
+        'surveying',
+        'building',
+        'playing',
+      ] as const;
+
       phases.forEach((startPhase) => {
         const store = createGameStore({ clock: mockClock });
-        
+
         // Navigate to the target phase
         if (startPhase !== 'landing') store.requestLevel();
-        if (startPhase === 'surveying' || startPhase === 'building' || startPhase === 'playing') {
+        if (
+          startPhase === 'surveying' ||
+          startPhase === 'building' ||
+          startPhase === 'playing'
+        ) {
           store.startSurveying();
         }
         if (startPhase === 'building' || startPhase === 'playing') {
@@ -266,7 +276,7 @@ describe('createGameStore', () => {
         if (startPhase === 'playing') {
           store.startPlaying();
         }
-        
+
         store.error('Test error');
         expect(store.phase).toBe('error');
         expect(store.state.error).toBe('Test error');
@@ -284,7 +294,7 @@ describe('createGameStore', () => {
 
         // Try to go from landing directly to playing
         store.startPlaying();
-        
+
         expect(store.phase).toBe('landing');
         expect(consoleWarn).toHaveBeenCalledWith(
           expect.stringContaining('Invalid transition from landing to playing')
@@ -298,15 +308,15 @@ describe('createGameStore', () => {
           /* intentionally empty for test */
         });
         const store = createGameStore({ clock: mockClock });
-        
+
         store.requestLevel();
         store.startSurveying();
         store.startBuilding(createMockPlan());
         store.startSurveying();
-        
+
         expect(store.phase).toBe('building');
         expect(consoleWarn).toHaveBeenCalled();
-        
+
         consoleWarn.mockRestore();
       });
 
@@ -315,26 +325,26 @@ describe('createGameStore', () => {
           /* intentionally empty for test */
         });
         const store = createGameStore({ clock: mockClock });
-        
+
         store.requestLevel();
         store.startSurveying();
         store.startBuilding(createMockPlan());
         store.startPlaying();
         store.win();
         store.requestLevel();
-        
+
         expect(store.phase).toBe('won');
         expect(consoleWarn).toHaveBeenCalled();
-        
+
         consoleWarn.mockRestore();
       });
     });
 
     describe('with error mode', () => {
       it('throws TransitionError on invalid transition', () => {
-        const store = createGameStore({ 
+        const store = createGameStore({
           clock: mockClock,
-          onInvalidTransition: 'error'
+          onInvalidTransition: 'error',
         });
 
         expect(() => {
@@ -345,9 +355,9 @@ describe('createGameStore', () => {
       });
 
       it('includes from and to phases in error', () => {
-        const store = createGameStore({ 
+        const store = createGameStore({
           clock: mockClock,
-          onInvalidTransition: 'error'
+          onInvalidTransition: 'error',
         });
 
         try {
@@ -368,10 +378,10 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       mockTime = 2000;
       expect(store.elapsedMs).toBe(1000);
     });
@@ -381,15 +391,15 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       mockTime = 3000;
       // Access elapsedMs to trigger recomputation
       let elapsed = store.elapsedMs;
       expect(elapsed).toBe(2000);
-      
+
       mockTime = 5000;
       // Access again to get updated value
       elapsed = store.elapsedMs;
@@ -401,15 +411,15 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       mockTime = 3000;
       expect(store.elapsedMs).toBe(2000);
-      
+
       store.pause();
-      
+
       mockTime = 5000;
       expect(store.elapsedMs).toBe(2000); // Still 2000, not 4000
     });
@@ -419,18 +429,18 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       mockTime = 3000;
       store.pause();
-      
+
       mockTime = 5000;
       expect(store.elapsedMs).toBe(2000);
-      
+
       store.resume();
-      
+
       mockTime = 7000;
       expect(store.elapsedMs).toBe(4000); // 2000 before pause + 2000 after resume
     });
@@ -440,24 +450,24 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       mockTime = 2000; // +1000
       store.pause();
-      
+
       mockTime = 5000; // paused, no change
       store.resume();
-      
+
       mockTime = 7000; // +2000
       store.pause();
-      
+
       mockTime = 10000; // paused, no change
       store.resume();
-      
+
       mockTime = 11000; // +1000
-      
+
       expect(store.elapsedMs).toBe(4000); // 1000 + 2000 + 1000
     });
 
@@ -466,15 +476,15 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       mockTime = 3000;
       store.win();
-      
+
       const timeAtWin = store.elapsedMs;
-      
+
       mockTime = 5000;
       expect(store.elapsedMs).toBe(timeAtWin);
     });
@@ -484,13 +494,13 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       mockTime = 3000;
       store.win();
-      
+
       store.replay();
       expect(store.elapsedMs).toBe(0);
     });
@@ -500,12 +510,12 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       mockTime = 3000;
-      
+
       store.exit();
       expect(store.elapsedMs).toBe(0);
     });
@@ -517,13 +527,13 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       mockTime = 2000;
       store.pieceBuilt('p1');
-      
+
       expect(store.events).toHaveLength(1);
       expect(store.events[0]).toEqual({
         type: 'pieceBuilt',
@@ -539,10 +549,10 @@ describe('createGameStore', () => {
       store.startSurveying();
       store.startBuilding(createMockPlan());
       store.startPlaying();
-      
+
       mockTime = 2000;
       store.gateOpened('gate1');
-      
+
       expect(store.events).toHaveLength(1);
       expect(store.events[0]?.type).toBe('gateOpened');
     });
@@ -553,9 +563,9 @@ describe('createGameStore', () => {
       store.startSurveying();
       store.startBuilding(createMockPlan());
       store.startPlaying();
-      
+
       store.slimeStunned('slime1');
-      
+
       expect(store.events[0]?.type).toBe('slimeStunned');
     });
 
@@ -565,19 +575,21 @@ describe('createGameStore', () => {
       store.startSurveying();
       store.startBuilding(createMockPlan());
       store.startPlaying();
-      
+
       expect(store.state.gemsCollected).toBe(0);
-      
+
       store.gemCollected('gem1');
       expect(store.state.gemsCollected).toBe(1);
-      
+
       store.gemCollected('gem2');
       expect(store.state.gemsCollected).toBe(2);
-      
+
       store.gemCollected('gem3');
       expect(store.state.gemsCollected).toBe(3);
-      
-      expect(store.events.filter(e => e.type === 'gemCollected')).toHaveLength(3);
+
+      expect(
+        store.events.filter((e) => e.type === 'gemCollected')
+      ).toHaveLength(3);
     });
 
     it('emits explorerBlocked event with reason', () => {
@@ -586,9 +598,9 @@ describe('createGameStore', () => {
       store.startSurveying();
       store.startBuilding(createMockPlan());
       store.startPlaying();
-      
+
       store.explorerBlocked('unbuiltGap');
-      
+
       expect(store.events[0]).toMatchObject({
         type: 'explorerBlocked',
         reason: 'unbuiltGap',
@@ -601,9 +613,9 @@ describe('createGameStore', () => {
       store.startSurveying();
       store.startBuilding(createMockPlan());
       store.startPlaying();
-      
+
       store.explorerOutOfView();
-      
+
       expect(store.events[0]?.type).toBe('explorerOutOfView');
     });
 
@@ -613,11 +625,11 @@ describe('createGameStore', () => {
       store.startSurveying();
       store.startBuilding(createMockPlan());
       store.startPlaying();
-      
+
       mockTime = 5000;
       store.win();
-      
-      const wonEvent = store.events.find(e => e.type === 'won');
+
+      const wonEvent = store.events.find((e) => e.type === 'won');
       expect(wonEvent).toBeDefined();
       expect(wonEvent?.timestamp).toBe(5000);
     });
@@ -628,15 +640,15 @@ describe('createGameStore', () => {
       store.startSurveying();
       store.startBuilding(createMockPlan());
       store.startPlaying();
-      
+
       store.pieceBuilt('p1');
       store.gemCollected('gem1');
-      
+
       expect(store.events.length).toBeGreaterThan(0);
-      
+
       store.win();
       store.replay();
-      
+
       expect(store.events).toEqual([]);
       expect(store.state.gemsCollected).toBe(0);
     });
@@ -648,10 +660,10 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       expect(store.state.currentBeatIndex).toBe(0);
       expect(store.state.beatTimings).toHaveLength(1);
       expect(store.state.beatTimings[0]).toEqual({
@@ -666,19 +678,19 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       mockTime = 3000;
       store.advanceBeat();
-      
+
       expect(store.state.currentBeatIndex).toBe(1);
       expect(store.state.beatTimings).toHaveLength(2);
-      
+
       // First beat should be completed
       expect(store.state.beatTimings[0]?.durationMs).toBe(2000);
-      
+
       // Second beat should be started
       expect(store.state.beatTimings[1]).toEqual({
         beatIndex: 1,
@@ -692,14 +704,14 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       mockTime = 3000;
       store.advanceBeat();
-      
-      const beatEvent = store.events.find(e => e.type === 'beatCompleted');
+
+      const beatEvent = store.events.find((e) => e.type === 'beatCompleted');
       expect(beatEvent).toBeDefined();
       expect(beatEvent).toMatchObject({
         type: 'beatCompleted',
@@ -714,17 +726,17 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       mockTime = 4000; // Beat 0: 3000ms
       store.advanceBeat();
-      
+
       // Plan has 2 beats, so beat 1 is the last one
       // We can't advance beyond it
       mockTime = 9000;
-      
+
       expect(store.state.beatTimings[0]?.durationMs).toBe(3000);
       expect(store.state.beatTimings[1]?.durationMs).toBeNull(); // Still in progress
     });
@@ -737,17 +749,41 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan()); // Has 2 beats
-      
+
       store.startPlaying(); // Beat 0
       store.advanceBeat(); // Beat 1
       store.advanceBeat(); // No beat 2
-      
+
       expect(store.state.currentBeatIndex).toBe(1);
       expect(consoleWarn).toHaveBeenCalledWith(
         expect.stringContaining('No more beats to advance to')
       );
-      
+
       consoleWarn.mockRestore();
+    });
+
+    it('completeCurrentBeat finishes the last beat', () => {
+      const store = createGameStore({ clock: mockClock });
+      store.requestLevel();
+      store.startSurveying();
+      store.startBuilding(createMockPlan());
+
+      mockTime = 1000;
+      store.startPlaying();
+      mockTime = 2500;
+      store.advanceBeat();
+      mockTime = 4000;
+      store.completeCurrentBeat();
+
+      expect(store.state.currentBeatIndex).toBe(1);
+      expect(store.state.beatTimings[1]?.durationMs).toBe(1500);
+      const beatEvent = store.events.filter((e) => e.type === 'beatCompleted');
+      expect(beatEvent).toHaveLength(2);
+      expect(beatEvent[1]).toMatchObject({
+        type: 'beatCompleted',
+        beatIndex: 1,
+        durationMs: 1500,
+      });
     });
   });
 
@@ -762,13 +798,13 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       mockTime = 5000;
       const signal = store.stuckPlayerSignal;
-      
+
       expect(signal).toEqual({
         beatIndex: 0,
         timeOnBeatMs: 4000,
@@ -781,19 +817,19 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       mockTime = 2000;
       store.explorerBlocked('unbuiltGap');
-      
+
       mockTime = 3000;
       store.explorerBlocked('closedGate');
-      
+
       mockTime = 4000;
       const signal = store.stuckPlayerSignal;
-      
+
       expect(signal?.recentBlocks).toHaveLength(2);
       expect(signal?.recentBlocks[0]).toEqual({
         reason: 'unbuiltGap',
@@ -810,21 +846,21 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       mockTime = 2000;
       store.explorerBlocked('unbuiltGap');
-      
+
       mockTime = 3000;
       store.advanceBeat(); // Move to beat 1
-      
+
       mockTime = 4000;
       store.explorerBlocked('closedGate');
-      
+
       const signal = store.stuckPlayerSignal;
-      
+
       // Only the closedGate from beat 1 should be included
       expect(signal?.recentBlocks).toHaveLength(1);
       expect(signal?.recentBlocks[0]?.reason).toBe('closedGate');
@@ -835,17 +871,17 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       mockTime = 3000;
       store.advanceBeat();
-      
+
       // Now check beat 0's signal (which is completed)
       const beat0Timing = store.state.beatTimings[0];
       expect(beat0Timing?.durationMs).not.toBeNull();
-      
+
       // The signal is for the current beat (1), not completed beat 0
       expect(store.stuckPlayerSignal?.beatIndex).toBe(1);
     });
@@ -862,17 +898,17 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       store.gemCollected('gem1');
       store.gemCollected('gem2');
       store.gemCollected('gem3');
-      
+
       mockTime = 1000 + 150000; // Under par
       store.win();
-      
+
       expect(store.result).toMatchObject({
         stars: 3,
         gems: 3,
@@ -886,15 +922,15 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       store.gemCollected('gem1');
-      
+
       mockTime = 1000 + 150000;
       store.win();
-      
+
       expect(store.result?.stars).toBe(2);
     });
 
@@ -903,18 +939,18 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       store.gemCollected('gem1');
       store.gemCollected('gem2');
       store.gemCollected('gem3');
       store.gemCollected('gem4');
-      
+
       mockTime = 1000 + 200000; // Over par
       store.win();
-      
+
       expect(store.result?.stars).toBe(2);
     });
 
@@ -923,13 +959,13 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       mockTime = 1000 + 200000;
       store.win();
-      
+
       expect(store.result?.stars).toBe(1);
     });
 
@@ -939,11 +975,11 @@ describe('createGameStore', () => {
       store.startSurveying();
       store.startBuilding(createMockPlan());
       store.startPlaying();
-      
+
       expect(store.result?.completed).toBe(false);
-      
+
       store.win();
-      
+
       expect(store.result?.completed).toBe(true);
     });
   });
@@ -952,15 +988,15 @@ describe('createGameStore', () => {
     it('keeps the same plan on replay', () => {
       const store = createGameStore({ clock: mockClock });
       const plan = createMockPlan();
-      
+
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(plan);
       store.startPlaying();
       store.win();
-      
+
       store.replay();
-      
+
       expect(store.plan).toEqual(plan);
       expect(store.phase).toBe('building');
     });
@@ -987,19 +1023,19 @@ describe('createGameStore', () => {
       store.requestLevel();
       store.startSurveying();
       store.startBuilding(createMockPlan());
-      
+
       mockTime = 1000;
       store.startPlaying();
-      
+
       store.gemCollected('gem1');
       store.gemCollected('gem2');
       store.pieceBuilt('p1');
-      
+
       mockTime = 5000;
       store.win();
-      
+
       store.replay();
-      
+
       expect(store.state.gemsCollected).toBe(0);
       expect(store.events).toEqual([]);
       expect(store.elapsedMs).toBe(0);
@@ -1015,12 +1051,12 @@ describe('createGameStore', () => {
       store.startSurveying();
       store.startBuilding(createMockPlan());
       store.startPlaying();
-      
+
       store.gemCollected('gem1');
       store.pieceBuilt('p1');
-      
+
       store.exit();
-      
+
       expect(store.phase).toBe('landing');
       expect(store.plan).toBeNull();
       expect(store.events).toEqual([]);

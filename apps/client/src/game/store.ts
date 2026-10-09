@@ -534,6 +534,11 @@ export function createGameStore(options: GameStoreOptions = {}) {
       // Start next beat
       startBeat(nextBeatIndex);
     },
+
+    /** Complete the current beat without starting a next one (last beat / win). */
+    completeCurrentBeat() {
+      completeBeat(currentBeatIndex.value);
+    },
   };
 }
 

@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   emulatorRoomFromFlags,
+  isFixtureXrSession,
   isSyntheticLivingRoomFixture,
   readClientFlags,
   shouldExposeDebugHooks,
@@ -21,6 +22,15 @@ describe('client URL flags', () => {
     expect(flags.emulator).toBe(false);
     expect(flags.room).toBeNull();
     expect(flags.fixture).toBeNull();
+    expect(flags.xr).toBe(false);
+    expect(isFixtureXrSession(flags)).toBe(false);
+  });
+
+  it('reads xr=1 for the fixture XR session path', () => {
+    const flags = readClientFlags('?fixture=synthetic_living_room&xr=1');
+    expect(isSyntheticLivingRoomFixture(flags)).toBe(true);
+    expect(flags.xr).toBe(true);
+    expect(isFixtureXrSession(flags)).toBe(true);
   });
 
   it('enables debug (the perf flag) only for the exact value 1', () => {

@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "e2e:xr": "tsx scripts/x05-xr-hand-pinch.ts",
     "clean": "rm -rf dist .turbo node_modules/.vite"
   },
   "dependencies": {

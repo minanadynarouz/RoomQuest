@@ -28,6 +28,8 @@ export interface ClientFlags {
   emulator: boolean;
   room: EmulatorRoom | null;
   fixture: string | null;
+  /** When set with the synthetic fixture, boot a real IWER AR session. */
+  xr: boolean;
 }
 
 const EMULATOR_ROOM_SET: ReadonlySet<string> = new Set(EMULATOR_ROOMS);
@@ -53,6 +55,7 @@ export function readClientFlags(
     emulator: params.get('emulator') === '1',
     room: room && isEmulatorRoom(room) ? room : null,
     fixture: fixture && fixture.length > 0 ? fixture : null,
+    xr: params.get('xr') === '1',
   };
 }
 
@@ -64,6 +67,10 @@ export function isSyntheticLivingRoomFixture(
   flags: Pick<ClientFlags, 'fixture'>
 ): boolean {
   return flags.fixture === FIXTURE_SYNTHETIC_LIVING_ROOM;
+}
+
+export function isFixtureXrSession(flags: ClientFlags): boolean {
+  return isSyntheticLivingRoomFixture(flags) && flags.xr;
 }
 
 /**

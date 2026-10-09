@@ -6,10 +6,14 @@ import {
   Mesh,
   MeshBasicMaterial,
   OneHandGrabbable,
+  Vector3,
   type Entity,
 } from '@iwsdk/core';
 import type { PieceId } from '@roomquest/schema';
-import { PlacementController, type PlacementHand } from '../placement/controller.js';
+import {
+  PlacementController,
+  type PlacementHand,
+} from '../placement/controller.js';
 import type { LevelBuilderSystem } from './LevelBuilderSystem.js';
 import type { createGameStore } from '../../game/index.js';
 import type { MountedPiece, SnapTarget } from '../level/types.js';
@@ -26,16 +30,21 @@ export interface PlacementDebugApi {
   piecePose: (
     placementId: string
   ) => { x: number; y: number; z: number; yaw: number } | null;
+  pieceWorldPose: (
+    placementId: string
+  ) => { x: number; y: number; z: number } | null;
   /**
-   * Fixture mode (`?fixture=`) does not start a WebXR session, so IWER
-   * cannot inject pinch poses. The headed check drives this API instead.
+   * True when a live WebXR session (IWER emulator hands) can drive grab.
+   * Desktop `?fixture=` without `xr=1` stays false.
    */
-  emulatorHandDriving: false;
+  emulatorHandDriving: boolean;
   emulatorHandDrivingNote: string;
 }
 
-const GHOST_NOTE =
-  'IWER hand pinch cannot be driven on the fixture path: World.create uses xr:false, so there is no XR session or emulated hands. Placement is covered by PlacementController grab/release (left and right) instead.';
+const GHOST_NOTE_DESKTOP =
+  'IWER hand pinch cannot be driven on the desktop fixture path: World.create uses xr:false, so there is no XR session or emulated hands.';
+const GHOST_NOTE_XR =
+  'IWER hands are live. Drive window.IWER_DEVICE.hands with position.set and updatePinchValue.';
 
 /**
  * Near-pinch placement for tray pieces. Runs after GrabSystem (-3) so the
@@ -67,6 +76,7 @@ export class PlacementSystem extends createSystem(
   );
   private ghostPiece: PieceId | null = null;
   private readonly tmpHeld = new Set<Entity>();
+  private readonly worldPos = new Vector3();
 
   configure(options: {
     builder: LevelBuilderSystem;
@@ -157,8 +167,20 @@ export class PlacementSystem extends createSystem(
           yaw: piece.object.rotation.y,
         };
       },
-      emulatorHandDriving: false,
-      emulatorHandDrivingNote: GHOST_NOTE,
+      pieceWorldPose: (placementId) => {
+        const piece = this.findPiece(placementId);
+        if (!piece) return null;
+        piece.object.getWorldPosition(this.worldPos);
+        return {
+          x: this.worldPos.x,
+          y: this.worldPos.y,
+          z: this.worldPos.z,
+        };
+      },
+      emulatorHandDriving: this.renderer.xr.isPresenting,
+      emulatorHandDrivingNote: this.renderer.xr.isPresenting
+        ? GHOST_NOTE_XR
+        : GHOST_NOTE_DESKTOP,
     };
   }
 

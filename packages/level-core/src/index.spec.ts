@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildSurfaceGraph } from './surface-pipeline';
 import { placementToPose, SURFACE_INSET_M } from './placement';
-import { generatePlan, repairPlan, validatePlan } from './index';
+import { generatePlan, repairPlan, validatePlan, explorerPath } from './index';
 import { findNearestSnapTarget, SNAP_RADIUS_M } from './snap';
 
 describe('level-core', () => {
@@ -23,5 +23,9 @@ describe('level-core', () => {
   it('exports findNearestSnapTarget and the 10 cm snap radius', () => {
     expect(findNearestSnapTarget).toBeTypeOf('function');
     expect(SNAP_RADIUS_M).toBe(0.1);
+  });
+
+  it('exports explorerPath', () => {
+    expect(explorerPath).toBeTypeOf('function');
   });
 });
