@@ -7,11 +7,12 @@
 
 import { iwsdkDev } from '@iwsdk/vite-plugin-dev';
 import { injectIWER } from '@iwsdk/vite-plugin-iwer';
+import tailwindcss from '@tailwindcss/vite';
 import basicSsl from '@vitejs/plugin-basic-ssl';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  plugins: [basicSsl(), iwsdkDev(), injectIWER()],
+  plugins: [basicSsl(), tailwindcss(), iwsdkDev(), injectIWER()],
   server: { host: '0.0.0.0', port: 5173, open: false },
   build: {
     outDir: 'dist',

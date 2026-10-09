@@ -7,6 +7,6 @@
     "jsx": "preserve",
     "types": ["@iwsdk/vite-plugin-dev/client", "vite/client"]
   },
-  "include": ["src", "scripts", "index.html", "vite.config.ts", "vitest.config.ts", "iwsdk.config.json"],
+  "include": ["src", "scripts", "index.html", "vite.config.ts", "vitest.config.ts", "iwsdk.config.json", "e2e", "playwright.config.ts"],
   "exclude": ["node_modules", "dist"]
 }
