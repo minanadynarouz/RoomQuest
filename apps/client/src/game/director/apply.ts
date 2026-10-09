@@ -20,5 +20,6 @@ export function applyDirectorResult(
     apiErrorCode: result.apiErrorCode,
     retryAfterS: result.retryAfterS,
     issues: result.issues,
+    tier: result.tier,
   });
 }

@@ -75,13 +75,31 @@ Beats track progression through the level:
 
 Time-per-beat data enables future "adapt" agent to detect stuck players.
 
-## Stars Formula
+## Stars Formula (F-07)
+
+Pure `calculateStars({ plan, gemsCollected, elapsedMs, completed })` in `stars.ts`.
+No DOM / IWSDK.
+
+Plan fields, when present:
+
+- `parTimeMs` — time bar for 3 stars
+- `gemTarget` — optional override (not on `LevelPlan` yet)
+
+Defaults:
+
+- par time: `180_000` ms if `parTimeMs` is missing or not a positive number
+- gem target: count of `gem` placements; if that is 0, `3`
+
+Scoring (`0..3`, matching `ResultRequest`):
 
 ```ts
-3 stars: time ≤ par AND gems ≥ 3
-2 stars: time ≤ par OR gems ≥ 3
-1 star:  otherwise
+0 stars: not completed (quit)
+3 stars: completed AND time ≤ par AND gems ≥ gem target
+2 stars: completed AND (time ≤ par OR gems ≥ gem target)
+1 star:  completed AND neither
 ```
+
+A gem target of `0` is treated as already satisfied.
 
 ## Stuck Player Signal
 
@@ -168,6 +186,21 @@ plan bound to the player's graph (`generatePlan`).
 
 `{error:{code,message,issues}}` with `INVALID_REQUEST` or `INTERNAL` also
 falls back. The code is stored as `apiErrorCode` for the debug overlay.
+
+## Result posting (F-07)
+
+After a win, and on quit (`completed: false`), the XR session posts
+`POST /api/v1/levels/:levelKey/result` with body
+`{ deviceId, stars, gems, timeMs, completed, planSource }` and the F-03
+headers `X-Device-Id` / `X-Client-Version`. Failures (network, 202
+`{stored:false}`, 400, 404, 429) are silent and do not change the HUD.
+
+- Server levels: `levelKey` is the `LevelResponse.cacheKey`.
+- Client procedural fallback (including `?director=off`): `levelKey` is
+  `proc:<seed>:<tier>` with `planSource: "procedural"`.
+
+Adapters live in `game/results/` until B-09 (`@roomquest/schema`
+`procLevelKey` / `ResultRequest`) merges. Posts still fire in director=off.
 
 `createDirectorClient` takes injected `fetch`, `generate`, `validate`,
 `repair`, and device id. `createDirectorClientFromEnv` reads flags from a

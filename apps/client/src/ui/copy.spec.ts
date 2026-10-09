@@ -23,6 +23,7 @@ describe('HUD copy', () => {
       HUD_COPY.retry,
       HUD_COPY.resume,
       HUD_COPY.replay,
+      HUD_COPY.done,
       HUD_COPY.skip,
       HUD_COPY.gazeFallback,
       ...ONBOARDING_STEPS.map((step) => step.line),
@@ -46,6 +47,7 @@ describe('HUD copy', () => {
   });
 
   it('formats win lines', () => {
+    expect(formatStarsLabel(0)).toBe('0 stars');
     expect(formatStarsLabel(1)).toBe('1 star');
     expect(formatStarsLabel(3)).toBe('3 stars');
     expect(formatWinStats(4, 185_000)).toBe('Gems 4 - 3:05');

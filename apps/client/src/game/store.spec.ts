@@ -103,6 +103,7 @@ describe('createGameStore', () => {
       expect(store.apiErrorCode).toBeNull();
       expect(store.retryAfterS).toBeNull();
       expect(store.validationIssues).toEqual([]);
+      expect(store.tier).toBeNull();
     });
   });
 
@@ -977,10 +978,30 @@ describe('createGameStore', () => {
       store.startPlaying();
 
       expect(store.result?.completed).toBe(false);
+      expect(store.result?.stars).toBe(0);
 
       store.win();
 
       expect(store.result?.completed).toBe(true);
+    });
+
+    it('emits won for F-08 and notifies subscribeEvents', () => {
+      const store = createGameStore({ clock: mockClock });
+      const seen: string[] = [];
+      const unsub = store.subscribeEvents((event) => {
+        seen.push(event.type);
+      });
+      store.requestLevel();
+      store.startSurveying();
+      store.startBuilding(createMockPlan());
+      store.startPlaying();
+      store.win();
+      expect(seen).toContain('won');
+      unsub();
+      store.replay();
+      store.startPlaying();
+      store.gemCollected('g');
+      expect(seen.filter((type) => type === 'gemCollected')).toHaveLength(0);
     });
   });
 
@@ -1070,6 +1091,7 @@ describe('createGameStore', () => {
       expect(store.apiErrorCode).toBeNull();
       expect(store.retryAfterS).toBeNull();
       expect(store.validationIssues).toEqual([]);
+      expect(store.tier).toBeNull();
     });
   });
 });

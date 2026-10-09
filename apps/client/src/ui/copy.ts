@@ -18,6 +18,8 @@ export const HUD_COPY = {
   exit: 'Exit',
   winTitle: 'You made it',
   replay: 'Replay',
+  /** Win-panel Done / Next (returns to landing). */
+  done: 'Done',
   pause: 'Pause',
   beatFallback: 'Help the explorer onward',
   gazeFallback: 'Pinch a plank from the tray, then snap it on a gap.',
@@ -49,7 +51,7 @@ export function formatIsoDate(date: Date): string {
   return `${String(year)}-${month}-${day}`;
 }
 
-export function formatStarsLabel(stars: 1 | 2 | 3): string {
+export function formatStarsLabel(stars: 0 | 1 | 2 | 3): string {
   return stars === 1 ? '1 star' : `${String(stars)} stars`;
 }
 
