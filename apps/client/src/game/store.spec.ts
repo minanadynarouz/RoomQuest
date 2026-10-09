@@ -101,6 +101,7 @@ describe('createGameStore', () => {
       expect(store.cacheKey).toBeNull();
       expect(store.fallbackReason).toBeNull();
       expect(store.apiErrorCode).toBeNull();
+      expect(store.retryAfterS).toBeNull();
       expect(store.validationIssues).toEqual([]);
     });
   });
@@ -145,6 +146,7 @@ describe('createGameStore', () => {
       expect(store.cacheKey).toBe('procedural:test-seed');
       expect(store.fallbackReason).toBe('graph-mismatch');
       expect(store.apiErrorCode).toBeNull();
+      expect(store.retryAfterS).toBeNull();
     });
 
     it('clamps par time from the plan with clampParTimeMs', () => {
@@ -1030,6 +1032,7 @@ describe('createGameStore', () => {
       expect(store.cacheKey).toBeNull();
       expect(store.fallbackReason).toBeNull();
       expect(store.apiErrorCode).toBeNull();
+      expect(store.retryAfterS).toBeNull();
       expect(store.validationIssues).toEqual([]);
     });
   });

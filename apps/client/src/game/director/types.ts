@@ -46,6 +46,7 @@ export type FallbackReason =
   | 'repaired'
   | 'api-error'
   | 'http-error'
+  | 'rate-limited'
   | 'director-off'
   | 'director-mock';
 
@@ -127,8 +128,10 @@ export interface DirectorResult {
   repairs: string[];
   usedFallback: boolean;
   fallbackReason?: FallbackReason;
-  /** Set when the API returned `{error:{code}}` (INVALID_REQUEST / INTERNAL). */
+  /** Set when the API returned `{error:{code}}` (INVALID_REQUEST / INTERNAL / RATE_LIMITED). */
   apiErrorCode?: ErrorCode;
+  /** Seconds until the director may POST again, when the API sent `retryAfterS`. */
+  retryAfterS?: number;
   /** Typed `validatePlan` issues for the debug overlay. */
   issues?: Issue[];
 }

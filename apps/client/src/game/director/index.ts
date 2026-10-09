@@ -29,6 +29,11 @@ export type { ErrorCode } from '@roomquest/schema';
 export { parseDirectorFlags } from './flags.js';
 export { getOrCreateDeviceId } from './device-id.js';
 export { fallbackReasonFromIssues } from './issues.js';
+export {
+  parseRetryAfterS,
+  cooldownUntilMs,
+  remainingRetryAfterS,
+} from './rate-limit.js';
 export { createDirectorClient } from './client.js';
 export { createDirectorClientFromEnv } from './factory.js';
 export type { DirectorEnv } from './factory.js';

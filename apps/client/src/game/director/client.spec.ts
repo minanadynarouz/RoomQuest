@@ -507,6 +507,99 @@ describe('createDirectorClient', () => {
     expect(result.source).toBe('procedural');
   });
 
+  it('falls back silently on 429 with the RATE_LIMITED envelope', async () => {
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve(
+        jsonResponse(
+          {
+            error: {
+              code: 'RATE_LIMITED',
+              message: 'per-device cache-miss budget exceeded',
+              issues: [{ path: [], message: 'RATE_LIMITED' }],
+              retryAfterS: 3600,
+            },
+          },
+          429
+        )
+      )
+    );
+
+    const result = await client(fetchFn).requestPlan(GRAPH);
+
+    expect(result.usedFallback).toBe(true);
+    expect(result.fallbackReason).toBe('rate-limited');
+    expect(result.retryAfterS).toBe(3600);
+    expect(result.apiErrorCode).toBe('RATE_LIMITED');
+    expect(result.source).toBe('procedural');
+    expect(result.plan.start).toBe('s1');
+    expect(console.warn).not.toHaveBeenCalled();
+    expect(console.info).toHaveBeenCalled();
+  });
+
+  it('falls back silently on 429 with only retryAfterS', async () => {
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve(jsonResponse({ retryAfterS: 90 }, 429))
+    );
+
+    const result = await client(fetchFn).requestPlan(GRAPH);
+
+    expect(result.usedFallback).toBe(true);
+    expect(result.fallbackReason).toBe('rate-limited');
+    expect(result.retryAfterS).toBe(90);
+    expect(result.apiErrorCode).toBeUndefined();
+    expect(result.source).toBe('procedural');
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('falls back silently on 429 with an unparseable body', async () => {
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve({
+        ok: false,
+        status: 429,
+        json: () => Promise.reject(new SyntaxError('Unexpected token')),
+      })
+    );
+
+    const result = await client(fetchFn).requestPlan(GRAPH);
+
+    expect(result.usedFallback).toBe(true);
+    expect(result.fallbackReason).toBe('rate-limited');
+    expect(result.retryAfterS).toBeUndefined();
+    expect(result.apiErrorCode).toBeUndefined();
+    expect(result.source).toBe('procedural');
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('skips later live POSTs until retryAfterS expires on the injected clock', async () => {
+    let now = 1_000;
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve(jsonResponse({ retryAfterS: 60 }, 429))
+    );
+    const director = client(fetchFn, { nowMs: () => now });
+
+    const first = await director.requestPlan(GRAPH);
+    expect(first.fallbackReason).toBe('rate-limited');
+    expect(first.retryAfterS).toBe(60);
+    expect(fetchFn).toHaveBeenCalledOnce();
+
+    now = 31_000;
+    const skipped = await director.requestPlan(GRAPH);
+    expect(skipped.fallbackReason).toBe('rate-limited');
+    expect(skipped.retryAfterS).toBe(30);
+    expect(skipped.source).toBe('procedural');
+    expect(fetchFn).toHaveBeenCalledOnce();
+    expect(console.warn).not.toHaveBeenCalled();
+
+    now = 61_000;
+    fetchFn.mockImplementationOnce(() =>
+      Promise.resolve(jsonResponse(apiResponse()))
+    );
+    const afterExpiry = await director.requestPlan(GRAPH);
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect(afterExpiry.usedFallback).toBe(false);
+    expect(afterExpiry.source).toBe('llm');
+  });
+
   it('starts the generator in parallel with the POST', async () => {
     let generateCalls = 0;
     const slowFetch: FetchLike = async () => {
@@ -728,6 +821,31 @@ describe('applyDirectorResult', () => {
     expect(store.phase).toBe('building');
     expect(store.apiErrorCode).toBe('INVALID_REQUEST');
     expect(store.fallbackReason).toBe('api-error');
+    expect(store.state.error).toBeNull();
+  });
+
+  it('records a rate-limited fallback without entering error', () => {
+    const store = createGameStore();
+    store.requestLevel();
+    store.startSurveying();
+
+    applyDirectorResult(store, {
+      plan: localPlan(),
+      source: 'procedural',
+      cacheKey: 'procedural:seed',
+      promptVersion: 'local',
+      latencyMs: 8,
+      repairs: [],
+      usedFallback: true,
+      fallbackReason: 'rate-limited',
+      apiErrorCode: 'RATE_LIMITED',
+      retryAfterS: 3600,
+    });
+
+    expect(store.phase).toBe('building');
+    expect(store.fallbackReason).toBe('rate-limited');
+    expect(store.retryAfterS).toBe(3600);
+    expect(store.apiErrorCode).toBe('RATE_LIMITED');
     expect(store.state.error).toBeNull();
   });
 });
