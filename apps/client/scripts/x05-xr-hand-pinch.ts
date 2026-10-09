@@ -146,6 +146,24 @@ async function waitForRq(page: Page, timeout = 45_000): Promise<void> {
   );
 }
 
+async function dismissViteOverlay(page: Page): Promise<void> {
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => {
+    const overlay = document.querySelector('vite-error-overlay');
+    overlay?.remove();
+  });
+}
+
+async function shot(page: Page, name: string): Promise<void> {
+  await dismissViteOverlay(page);
+  const canvas = page.locator('#scene-container canvas').first();
+  if ((await canvas.count()) > 0) {
+    await canvas.screenshot({ path: path.join(OUT_DIR, name) });
+  } else {
+    await page.screenshot({ path: path.join(OUT_DIR, name), type: 'png' });
+  }
+}
+
 async function captureDesktopScreenshots(
   browser: Browser,
   baseUrl: string
@@ -165,10 +183,7 @@ async function captureDesktopScreenshots(
     null,
     { timeout: 45_000 }
   );
-  await page.screenshot({
-    path: path.join(OUT_DIR, 'blocked-gap.png'),
-    type: 'png',
-  });
+  await shot(page, 'blocked-gap.png');
   console.log('[X-05 e2e] screenshot blocked-gap.png');
 
   const solved = await page.evaluate(() => {
@@ -182,10 +197,7 @@ async function captureDesktopScreenshots(
   console.log('[X-05 e2e] desktop autoSolve', solved);
 
   await sleep(2500);
-  await page.screenshot({
-    path: path.join(OUT_DIR, 'walking.png'),
-    type: 'png',
-  });
+  await shot(page, 'walking.png');
   console.log('[X-05 e2e] screenshot walking.png');
 
   await page.waitForFunction(
@@ -194,10 +206,7 @@ async function captureDesktopScreenshots(
     { timeout: 60_000 }
   );
   await sleep(400);
-  await page.screenshot({
-    path: path.join(OUT_DIR, 'won.png'),
-    type: 'png',
-  });
+  await shot(page, 'won.png');
   console.log('[X-05 e2e] screenshot won.png');
   await page.close();
 }
@@ -387,26 +396,6 @@ async function pinchPlace(
   return result;
 }
 
-async function autoSolveToWon(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    (window as unknown as RqWindow).__rq?.autoSolve?.();
-  });
-  await page.waitForFunction(
-    () => (window as unknown as RqWindow).__rq?.store.phase === 'won',
-    null,
-    { timeout: 90_000 }
-  );
-  const summary = await page.evaluate(() => {
-    const rq = (window as unknown as RqWindow).__rq;
-    return {
-      phase: rq?.store.phase,
-      explorer: rq?.explorer?.state(),
-      events: rq?.store.events.map((e) => e.type),
-    };
-  });
-  console.log('[X-05 e2e] autoSolve won', summary);
-}
-
 async function main(): Promise<void> {
   await mkdir(OUT_DIR, { recursive: true });
   const server = await startVite();
@@ -416,6 +405,14 @@ async function main(): Promise<void> {
 
     const leftPage = await browser.newPage({ ignoreHTTPSErrors: true });
     await enterXrFixture(leftPage, server.url);
+    await leftPage.waitForFunction(
+      () =>
+        (window as unknown as RqWindow).__rq?.explorer?.state() === 'blocked',
+      null,
+      { timeout: 45_000 }
+    );
+    await shot(leftPage, 'blocked-gap.png');
+    await shot(leftPage, 'xr-blocked-gap.png');
     const left = await pinchPlace(leftPage, 'left');
     console.log('[X-05 e2e] LEFT', left);
     await leftPage.close();
@@ -424,11 +421,29 @@ async function main(): Promise<void> {
     await enterXrFixture(rightPage, server.url);
     const right = await pinchPlace(rightPage, 'right');
     console.log('[X-05 e2e] RIGHT', right);
-    await autoSolveToWon(rightPage);
-    await rightPage.screenshot({
-      path: path.join(OUT_DIR, 'xr-won.png'),
-      type: 'png',
+    await rightPage.evaluate(() => {
+      (window as unknown as RqWindow).__rq?.autoSolve?.();
     });
+    await sleep(2200);
+    await shot(rightPage, 'walking.png');
+    await shot(rightPage, 'xr-walking.png');
+    await rightPage.waitForFunction(
+      () => (window as unknown as RqWindow).__rq?.store.phase === 'won',
+      null,
+      { timeout: 90_000 }
+    );
+    const summary = await rightPage.evaluate(() => {
+      const rq = (window as unknown as RqWindow).__rq;
+      return {
+        phase: rq?.store.phase,
+        explorer: rq?.explorer?.state(),
+        events: rq?.store.events.map((e) => e.type),
+      };
+    });
+    console.log('[X-05 e2e] autoSolve won', summary);
+    await sleep(400);
+    await shot(rightPage, 'xr-won.png');
+    await shot(rightPage, 'won.png');
     await rightPage.close();
 
     console.log('[X-05 e2e] IWER APIs used:', IWER_APIS_USED.join(', '));
