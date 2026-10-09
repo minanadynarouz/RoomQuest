@@ -1,5 +1,5 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta
@@ -7,11 +7,87 @@
       content="width=device-width, initial-scale=1, shrink-to-fit=no"
     />
     <link rel="icon" href="data:," />
-    <title>client</title>
+    <title>Roomquest - Your room, a new quest every day</title>
+    <meta name="description" content="Turn your real room into a tiny puzzle adventure. Hand-tracked MR game for Meta Quest." />
   </head>
-  <body style="margin: 0">
-    <div id="scene-container"></div>
-    <button id="enter-ar" style="position: absolute; top: 10px; left: 10px; z-index: 1000; padding: 10px 20px; font-size: 16px; display: none;">Enter AR</button>
+  <body>
+    <!-- XR host used by X-01's launchXR() / World.create -->
+    <div id="scene-container" style="position: fixed; inset: 0;"></div>
+
+    <!-- Landing page -->
+    <div id="landing-page" class="relative z-10 min-h-screen flex flex-col bg-gradient-to-br from-indigo-600 via-purple-600 to-purple-800 text-white">
+      <div class="flex-1 flex items-center justify-center px-4 py-8">
+        <div class="max-w-2xl w-full text-center space-y-8">
+          <!-- Title -->
+          <h1 class="text-5xl md:text-6xl font-bold tracking-tight">
+            Roomquest
+          </h1>
+          
+          <!-- Pitch -->
+          <p class="text-xl md:text-2xl text-purple-100">
+            Your room, a new quest every day
+          </p>
+          
+          <!-- Enter button -->
+          <div class="flex flex-col items-center gap-4">
+            <button
+              id="enter-button"
+              disabled
+              class="px-8 py-4 bg-white text-purple-700 text-xl font-semibold rounded-lg shadow-lg hover:bg-purple-50 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+            >
+              Enter your room
+            </button>
+            
+            <!-- Status message with loading spinner -->
+            <div class="flex items-center gap-2 min-h-[24px]">
+              <div id="loading-spinner" class="hidden">
+                <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              </div>
+              <span id="status-message" class="text-sm"></span>
+            </div>
+            
+            <!-- Try in emulator link (hidden by default, shown on desktop) -->
+            <a
+              id="try-emulator-link"
+              href="?emulator=1&room=living_room"
+              class="hidden text-purple-200 hover:text-white underline text-sm"
+            >
+              Try in emulator
+            </a>
+          </div>
+          
+          <!-- How to play -->
+          <div class="mt-12 text-left bg-white/10 backdrop-blur-sm rounded-lg p-6">
+            <h2 class="text-lg font-semibold mb-3">How to play:</h2>
+            <ol class="space-y-2 text-purple-100">
+              <li>1. Your Quest scans your room and builds a tiny adventure</li>
+              <li>2. Use your hands to place bridges, pull levers, and help your explorer</li>
+              <li>3. Complete the quest before time runs out</li>
+            </ol>
+          </div>
+          
+          <!-- Credits -->
+          <div class="mt-8 text-sm text-purple-200">
+            <p>A hands-only WebXR game for Meta Quest</p>
+            <p class="mt-2">Built with Meta Immersive Web SDK</p>
+            <p class="mt-2">
+              <a href="https://github.com/minanarouzi/roomquest" target="_blank" rel="noopener noreferrer" class="underline hover:text-white">
+                Open source
+              </a>
+              · 
+              <a href="/LICENSES.md" target="_blank" class="underline hover:text-white">
+                Licenses
+              </a>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Main app entry point -->
     <script type="module" src="/src/index.ts"></script>
   </body>
 </html>
