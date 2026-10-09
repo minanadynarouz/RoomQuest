@@ -40,8 +40,15 @@ export interface SoundEntry {
   intervals?: readonly number[];
 }
 
-/** Store events plus pinch/grab and invalid place/tray-return. */
-export type SoundKey = GameEvent['type'] | 'grab' | 'invalidPlace';
+/** Store events plus pinch/grab, tray-return, and F-07 pause HUD actions. */
+export type SoundKey =
+  | GameEvent['type']
+  | 'grab'
+  | 'invalidPlace'
+  | 'pause'
+  | 'resume'
+  | 'replay'
+  | 'exit';
 
 export const SOUND_MANIFEST: Record<SoundKey, SoundEntry> = {
   grab: {
@@ -71,6 +78,34 @@ export const SOUND_MANIFEST: Record<SoundKey, SoundEntry> = {
     spatial: false,
     pitchHz: 88,
     duration: 0.13,
+  },
+  pause: {
+    synth: 'woodClick',
+    gain: 0.16,
+    spatial: false,
+    pitchHz: 920,
+    duration: 0.05,
+  },
+  resume: {
+    synth: 'woodClick',
+    gain: 0.16,
+    spatial: false,
+    pitchHz: 1280,
+    duration: 0.045,
+  },
+  replay: {
+    synth: 'woodClick',
+    gain: 0.18,
+    spatial: false,
+    pitchHz: 1400,
+    duration: 0.05,
+  },
+  exit: {
+    synth: 'mutedThud',
+    gain: 0.18,
+    spatial: false,
+    pitchHz: 80,
+    duration: 0.1,
   },
   gateOpened: {
     synth: 'marimbaRise',

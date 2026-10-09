@@ -182,14 +182,20 @@ describe('audio manager', () => {
     expect(SOUND_MANIFEST.won.synth).toBe('chimeSting');
   });
 
-  it('plays grab and invalidPlace as UI sounds', () => {
+  it('plays grab, invalidPlace, and F-07 HUD actions as UI sounds', () => {
     const audio = installMockAudio();
     unlockAudio();
     const before = audio.voices;
     playUiSound('grab');
     playUiSound('invalidPlace');
+    playUiSound('pause');
+    playUiSound('resume');
+    playUiSound('replay');
+    playUiSound('exit');
     expect(audio.voices).toBeGreaterThan(before);
     expect(SOUND_MANIFEST.invalidPlace.synth).toBe('mutedThud');
+    expect(SOUND_MANIFEST.pause.synth).toBe('woodClick');
+    expect(SOUND_MANIFEST.won.synth).toBe('chimeSting');
   });
 
   it('spatially chirps at the ExplorerTarget and respects cooldown', () => {

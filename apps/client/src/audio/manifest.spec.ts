@@ -19,9 +19,17 @@ const STORE_EVENTS: GameEvent['type'][] = [
 ];
 
 describe('SOUND_MANIFEST', () => {
-  it('defines every store event plus grab and invalidPlace', () => {
+  it('defines every store event plus grab, invalidPlace, and F-07 HUD actions', () => {
     expect(new Set(SOUND_KEYS)).toEqual(
-      new Set<SoundKey>([...STORE_EVENTS, 'grab', 'invalidPlace'])
+      new Set<SoundKey>([
+        ...STORE_EVENTS,
+        'grab',
+        'invalidPlace',
+        'pause',
+        'resume',
+        'replay',
+        'exit',
+      ])
     );
     for (const key of SOUND_KEYS) {
       const entry = SOUND_MANIFEST[key];
@@ -40,6 +48,10 @@ describe('SOUND_MANIFEST', () => {
     expect(SOUND_MANIFEST.beatCompleted.synth).toBe('marimbaRise');
     expect(SOUND_MANIFEST.invalidPlace.synth).toBe('mutedThud');
     expect(SOUND_MANIFEST.won.synth).toBe('chimeSting');
+    expect(SOUND_MANIFEST.pause.synth).toBe('woodClick');
+    expect(SOUND_MANIFEST.resume.synth).toBe('woodClick');
+    expect(SOUND_MANIFEST.replay.synth).toBe('woodClick');
+    expect(SOUND_MANIFEST.exit.synth).toBe('mutedThud');
     expect(SOUND_MANIFEST.explorerOutOfView.synth).toBe('voiceBlip');
     expect(SOUND_MANIFEST.explorerOutOfView.spatial).toBe(true);
     expect(SOUND_MANIFEST.explorerOutOfView.randomPitchCents).toBeGreaterThan(0);
