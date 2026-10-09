@@ -16,9 +16,10 @@ describe('render.yaml (B-10)', () => {
     expect(yaml).toContain('autoDeploy: false');
     expect(yaml).toContain('healthCheckPath: /api/health');
     expect(yaml).toContain(
-      'buildCommand: corepack enable && pnpm i --frozen-lockfile && pnpm turbo run build --filter=api...'
+      'buildCommand: corepack enable && pnpm i --frozen-lockfile && pnpm turbo run build --filter=api... && pnpm --filter api db:migrate:deploy'
     );
     expect(yaml).toContain('startCommand: node apps/api/dist/main.js');
+    expect(yaml).toContain('db:migrate:deploy');
     expect(yaml).toContain("value: '22'");
   });
 

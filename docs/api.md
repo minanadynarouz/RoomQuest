@@ -291,7 +291,7 @@ Requests with no `Origin` (curl, server-side) are allowed. Blocked origins are n
 
 Validated in `apps/api/src/config/env.ts`. Copy `.env.example` (repo root or `apps/api/.env.example`) to `.env` — never commit secrets.
 
-None of these are required to start the API. CI does not set a database. Local DB, when used, is **Docker Postgres 17** only (B-10 does not create Render or Neon projects).
+None of these are required to start the API. CI sets `TEST_DATABASE_URL` on the `test` and `smoke-api` jobs (`postgres:17` service). Local DB, when used, is **Docker Postgres 17** only (B-10 does not create Render or Neon projects).
 
 | Name | Required | Default | Example | Environments |
 | --- | --- | --- | --- | --- |
@@ -305,7 +305,7 @@ None of these are required to start the API. CI does not set a database. Local D
 | `GOOGLE_API_KEY` | optional | unset | Gemini API key (never commit) | **staging** / **prod** when `DIRECTOR_MODE=live`; **local** live director / **eval** (`pnpm --filter api eval`). Also a **GitHub Actions repository secret** for `.github/workflows/eval.yml`. Blank → health `llm:"missing"`; live eval skips unless `--mock`. |
 | `ANTHROPIC_API_KEY` | optional | unset | Anthropic API key (never commit) | **staging** / **prod** fallback; **local** live director / **eval**. Optional **GitHub Actions repository secret** for `eval.yml`. Either key makes health `llm:"configured"`. |
 | `DATABASE_URL` | optional | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **local** Docker Postgres 17 (runtime / pooled). **staging** / **prod**: Neon pooled URL — declared in `render.yaml`, values set later (M-10). Unset → health `db:"disabled"`; unreachable → health `db:"down"`. `/levels` still serves without cache (warning logged); `/result` returns `202 {stored:false}`; process still 200. |
-| `DIRECT_URL` | optional | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **local** Docker (Prisma CLI / `pnpm --filter api db:migrate`). **staging** / **prod**: Neon unpooled URL for `migrate deploy` (GitHub Environments, L-03 / L-04). |
+| `DIRECT_URL` | optional | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **local** Docker (Prisma CLI / `pnpm --filter api db:migrate`). **staging** / **prod**: Neon unpooled URL for `migrate deploy` at the end of the Render build (`render.yaml`) and later in GitHub Environments (L-03 / L-04). |
 | `NODE_VERSION` | Render build only (not read by Nest) | `22` in `render.yaml` | `22` | **staging** / **prod** Render native runtime. **local** uses `.nvmrc` (`22`). |
 | `TEST_DATABASE_URL` | tests only (not read by Nest) | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **CI** test job (GitHub Actions `postgres:17` service). **local** cache integration tests when Docker Postgres is up. When unset, those tests skip unless `CI=true` (then they fail). |
 
@@ -350,3 +350,12 @@ pnpm --filter api dev
 Listens on `PORT` (default 3000). `GET /api/health` returns `db: "disabled"` when `DATABASE_URL` is unset.
 
 With Docker Postgres 17 (`docker compose up -d` + `pnpm --filter api db:migrate`), the same endpoint returns `db: "up"`. See `docs/deploy-api.md`.
+
+HTTP contract smoke against a running process (local, staging, or prod):
+
+```bash
+pnpm --filter api smoke
+BASE_URL=https://roomquest-api-staging.onrender.com pnpm --filter api smoke
+```
+
+Details and the optional local Postgres-down check: `docs/deploy-api.md` § 5.

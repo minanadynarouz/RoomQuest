@@ -6,10 +6,17 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['./src/test-setup.ts'],
-    include: ['src/**/*.spec.ts', 'test/**/*.spec.ts', 'eval/**/*.spec.ts'],
+    include: [
+      'src/**/*.spec.ts',
+      'test/**/*.spec.ts',
+      'eval/**/*.spec.ts',
+      'smoke/**/*.spec.ts',
+    ],
     pool: 'forks',
     isolate: true,
-    fileParallelism: true,
+    // Postgres integration specs share one database and wipe tables in
+    // beforeEach. Parallel files delete each other's SessionResult rows.
+    fileParallelism: false,
   },
   plugins: [
     swc.vite({

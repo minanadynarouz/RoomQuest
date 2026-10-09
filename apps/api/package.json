@@ -13,6 +13,7 @@
     "typecheck": "prisma generate && tsc --noEmit",
     "test": "prisma generate && vitest run",
     "eval": "tsx eval/cli.ts",
+    "smoke": "tsx smoke/cli.ts",
     "clean": "rm -rf dist .turbo src/generated",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
