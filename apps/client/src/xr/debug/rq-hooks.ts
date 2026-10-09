@@ -53,6 +53,8 @@ export interface RqHooks {
   placement?: PlacementDebugApi | null;
   stats?: () => RqPerfStats;
   autoSolve?: () => Promise<void>;
+  /** Debug/e2e: force the synthetic living-room plan into `playing`. */
+  playSynthetic?: () => boolean;
 }
 
 export type RqHookName = keyof RqHooks;

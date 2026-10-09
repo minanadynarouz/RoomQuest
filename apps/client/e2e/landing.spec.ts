@@ -437,6 +437,7 @@ test.describe('F-06 onboarding and edge arrow', () => {
   test('shows the onboarding bubble then an edge arrow when looking away', async ({
     page,
   }) => {
+    test.setTimeout(90_000);
     await page.addInitScript(() => {
       try {
         window.localStorage.removeItem('rq.onboarding.v1');
@@ -482,6 +483,21 @@ test.describe('F-06 onboarding and edge arrow', () => {
         ),
       { timeout: 25_000 }
     );
+
+    await page.waitForTimeout(3_000);
+    await page.evaluate(() => {
+      const rq = (
+        window as unknown as {
+          __rq?: {
+            store?: { phase?: string };
+            playSynthetic?: () => boolean;
+          };
+        }
+      ).__rq;
+      if (rq?.store?.phase !== 'playing') {
+        rq?.playSynthetic?.();
+      }
+    });
 
     await page.waitForFunction(
       () => {

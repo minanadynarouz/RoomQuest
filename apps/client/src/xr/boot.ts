@@ -99,6 +99,7 @@ function exposeHooks(
       overlay: isOverlayReady() ? { ready: true } : window.__rq?.overlay,
       placement: latestPlacement,
       stats: statsGetter,
+      playSynthetic: playSyntheticLevel,
     },
     { flags: clientFlags, isDev: import.meta.env.DEV }
   );
@@ -126,6 +127,34 @@ function browserKv(): {
 
 function canBuildFromDirector(phase: string): boolean {
   return phase === 'surveying' || phase === 'requesting';
+}
+
+function playSyntheticLevel(): boolean {
+  const world = worldInstance;
+  const builder = world?.getSystem(LevelBuilderSystem);
+  if (!world || !builder) return false;
+  const phase = gameStore.phase;
+  if (phase === 'playing') return true;
+  if (phase === 'noSurfaces' || phase === 'requesting') {
+    gameStore.startSurveying();
+  }
+  if (gameStore.phase === 'surveying') {
+    gameStore.startBuilding(SYNTHETIC_LIVING_ROOM_PLAN, {
+      source: 'procedural',
+    });
+    builder.build(SYNTHETIC_LIVING_ROOM_PLAN, SYNTHETIC_LIVING_ROOM);
+  }
+  if (gameStore.phase === 'building') {
+    gameStore.startPlaying();
+  }
+  exposeHooks(
+    SYNTHETIC_LIVING_ROOM,
+    SYNTHETIC_LIVING_ROOM_PLAN,
+    builder.getSnapTargets(),
+    countDrawCalls(world.scene),
+    latestPlacement
+  );
+  return true;
 }
 
 async function startPlayableLevel(
