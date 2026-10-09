@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildSurfaceGraph, placementToPose, SURFACE_INSET_M } from './index';
+import { buildSurfaceGraph } from './surface-pipeline';
+import { placementToPose, SURFACE_INSET_M } from './placement';
 
 describe('level-core', () => {
   it('exports buildSurfaceGraph', () => {
