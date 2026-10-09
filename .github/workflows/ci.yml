@@ -223,7 +223,7 @@ jobs:
   e2e-xr:
     name: e2e-xr
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -282,7 +282,7 @@ jobs:
           cat /tmp/client-dev.log || true
           exit 1
 
-      - name: Run XR hand-pinch e2e
+      - name: Run XR e2e
         env:
           X05_BASE_URL: https://localhost:5173
         run: xvfb-run -a pnpm --filter client e2e:xr
@@ -294,5 +294,6 @@ jobs:
           name: e2e-xr-artifacts
           path: |
             docs/img/x05/
+            docs/img/x09/
             /tmp/client-dev.log
           if-no-files-found: ignore

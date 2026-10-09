@@ -1,17 +1,20 @@
 /**
- * Headed Chromium XR E2E for X-05 against `pnpm dev`.
+ * Headed Chromium XR E2E against `pnpm dev` (`pnpm --filter client e2e:xr`).
  *
  * 1. Desktop fixture screenshots (blocked / walking / won).
  * 2. `?fixture=synthetic_living_room&xr=1` boots a real IWER AR session
  *    from a user click, then drives injected `window.IWER_DEVICE` hands:
  *    XRDevice.hands, XRHandInput.position.set, updatePinchValue.
  *    Each hand pinch-places the plank, then autoSolve walks to won.
+ * 3. X-09 village-anchor scenario: persist in session 1, restore (or clean
+ *    largest-table fallback) in session 2 with the same origin storage.
  */
 import { chromium, type Browser, type Page } from '@playwright/test';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runVillageAnchorScenario } from './x09-xr-village-anchor.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLIENT_ROOT = path.resolve(__dirname, '..');
@@ -470,6 +473,8 @@ async function main(): Promise<void> {
     console.log(
       '[X-05 e2e] both hands pinch-placed p2 within 1 cm; autoSolve reached won'
     );
+
+    await runVillageAnchorScenario({ browser, baseUrl: server.url });
   } finally {
     await browser.close();
     server.stop();

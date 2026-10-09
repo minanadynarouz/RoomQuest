@@ -48,6 +48,7 @@ export class LevelBuilderSystem extends createSystem({}, {}) {
   private readonly entitiesByPlacement = new Map<string, Entity>();
   private debugGraph: SurfaceGraph | null = null;
   private debugRoot: Group | null = null;
+  private lastGraph: SurfaceGraph | null = null;
 
   init(): void {
     this.cleanupFuncs.push(() => {
@@ -58,6 +59,7 @@ export class LevelBuilderSystem extends createSystem({}, {}) {
 
   /** Build (or rebuild) the level from a plan and surface graph. */
   build(plan: LevelPlan, graph: SurfaceGraph): void {
+    this.lastGraph = graph;
     this.clearPieces();
 
     const mountParent = new Group();
@@ -135,6 +137,20 @@ export class LevelBuilderSystem extends createSystem({}, {}) {
 
   getPieceEntity(placementId: string): Entity | null {
     return this.entitiesByPlacement.get(placementId) ?? null;
+  }
+
+  getGraph(): SurfaceGraph | null {
+    return this.lastGraph;
+  }
+
+  getVillageHutEntity(): Entity | null {
+    if (!this.mounted) return null;
+    for (const piece of this.mounted.pieces) {
+      if (piece.placement.piece === 'village_hut') {
+        return this.entitiesByPlacement.get(piece.placement.id) ?? null;
+      }
+    }
+    return null;
   }
 
   /**
