@@ -26,6 +26,7 @@ export class InstancePool {
     this.mesh.castShadow = false;
     this.mesh.receiveShadow = false;
     this.mesh.count = 0;
+    this.mesh.visible = false;
     this.mesh.matrixAutoUpdate = false;
     this.mesh.matrix.identity();
   }
@@ -50,6 +51,7 @@ export class InstancePool {
       this.tmpMatrix.copy(proxy.matrixWorld);
       this.mesh.setMatrixAt(i, this.tmpMatrix);
     }
+    this.mesh.visible = this.used > 0;
     if (this.used > 0) {
       this.mesh.instanceMatrix.needsUpdate = true;
     }
@@ -59,6 +61,7 @@ export class InstancePool {
     this.proxies.length = 0;
     this.used = 0;
     this.mesh.count = 0;
+    this.mesh.visible = false;
   }
 
   dispose(): void {

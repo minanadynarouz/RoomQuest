@@ -170,7 +170,15 @@ describe('mountGreyboxLevel', () => {
     for (const piece of mounted.pieces) {
       if (piece.inTray) {
         expect(piece.object.parent).toBe(mounted.tray);
+        expect(piece.traySlot).toEqual({
+          x: piece.object.position.x,
+          y: piece.object.position.y,
+          z: piece.object.position.z,
+        });
       }
+    }
+    for (const target of mounted.snapTargets) {
+      expect(target.filled).toBe(false);
     }
     mounted.dispose();
   });

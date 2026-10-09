@@ -3,4 +3,4 @@ export * from './placement';
 export * from './validate';
 export * from './repair';
 export * from './generate';
-
+export * from './snap';

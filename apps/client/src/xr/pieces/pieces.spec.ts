@@ -43,4 +43,18 @@ describe('greybox piece factories', () => {
     expect(plank.userData.piece).toBe('plank_bridge');
     kit.dispose();
   });
+
+  it('builds a real mesh plank when instancing is disabled (tray grab bounds)', () => {
+    const kit = createGreyboxKit('forest');
+    const plank = createPiece('plank_bridge', kit, { instanced: false });
+    expect(kit.plankPool.mesh.count).toBe(0);
+    let hasMesh = false;
+    plank.traverse((obj) => {
+      if (obj !== plank && (obj as { isMesh?: boolean }).isMesh) {
+        hasMesh = true;
+      }
+    });
+    expect(hasMesh).toBe(true);
+    kit.dispose();
+  });
 });

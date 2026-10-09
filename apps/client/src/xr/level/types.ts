@@ -7,7 +7,14 @@ export interface SnapTarget {
   placementId: string;
   piece: PieceId;
   pose: WorldPose;
+  filled: boolean;
   to?: string;
+}
+
+export interface TraySlot {
+  x: number;
+  y: number;
+  z: number;
 }
 
 export interface MountedPiece {
@@ -15,6 +22,7 @@ export interface MountedPiece {
   object: Object3D;
   pose: WorldPose;
   inTray: boolean;
+  traySlot: TraySlot;
 }
 
 export interface LevelBuiltDetail {

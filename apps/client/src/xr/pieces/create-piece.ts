@@ -3,16 +3,24 @@ import type { Object3D } from '@iwsdk/core';
 import type { GreyboxKit } from './kit.js';
 import { createVillageHut } from './village-hut.js';
 import { createCrystalShrine } from './crystal-shrine.js';
-import { createPlankBridge } from './plank-bridge.js';
+import { createPlankBridge, PLANK_BRIDGE_FOOTPRINT } from './plank-bridge.js';
 import { createRamp } from './ramp.js';
 import { createMovingPlatform } from './moving-platform.js';
 import { createGate } from './gate.js';
 import { createLever } from './lever.js';
-import { createGem } from './gem.js';
+import { createGem, GEM_FOOTPRINT } from './gem.js';
 import { createSlime } from './slime.js';
 import { createPortal } from './portal.js';
 
 type PieceFactory = (kit: GreyboxKit) => Object3D;
+
+export interface CreatePieceOptions {
+  /**
+   * Gems and planks default to InstancedMesh proxies. Tray pieces need a
+   * real Mesh so OneHandGrabbable has a raycastable bound.
+   */
+  instanced?: boolean;
+}
 
 const FACTORIES: Record<PieceId, PieceFactory> = {
   village_hut: createVillageHut,
@@ -28,7 +36,17 @@ const FACTORIES: Record<PieceId, PieceFactory> = {
 };
 
 /** Build one greybox piece. Base of the returned Object3D is at y = 0. */
-export function createPiece(piece: PieceId, kit: GreyboxKit): Object3D {
+export function createPiece(
+  piece: PieceId,
+  kit: GreyboxKit,
+  options: CreatePieceOptions = {}
+): Object3D {
+  const instanced = options.instanced !== false;
+  if (!instanced && (piece === 'plank_bridge' || piece === 'gem')) {
+    const footprint =
+      piece === 'gem' ? GEM_FOOTPRINT : PLANK_BRIDGE_FOOTPRINT;
+    return kit.createMeshPiece(piece, footprint);
+  }
   return FACTORIES[piece](kit);
 }
 
