@@ -23,6 +23,7 @@ export type {
   KvStore,
   RequestPlanOverrides,
 } from './types.js';
+export type { ErrorCode } from '@roomquest/schema';
 export { parseDirectorFlags } from './flags.js';
 export { getOrCreateDeviceId } from './device-id.js';
 export { stubGenerate, schemaValidate } from './fallback.js';

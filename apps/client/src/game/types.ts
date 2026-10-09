@@ -3,7 +3,8 @@
  * Pure TypeScript, no DOM, IWSDK or Three.js imports
  */
 
-import type { LevelPlan, PlanSource } from '@roomquest/schema';
+import type { ErrorCode, LevelPlan, PlanSource } from '@roomquest/schema';
+import type { FallbackReason } from './director/types.js';
 
 /**
  * Options for startBuilding, including F-03 director metadata.
@@ -14,6 +15,8 @@ export interface StartBuildingOptions {
   latencyMs?: number;
   repairs?: string[];
   cacheKey?: string;
+  fallbackReason?: FallbackReason;
+  apiErrorCode?: ErrorCode;
 }
 
 /**
@@ -150,4 +153,8 @@ export interface GameState {
   repairs: string[];
   /** Cache key from the director response, if any. */
   cacheKey: string | null;
+  /** Why the director fell back to the local generator, if it did. */
+  fallbackReason: FallbackReason | null;
+  /** API `{error.code}` (`INVALID_REQUEST` / `INTERNAL`) when the envelope parsed. */
+  apiErrorCode: ErrorCode | null;
 }

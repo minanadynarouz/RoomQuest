@@ -4,6 +4,7 @@
  */
 
 import type {
+  ErrorCode,
   LevelPlan,
   PlanSource,
   SurfaceGraph,
@@ -28,6 +29,8 @@ export type FallbackReason =
   | 'timeout'
   | 'network'
   | 'invalid-plan'
+  | 'graph-mismatch'
+  | 'api-error'
   | 'http-error'
   | 'director-off'
   | 'director-mock';
@@ -103,6 +106,8 @@ export interface DirectorResult {
   repairs: string[];
   usedFallback: boolean;
   fallbackReason?: FallbackReason;
+  /** Set when the API returned `{error:{code}}` (INVALID_REQUEST / INTERNAL). */
+  apiErrorCode?: ErrorCode;
 }
 
 export interface DirectorClient {

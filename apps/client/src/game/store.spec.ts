@@ -99,6 +99,8 @@ describe('createGameStore', () => {
       expect(store.directorLatencyMs).toBeNull();
       expect(store.repairs).toEqual([]);
       expect(store.cacheKey).toBeNull();
+      expect(store.fallbackReason).toBeNull();
+      expect(store.apiErrorCode).toBeNull();
     });
   });
 
@@ -135,10 +137,13 @@ describe('createGameStore', () => {
         latencyMs: 18,
         repairs: [],
         cacheKey: 'procedural:test-seed',
+        fallbackReason: 'graph-mismatch',
       });
       expect(store.planSource).toBe('procedural');
       expect(store.directorLatencyMs).toBe(18);
       expect(store.cacheKey).toBe('procedural:test-seed');
+      expect(store.fallbackReason).toBe('graph-mismatch');
+      expect(store.apiErrorCode).toBeNull();
     });
 
     it('allows building → playing', () => {
@@ -1014,6 +1019,8 @@ describe('createGameStore', () => {
       expect(store.planSource).toBeNull();
       expect(store.directorLatencyMs).toBeNull();
       expect(store.cacheKey).toBeNull();
+      expect(store.fallbackReason).toBeNull();
+      expect(store.apiErrorCode).toBeNull();
     });
   });
 });

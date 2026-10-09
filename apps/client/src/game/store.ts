@@ -5,7 +5,8 @@
  */
 
 import { signal, computed } from '@preact/signals-core';
-import type { LevelPlan, PlanSource } from '@roomquest/schema';
+import type { ErrorCode, LevelPlan, PlanSource } from '@roomquest/schema';
+import type { FallbackReason } from './director/types.js';
 import type {
   GamePhase,
   GameEvent,
@@ -83,6 +84,8 @@ export function createGameStore(options: GameStoreOptions = {}) {
   const directorLatencyMs = signal<number | null>(null);
   const repairs = signal<string[]>([]);
   const cacheKey = signal<string | null>(null);
+  const fallbackReason = signal<FallbackReason | null>(null);
+  const apiErrorCode = signal<ErrorCode | null>(null);
 
   // Computed values
   const state = computed<GameState>(() => ({
@@ -98,6 +101,8 @@ export function createGameStore(options: GameStoreOptions = {}) {
     directorLatencyMs: directorLatencyMs.value,
     repairs: repairs.value,
     cacheKey: cacheKey.value,
+    fallbackReason: fallbackReason.value,
+    apiErrorCode: apiErrorCode.value,
   }));
 
   // Helper to get current elapsed time (not a computed to avoid caching issues)
@@ -357,6 +362,12 @@ export function createGameStore(options: GameStoreOptions = {}) {
     get cacheKey() {
       return cacheKey.value;
     },
+    get fallbackReason() {
+      return fallbackReason.value;
+    },
+    get apiErrorCode() {
+      return apiErrorCode.value;
+    },
 
     // Phase transitions
     requestLevel() {
@@ -378,6 +389,8 @@ export function createGameStore(options: GameStoreOptions = {}) {
       directorLatencyMs.value = options?.latencyMs ?? null;
       repairs.value = options?.repairs ?? [];
       cacheKey.value = options?.cacheKey ?? null;
+      fallbackReason.value = options?.fallbackReason ?? null;
+      apiErrorCode.value = options?.apiErrorCode ?? null;
       events.value = [];
       gemsCollected.value = 0;
       beatTimings.value = [];
@@ -447,6 +460,8 @@ export function createGameStore(options: GameStoreOptions = {}) {
       directorLatencyMs.value = null;
       repairs.value = [];
       cacheKey.value = null;
+      fallbackReason.value = null;
+      apiErrorCode.value = null;
       events.value = [];
       gemsCollected.value = 0;
       beatTimings.value = [];

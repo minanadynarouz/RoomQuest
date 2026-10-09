@@ -140,16 +140,26 @@ console.log(store.planSource, store.directorLatencyMs); // F-03
 
 ## Director client (F-03)
 
-Races the director API against a local generator. The API plan is used only if
-it arrives in ≤ 8 s (`AbortController`) **and** passes local re-validation
-against the scanned graph. Otherwise the local procedural plan is used. API
-failures are invisible to the player.
+Races `POST ${VITE_API_BASE_URL}/api/v1/levels` against a local generator.
+Headers: `X-Device-Id` (UUID v4) and `X-Client-Version` (`0.1.0`). The API
+plan is used only if it arrives in ≤ 8 s, parses as `LevelResponse`, **and**
+passes local re-validation against the scanned graph. Otherwise the local
+procedural plan is used. API failures are invisible to the player.
 
 ```
 ?director=live|mock|off   live (default) races the API; mock/off skip the network
 ?seed=                    overrides the local generator seed
 ?date=YYYY-MM-DD          overrides the daily date sent to the API
 ```
+
+A 200 that is schema-valid but placed on fixture surface ids (`s1`/`s2`/`s4`)
+is the B-02 mock until B-05. Local re-validation fails, the client logs
+`reason=graph-mismatch`, and it falls back to the generator — not an error.
+`?director=mock` never hits the network and still returns a plan bound to the
+player's graph.
+
+`{error:{code,message,issues}}` with `INVALID_REQUEST` or `INTERNAL` also
+falls back. The code is stored as `apiErrorCode` for the debug overlay.
 
 `createDirectorClient` takes injected `fetch`, `generate`, `validate`, and
 device id. `createDirectorClientFromEnv` reads flags from a query string and
@@ -192,6 +202,14 @@ The spec said "Exit returns to landing" but didn't specify from which states. I 
 
 **Decision**: ship a deterministic stub generator so F-03 always resolves to a
 valid plan. B-04 replaces `stubGenerate` with `level-core.generate`.
+
+### 6. B-02 fixture-id mismatch is expected
+
+**Decision**: a 200 `LevelResponse` whose placements reference fixture surface
+ids (not the scanned graph) is `fallbackReason: 'graph-mismatch'`, logged at
+info, and never drives the store into `error`. B-05 will emit graph-relative
+plans; until then the generator is the playable path. `?director=mock` skips
+the API entirely so emulator sessions do not depend on that mismatch.
 
 ## Purity Enforcement
 

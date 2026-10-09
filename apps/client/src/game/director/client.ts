@@ -8,7 +8,9 @@
  */
 
 import {
+  ApiError,
   LevelResponse,
+  type ErrorCode,
   type LevelPlan,
   type SurfaceGraph,
 } from '@roomquest/schema';
@@ -46,15 +48,35 @@ function isAbortError(err: unknown): boolean {
   );
 }
 
+interface PostFailure {
+  ok: false;
+  reason: FallbackReason;
+  apiErrorCode?: ErrorCode;
+}
+
+async function readJson(response: Pick<Response, 'json'>): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return undefined;
+  }
+}
+
+function parseApiError(payload: unknown): ErrorCode | undefined {
+  const parsed = ApiError.safeParse(payload);
+  if (!parsed.success) {
+    return undefined;
+  }
+  return parsed.data.error.code;
+}
+
 async function postLevels(
   fetchFn: FetchLike,
   url: string,
   body: unknown,
   headers: Record<string, string>,
   budgetMs: number
-): Promise<
-  { ok: true; payload: unknown } | { ok: false; reason: FallbackReason }
-> {
+): Promise<{ ok: true; payload: unknown } | PostFailure> {
   const controller = new AbortController();
   const timer = setTimeout(() => {
     controller.abort();
@@ -68,16 +90,21 @@ async function postLevels(
       signal: controller.signal,
     });
 
+    const payload = await readJson(response);
+
     if (!response.ok) {
+      const apiErrorCode = parseApiError(payload);
+      if (apiErrorCode) {
+        return { ok: false, reason: 'api-error', apiErrorCode };
+      }
       return { ok: false, reason: 'http-error' };
     }
 
-    try {
-      const payload: unknown = await response.json();
-      return { ok: true, payload };
-    } catch {
+    if (payload === undefined) {
       return { ok: false, reason: 'invalid-plan' };
     }
+
+    return { ok: true, payload };
   } catch (err) {
     if (isAbortError(err)) {
       return { ok: false, reason: 'timeout' };
@@ -92,7 +119,8 @@ function proceduralResult(
   plan: ReturnType<typeof lastResortPlan>,
   seed: string,
   latencyMs: number,
-  reason: FallbackReason
+  reason: FallbackReason,
+  apiErrorCode?: ErrorCode
 ): DirectorResult {
   return {
     plan,
@@ -103,7 +131,18 @@ function proceduralResult(
     repairs: [],
     usedFallback: true,
     fallbackReason: reason,
+    apiErrorCode,
   };
+}
+
+function logDirectorResult(result: DirectorResult): void {
+  const reason = result.fallbackReason
+    ? ` reason=${result.fallbackReason}`
+    : '';
+  const code = result.apiErrorCode ? ` apiError=${result.apiErrorCode}` : '';
+  console.info(
+    `[director] source=${result.source} latencyMs=${result.latencyMs}${reason}${code}`
+  );
 }
 
 /**
@@ -140,7 +179,8 @@ export function createDirectorClient(
     );
 
     async function useGenerator(
-      reason: FallbackReason
+      reason: FallbackReason,
+      apiErrorCode?: ErrorCode
     ): Promise<DirectorResult> {
       let plan: LevelPlan;
       try {
@@ -162,10 +202,14 @@ export function createDirectorClient(
         plan = lastResortPlan(graph, seed);
       }
 
-      const result = proceduralResult(plan, seed, nowMs() - started, reason);
-      console.info(
-        `[director] source=${result.source} latencyMs=${result.latencyMs} reason=${reason}`
+      const result = proceduralResult(
+        plan,
+        seed,
+        nowMs() - started,
+        reason,
+        apiErrorCode
       );
+      logDirectorResult(result);
       return result;
     }
 
@@ -199,7 +243,7 @@ export function createDirectorClient(
     );
 
     if (!api.ok) {
-      return useGenerator(api.reason);
+      return useGenerator(api.reason, api.apiErrorCode);
     }
 
     const parsed = LevelResponse.safeParse(api.payload);
@@ -207,9 +251,12 @@ export function createDirectorClient(
       return useGenerator('invalid-plan');
     }
 
+    // B-02 mock plans use fixture surface ids, not the scanned graph.
+    // Local re-validation rejecting them is expected until B-05 — fall back
+    // to the generator without treating it as a player-facing error.
     const local = await validate(parsed.data.plan, graph);
     if (!local.ok) {
-      return useGenerator('invalid-plan');
+      return useGenerator('graph-mismatch');
     }
 
     const latencyMs = nowMs() - started;
@@ -230,9 +277,7 @@ export function createDirectorClient(
       repairs: parsed.data.repairs,
       usedFallback: false,
     };
-    console.info(
-      `[director] source=${result.source} latencyMs=${result.latencyMs}`
-    );
+    logDirectorResult(result);
     return result;
   }
 

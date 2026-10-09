@@ -46,6 +46,109 @@ const GRAPH: SurfaceGraph = {
   edges: [{ a: 's1', b: 's2', gap: 0.4, dh: -0.3, kind: 'plank' }],
 };
 
+/** Player graph whose surface ids do not match the B-02 fixture (s1/s2/s4). */
+const SCANNED_GRAPH: SurfaceGraph = {
+  version: 1,
+  roomHash: 'aabbccddeeff',
+  mode: 'scene',
+  floorY: 0,
+  nodes: [
+    {
+      id: 's10',
+      label: 'table',
+      kind: 'plane',
+      topHeight: 0.75,
+      centroid: [0, 0.75, 0],
+      size: [1, 0.6],
+      yaw: 0,
+      area: 0.6,
+      reach: 'hand',
+      angleFromForward: 0,
+    },
+    {
+      id: 's11',
+      label: 'couch',
+      kind: 'mesh',
+      topHeight: 0.45,
+      centroid: [0, 0.45, -2],
+      size: [2, 0.9],
+      yaw: 0,
+      area: 1.8,
+      reach: 'ray',
+      angleFromForward: 25,
+    },
+  ],
+  edges: [{ a: 's10', b: 's11', gap: 0.4, dh: -0.3, kind: 'plank' }],
+};
+
+/**
+ * Schema-valid plan using fixture surface ids (s1, s2, s4), as B-02's mock
+ * director returns until B-05 binds plans to the request graph.
+ */
+function b02FixturePlan(): LevelPlan {
+  return {
+    seed: 'f1a2b3c4d5e6-2026-10-14',
+    theme: 'forest',
+    title: 'The Living Room Quest',
+    start: 's1',
+    goal: 's2',
+    parTimeMs: 180000,
+    placements: [
+      {
+        id: 'p1',
+        piece: 'village_hut',
+        surface: 's1',
+        u: 0.5,
+        v: 0.5,
+        playerBuilt: false,
+        links: [],
+      },
+      {
+        id: 'p2',
+        piece: 'plank_bridge',
+        surface: 's1',
+        to: 's2',
+        u: 0.8,
+        v: 0.5,
+        playerBuilt: true,
+        links: [],
+      },
+      {
+        id: 'p3',
+        piece: 'gate',
+        surface: 's2',
+        u: 0.3,
+        v: 0.5,
+        playerBuilt: false,
+        links: [],
+      },
+      {
+        id: 'p4',
+        piece: 'lever',
+        surface: 's4',
+        u: 0.5,
+        v: 0.5,
+        playerBuilt: false,
+        links: ['p3'],
+      },
+      {
+        id: 'p5',
+        piece: 'crystal_shrine',
+        surface: 's2',
+        u: 0.8,
+        v: 0.5,
+        playerBuilt: false,
+        links: [],
+      },
+    ],
+    beats: [
+      { goal: 'Bridge the gap to the couch', uses: ['p2'] },
+      { goal: 'Reach the crystal shrine', uses: ['p5'] },
+    ],
+    dialogue: [{ trigger: 'intro', line: 'Help me reach it.' }],
+  };
+}
+
 function localPlan(seed = 'f1a2b3c4d5e6-2026-10-09'): LevelPlan {
   return stubGenerate(GRAPH, seed, 'normal');
 }
@@ -152,28 +255,28 @@ describe('createDirectorClient', () => {
     expect(fetchFn).toHaveBeenCalledOnce();
   });
 
-  it('falls back when the API plan fails local validation', async () => {
-    const badPlan = {
-      ...apiPlan(),
-      start: 's99',
-      goal: 's99',
-      placements: apiPlan().placements.map((p) => ({
-        ...p,
-        surface: 's99',
-        to: undefined,
-      })),
-    };
+  it('treats a B-02 fixture-id plan as a clean graph-mismatch fallback', async () => {
     const fetchFn = vi.fn<FetchLike>(() =>
-      Promise.resolve(jsonResponse({ ...apiResponse(), plan: badPlan }))
+      Promise.resolve(
+        jsonResponse(
+          apiResponse({
+            plan: b02FixturePlan(),
+            source: 'procedural',
+          })
+        )
+      )
     );
 
-    const result = await client(fetchFn).requestPlan(GRAPH);
+    const result = await client(fetchFn).requestPlan(SCANNED_GRAPH);
 
     expect(result.usedFallback).toBe(true);
-    expect(result.fallbackReason).toBe('invalid-plan');
+    expect(result.fallbackReason).toBe('graph-mismatch');
     expect(result.source).toBe('procedural');
-    expect(result.plan.start).toBe('s1');
-    expect(result.plan.goal).toBe('s2');
+    expect(result.apiErrorCode).toBeUndefined();
+    expect(result.plan.start).toBe('s10');
+    expect(result.plan.goal).toBe('s11');
+    expect(result.plan.placements.every((p) => p.surface !== 's1')).toBe(true);
+    expect(console.warn).not.toHaveBeenCalled();
   });
 
   it('falls back when LevelResponse does not parse', async () => {
@@ -223,15 +326,63 @@ describe('createDirectorClient', () => {
     expect(result.plan.placements.length).toBeGreaterThanOrEqual(4);
   });
 
-  it('falls back on HTTP error without throwing', async () => {
+  it('falls back on INVALID_REQUEST and records the code', async () => {
     const fetchFn = vi.fn<FetchLike>(() =>
-      Promise.resolve(jsonResponse({ error: { code: 'INTERNAL' } }, 500))
+      Promise.resolve(
+        jsonResponse(
+          {
+            error: {
+              code: 'INVALID_REQUEST',
+              message: 'graph.nodes: too small',
+              issues: [{ path: ['graph', 'nodes'], message: 'too small' }],
+            },
+          },
+          400
+        )
+      )
+    );
+
+    const result = await client(fetchFn).requestPlan(GRAPH);
+
+    expect(result.usedFallback).toBe(true);
+    expect(result.fallbackReason).toBe('api-error');
+    expect(result.apiErrorCode).toBe('INVALID_REQUEST');
+    expect(result.source).toBe('procedural');
+    expect(result.plan.start).toBe('s1');
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('falls back on INTERNAL and records the code', async () => {
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve(
+        jsonResponse(
+          {
+            error: { code: 'INTERNAL', message: 'director boom' },
+          },
+          500
+        )
+      )
+    );
+
+    const result = await client(fetchFn).requestPlan(GRAPH);
+
+    expect(result.usedFallback).toBe(true);
+    expect(result.fallbackReason).toBe('api-error');
+    expect(result.apiErrorCode).toBe('INTERNAL');
+    expect(result.source).toBe('procedural');
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('falls back on a non-envelope HTTP error without throwing', async () => {
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve(jsonResponse({ oops: true }, 502))
     );
 
     const result = await client(fetchFn).requestPlan(GRAPH);
 
     expect(result.usedFallback).toBe(true);
     expect(result.fallbackReason).toBe('http-error');
+    expect(result.apiErrorCode).toBeUndefined();
     expect(result.source).toBe('procedural');
   });
 
@@ -280,6 +431,23 @@ describe('createDirectorClient', () => {
     expect(fetchFn).not.toHaveBeenCalled();
     expect(result.fallbackReason).toBe('director-mock');
     expect(result.source).toBe('procedural');
+  });
+
+  it('returns a valid plan for ?director=mock on a non-fixture graph', async () => {
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve(jsonResponse(apiResponse({ plan: b02FixturePlan() })))
+    );
+    const result = await client(fetchFn, { directorMode: 'mock' }).requestPlan(
+      SCANNED_GRAPH
+    );
+
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(result.usedFallback).toBe(true);
+    expect(result.fallbackReason).toBe('director-mock');
+    expect(result.source).toBe('procedural');
+    expect(result.plan.start).toBe('s10');
+    expect(result.plan.goal).toBe('s11');
+    expect(schemaValidate(result.plan, SCANNED_GRAPH).ok).toBe(true);
   });
 
   it('honours seed and date overrides', async () => {
@@ -365,5 +533,52 @@ describe('applyDirectorResult', () => {
     expect(store.repairs).toEqual(['clamped-uv']);
     expect(store.cacheKey).toBe('cache-1');
     expect(store.plan?.title).toBe('Roomquest');
+    expect(store.state.error).toBeNull();
+  });
+
+  it('records a graph-mismatch fallback without entering error', () => {
+    const store = createGameStore();
+    store.requestLevel();
+    store.startSurveying();
+
+    applyDirectorResult(store, {
+      plan: stubGenerate(SCANNED_GRAPH, 'seed', 'normal'),
+      source: 'procedural',
+      cacheKey: 'procedural:seed',
+      promptVersion: 'local',
+      latencyMs: 40,
+      repairs: [],
+      usedFallback: true,
+      fallbackReason: 'graph-mismatch',
+    });
+
+    expect(store.phase).toBe('building');
+    expect(store.planSource).toBe('procedural');
+    expect(store.fallbackReason).toBe('graph-mismatch');
+    expect(store.apiErrorCode).toBeNull();
+    expect(store.state.error).toBeNull();
+  });
+
+  it('records INVALID_REQUEST on the store for debug', () => {
+    const store = createGameStore();
+    store.requestLevel();
+    store.startSurveying();
+
+    applyDirectorResult(store, {
+      plan: localPlan(),
+      source: 'procedural',
+      cacheKey: 'procedural:seed',
+      promptVersion: 'local',
+      latencyMs: 12,
+      repairs: [],
+      usedFallback: true,
+      fallbackReason: 'api-error',
+      apiErrorCode: 'INVALID_REQUEST',
+    });
+
+    expect(store.phase).toBe('building');
+    expect(store.apiErrorCode).toBe('INVALID_REQUEST');
+    expect(store.fallbackReason).toBe('api-error');
+    expect(store.state.error).toBeNull();
   });
 });

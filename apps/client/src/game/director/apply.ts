@@ -16,5 +16,7 @@ export function applyDirectorResult(
     latencyMs: result.latencyMs,
     repairs: result.repairs,
     cacheKey: result.cacheKey,
+    fallbackReason: result.fallbackReason,
+    apiErrorCode: result.apiErrorCode,
   });
 }
