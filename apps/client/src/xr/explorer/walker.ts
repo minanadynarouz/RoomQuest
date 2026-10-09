@@ -1,4 +1,8 @@
-import type { ExplorerPath, PathBlocker } from '@roomquest/level-core';
+import type {
+  ExplorerPath,
+  ExplorerSegment,
+  PathBlocker,
+} from '@roomquest/level-core';
 import type { LevelPlan, Placement } from '@roomquest/schema';
 import type { GameStore } from '../../game/index.js';
 
@@ -35,6 +39,8 @@ export class ExplorerWalker {
   private readonly built = new Set<string>();
   private readonly openGates = new Set<string>();
   private readonly stunned = new Set<string>();
+  /** Slime hops the explorer already crossed this run. */
+  private readonly passedSlimes = new Set<string>();
   private readonly gems = new Set<string>();
   private readonly aligned = new Set<string>();
   private readonly portalsUsed = new Set<string>();
@@ -64,6 +70,7 @@ export class ExplorerWalker {
     this.built.clear();
     this.openGates.clear();
     this.stunned.clear();
+    this.passedSlimes.clear();
     this.gems.clear();
     this.aligned.clear();
     this.portalsUsed.clear();
@@ -182,7 +189,11 @@ export class ExplorerWalker {
       } else if (event.type === 'slimeStunned') {
         this.stunned.add(event.placementId);
       } else if (event.type === 'slimeWoke') {
-        this.stunned.delete(event.placementId);
+        // Visual stun is 4 s; keep the hop clear until the 0.15 m/s explorer
+        // finishes that segment so a wake before arrival cannot re-block.
+        if (this.passedSlimes.has(event.placementId)) {
+          this.stunned.delete(event.placementId);
+        }
       } else if (event.type === 'gemCollected') {
         this.gems.add(event.placementId);
       } else if (event.type === 'platformAligned') {
@@ -224,9 +235,7 @@ export class ExplorerWalker {
       this.teleportAge += dt;
       if (this.teleportAge >= TELEPORT_S) {
         this.arrive(segment.toIndex);
-        this.teleportAge = 0;
-        this.segmentIndex += 1;
-        this.t = 0;
+        this.finishSegment(segment);
       }
       return;
     }
@@ -234,8 +243,7 @@ export class ExplorerWalker {
     const from = this.path.waypoints[segment.fromIndex];
     const to = this.path.waypoints[segment.toIndex];
     if (!from || !to) {
-      this.segmentIndex += 1;
-      this.t = 0;
+      this.finishSegment(segment);
       return;
     }
     const dx = to.pose.position[0] - from.pose.position[0];
@@ -244,21 +252,28 @@ export class ExplorerWalker {
     const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (dist < ARRIVE_EPS) {
       this.arrive(segment.toIndex);
-      this.segmentIndex += 1;
-      this.t = 0;
+      this.finishSegment(segment);
       return;
     }
     this.t += (this.speedMps * dt) / dist;
     if (this.t >= 1) {
       this.arrive(segment.toIndex);
-      this.segmentIndex += 1;
-      this.t = 0;
+      this.finishSegment(segment);
       return;
     }
     this.x = from.pose.position[0] + dx * this.t;
     this.y = from.pose.position[1] + dy * this.t;
     this.z = from.pose.position[2] + dz * this.t;
     this.yaw = Math.atan2(dx, dz);
+  }
+
+  private finishSegment(segment: ExplorerSegment): void {
+    if (segment.blocker === 'awakeSlime' && segment.placementId) {
+      this.passedSlimes.add(segment.placementId);
+    }
+    this.segmentIndex += 1;
+    this.t = 0;
+    this.teleportAge = 0;
   }
 
   private arrive(waypointIndex: number): void {

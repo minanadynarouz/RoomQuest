@@ -166,7 +166,7 @@ describe('ExplorerWalker blockers', () => {
     expect(moved || celebrated || walker.state === 'blocked').toBe(true);
   });
 
-  it('never passes an awake slime and waits again after slimeWoke', () => {
+  it('never passes an awake slime until it has been stunned', () => {
     const plan: LevelPlan = {
       ...PLAN,
       placements: [
@@ -196,11 +196,36 @@ describe('ExplorerWalker blockers', () => {
     tick(1);
     expect(walker.reason).not.toBe('awakeSlime');
     expect(walker.state).toBe('walking');
+  });
+
+  it('stays passable after slimeWoke until the explorer finishes the hop', () => {
+    const plan: LevelPlan = {
+      ...PLAN,
+      placements: [
+        ...PLAN.placements,
+        {
+          id: 'pslime',
+          piece: 'slime',
+          surface: 's1',
+          u: 0.85,
+          v: 0.5,
+          playerBuilt: false,
+          links: [],
+        },
+      ],
+    };
+    const { store, walker, tick } = playing(plan);
+    tick(80);
+    expect(walker.reason).toBe('awakeSlime');
+
+    store.slimeStunned('pslime');
+    tick(1);
+    expect(walker.state).toBe('walking');
 
     store.slimeWoke('pslime');
     tick(2);
-    expect(walker.state).toBe('blocked');
-    expect(walker.reason).toBe('awakeSlime');
+    expect(walker.state).toBe('walking');
+    expect(walker.reason).not.toBe('awakeSlime');
   });
 
   it('completes the X-08 slime fixture after slimeStunned', () => {
@@ -211,6 +236,15 @@ describe('ExplorerWalker blockers', () => {
 
     store.slimeStunned('p8');
     tick(80);
+    expect(store.phase).toBe('won');
+    expect(walker.state).toBe('celebrating');
+  });
+
+  it('completes the X-08 slime fixture even if slimeWoke fires before arrival', () => {
+    const { store, walker, tick } = playing(SYNTHETIC_SLIME_PLAN);
+    store.slimeStunned('p8');
+    store.slimeWoke('p8');
+    tick(120);
     expect(store.phase).toBe('won');
     expect(walker.state).toBe('celebrating');
   });
@@ -249,7 +283,9 @@ describe('ExplorerWalker blockers', () => {
     store.platformAligned('p2');
     tick(120);
     expect(
-      store.events.some((e) => e.type === 'portalUsed' && e.placementId === 'p3')
+      store.events.some(
+        (e) => e.type === 'portalUsed' && e.placementId === 'p3'
+      )
     ).toBe(true);
     expect(['teleporting', 'walking', 'celebrating', 'idle']).toContain(
       walker.state

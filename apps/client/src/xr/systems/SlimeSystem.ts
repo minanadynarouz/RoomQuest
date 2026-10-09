@@ -22,7 +22,7 @@ import {
 } from '@roomquest/level-core';
 import type { SurfaceGraph } from '@roomquest/schema';
 import type { GameStore } from '../../game/index.js';
-import { emitSlimeStunned } from '../slime/stun.js';
+import { emitSlimeStunned, isSlimeStunStillActive } from '../slime/stun.js';
 import type { LevelBuilderSystem } from './LevelBuilderSystem.js';
 
 interface BoundSlime {
@@ -111,7 +111,10 @@ export class SlimeSystem extends createSystem(
 
   private rebind(): void {
     this.unbindAll();
-    this.eventCursor = 0;
+    const events = this.store?.events ?? [];
+    // Skip the historical log. Replaying slimeStunned after slimeWoke would
+    // restun without a new poke (HUD Replay clears events; this path does not).
+    this.eventCursor = events.length;
     const mounted = this.builder?.getMounted();
     const graph = this.graph;
     if (!mounted) return;
@@ -127,6 +130,10 @@ export class SlimeSystem extends createSystem(
         node?.size[1] ?? 0.6
       );
       this.bindSlime(entity, piece.object, piece.placement.id, config);
+      const row = this.bound.get(piece.placement.id);
+      if (row && isSlimeStunStillActive(events, piece.placement.id)) {
+        stunSlime(row.runtime);
+      }
     }
   }
 
@@ -206,6 +213,7 @@ export class SlimeSystem extends createSystem(
       this.eventCursor += 1;
       if (!event) continue;
       if (event.type !== 'slimeStunned') continue;
+      if (!isSlimeStunStillActive(events, event.placementId)) continue;
       const row = this.bound.get(event.placementId);
       if (!row) continue;
       if (row.runtime.stunRemainingS <= 0) {
