@@ -34,7 +34,7 @@ export {
   cooldownUntilMs,
   remainingRetryAfterS,
 } from './rate-limit.js';
-export { createDirectorClient } from './client.js';
+export { createDirectorClient, snapshotSurfaceGraph } from './client.js';
 export { createDirectorClientFromEnv } from './factory.js';
 export type { DirectorEnv } from './factory.js';
 export { applyDirectorResult } from './apply.js';

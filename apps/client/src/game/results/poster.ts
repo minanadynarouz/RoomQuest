@@ -74,12 +74,22 @@ function clampTimeMs(timeMs: number): number {
   return rounded;
 }
 
+/** First 16 hex chars of sha256 — same shape as API `makeCacheKey`. */
+const DIRECTOR_CACHE_KEY_RE = /^[0-9a-f]{16}$/;
+
 /**
- * Server levels use the `LevelResponse.cacheKey`. Client procedural
- * fallback (including director=off/mock) uses `proc:<seed>:<tier>` and
- * `planSource: "procedural"`.
+ * Server levels use the `LevelResponse.cacheKey`, including B-05
+ * `source: "procedural"` when the API had no LLM keys. Client-local
+ * fallback (director=off/mock, or generatePlan after a live miss) uses
+ * `proc:<seed>:<tier>` and `planSource: "procedural"`.
  */
 export function resolveLevelKey(input: ResolveLevelKeyInput): string | null {
+  if (
+    typeof input.cacheKey === 'string' &&
+    DIRECTOR_CACHE_KEY_RE.test(input.cacheKey)
+  ) {
+    return input.cacheKey;
+  }
   if (input.planSource === 'procedural' || input.planSource === null) {
     if (input.seed === null || input.seed === undefined || input.seed === '') {
       return null;

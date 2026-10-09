@@ -10,6 +10,11 @@ import { createDirectorClient } from './client.js';
 import { createDirectorClientFromEnv } from './factory.js';
 import { applyDirectorResult } from './apply.js';
 import { createGameStore } from '../store.js';
+import {
+  createResultPoster,
+  resolveLevelKey,
+} from '../results/poster.js';
+import { LEVELS_PATH } from './types.js';
 import type { FetchLike, GenerateFn, KvStore, RepairFn } from './types.js';
 
 /** Synthetic living-room graph — `validatePlan` accepts the fixture plan on this. */
@@ -329,6 +334,83 @@ describe('createDirectorClient', () => {
     expect(result.cacheKey).toBe('abcd1234abcd1234');
     expect(result.latencyMs).toBeGreaterThanOrEqual(0);
     expect(fetchFn).toHaveBeenCalledOnce();
+  });
+
+  it('accepts a B-05 server plan for the posted graph snapshot and posts the result to the cacheKey', async () => {
+    const live = JSON.parse(JSON.stringify(GRAPH)) as SurfaceGraph;
+    const cacheKey = '0123456789abcdef';
+    const fetchFn = vi.fn<FetchLike>((url, init) => {
+      if (url.endsWith('/result')) {
+        return Promise.resolve(jsonResponse({ stored: false }, 202));
+      }
+      const body = JSON.parse(init.body) as { graph: SurfaceGraph };
+      live.nodes = SCANNED_GRAPH.nodes.map((node) => ({ ...node }));
+      live.edges = SCANNED_GRAPH.edges.map((edge) => ({ ...edge }));
+      live.roomHash = SCANNED_GRAPH.roomHash;
+      const plan = generatePlan(
+        body.graph,
+        `${body.graph.roomHash}-2026-10-09`,
+        'normal'
+      );
+      return Promise.resolve(
+        jsonResponse({
+          plan,
+          source: 'procedural',
+          cacheKey,
+          promptVersion: 'v1',
+          latencyMs: 18,
+          repairs: [],
+        })
+      );
+    });
+
+    const result = await client(fetchFn).requestPlan(live);
+
+    expect(result.usedFallback).toBe(false);
+    expect(result.fallbackReason).toBeUndefined();
+    expect(result.source).toBe('procedural');
+    expect(result.cacheKey).toBe(cacheKey);
+    expect(result.plan.start).toBe('s1');
+    expect(live.nodes[0]?.id).toBe('s10');
+
+    const store = createGameStore();
+    store.requestLevel();
+    store.startSurveying();
+    applyDirectorResult(store, result);
+
+    const deviceId = '11111111-2222-4333-8444-555555555555';
+    const levelKey = resolveLevelKey({
+      planSource: store.planSource,
+      cacheKey: store.cacheKey,
+      seed: store.plan?.seed,
+      tier: store.tier,
+    });
+    expect(levelKey).toBe(cacheKey);
+    expect(store.planSource).toBe('procedural');
+
+    await createResultPoster({
+      fetch: (input, init) =>
+        fetchFn(input, { ...init, signal: new AbortController().signal }),
+      apiBaseUrl: 'http://localhost:3000',
+      deviceId,
+    }).post({
+      levelKey: cacheKey,
+      deviceId,
+      stars: 3,
+      gems: 1,
+      timeMs: 40_000,
+      completed: true,
+      planSource: store.planSource ?? 'procedural',
+    });
+
+    const resultUrl = fetchFn.mock.calls
+      .map(([calledUrl]) => calledUrl)
+      .find((calledUrl) =>
+        calledUrl.includes(`${LEVELS_PATH}/${cacheKey}/result`)
+      );
+    expect(resultUrl).toBe(
+      `http://localhost:3000${LEVELS_PATH}/${cacheKey}/result`
+    );
   });
 
   it('treats a B-02 fixture-id plan as a clean graph-mismatch fallback', async () => {
