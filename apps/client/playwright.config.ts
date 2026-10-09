@@ -8,7 +8,10 @@ export default defineConfig({
   workers: 1,
   reporter: 'list',
   use: {
-    baseURL: 'https://localhost:4173',
+    baseURL:
+      process.env.MVP_BASE_URL ??
+      process.env.X05_BASE_URL ??
+      'https://localhost:4173',
     trace: 'on-first-retry',
     ignoreHTTPSErrors: true,
     screenshot: 'only-on-failure',
