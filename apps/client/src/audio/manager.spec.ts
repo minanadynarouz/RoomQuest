@@ -172,11 +172,13 @@ describe('audio manager', () => {
     store.gemCollected('gem1');
     store.explorerBlocked('unbuiltGap');
     store.advanceBeat();
+    store.completeCurrentBeat();
     store.win();
     store.leverPulled('lev1');
     expect(audio.voices).toBeGreaterThan(8);
     expect(SOUND_MANIFEST.pieceBuilt.synth).toBe('woodClick');
     expect(SOUND_MANIFEST.gateOpened.synth).toBe('marimbaRise');
+    expect(SOUND_MANIFEST.beatCompleted.synth).toBe('marimbaRise');
     expect(SOUND_MANIFEST.won.synth).toBe('chimeSting');
   });
 

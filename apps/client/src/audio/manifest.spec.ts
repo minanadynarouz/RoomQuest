@@ -20,8 +20,8 @@ const STORE_EVENTS: GameEvent['type'][] = [
 
 describe('SOUND_MANIFEST', () => {
   it('defines every store event plus grab and invalidPlace', () => {
-    expect(SOUND_KEYS).toEqual(
-      expect.arrayContaining<SoundKey>([...STORE_EVENTS, 'grab', 'invalidPlace'])
+    expect(new Set(SOUND_KEYS)).toEqual(
+      new Set<SoundKey>([...STORE_EVENTS, 'grab', 'invalidPlace'])
     );
     for (const key of SOUND_KEYS) {
       const entry = SOUND_MANIFEST[key];
