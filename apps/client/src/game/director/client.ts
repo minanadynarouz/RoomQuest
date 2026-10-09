@@ -59,6 +59,33 @@ function stripTrailingSlash(url: string): string {
   return url.endsWith('/') ? url.slice(0, -1) : url;
 }
 
+/**
+ * JSON round-trip of the scanned graph. POST and local re-validation must
+ * use this snapshot: SurfaceGraphSystem may keep mutating the caller's
+ * object as planes/meshes arrive, and node ids are rank-based `s1`..`s12`.
+ */
+export function snapshotSurfaceGraph(graph: SurfaceGraph): SurfaceGraph {
+  try {
+    return JSON.parse(JSON.stringify(graph)) as SurfaceGraph;
+  } catch {
+    return graph;
+  }
+}
+
+function logGraphDrift(current: SurfaceGraph, posted: SurfaceGraph): void {
+  try {
+    if (JSON.stringify(current) === JSON.stringify(posted)) {
+      return;
+    }
+  } catch {
+    return;
+  }
+  console.info(
+    '[director] scanned graph changed during request; validating posted snapshot',
+    { posted, current }
+  );
+}
+
 function formatLocalDate(d: Date): string {
   const year = String(d.getFullYear());
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -225,17 +252,19 @@ export function createDirectorClient(
     graph: SurfaceGraph,
     overrides: RequestPlanOverrides = {}
   ): Promise<DirectorResult> {
+    const postedGraph = snapshotSurfaceGraph(graph);
     const started = nowMs();
     const mode = overrides.directorMode ?? defaultMode;
     const date = overrides.date ?? options.date ?? formatLocalDate(new Date());
-    const seed = overrides.seed ?? options.seed ?? `${graph.roomHash}-${date}`;
+    const seed =
+      overrides.seed ?? options.seed ?? `${postedGraph.roomHash}-${date}`;
     const tier = overrides.tier ?? defaultTier;
     const recentThemes = overrides.recentThemes ?? options.recentThemes;
     const generateOptions =
       recentThemes && recentThemes.length > 0 ? { recentThemes } : undefined;
 
     const genPromise = Promise.resolve().then(() =>
-      generate(graph, seed, tier, generateOptions)
+      generate(postedGraph, seed, tier, generateOptions)
     );
 
     async function useGenerator(
@@ -254,7 +283,7 @@ export function createDirectorClient(
           '[director] generator failed, using generatePlan last resort',
           err
         );
-        plan = generatePlan(graph, seed, tier, generateOptions);
+        plan = generatePlan(postedGraph, seed, tier, generateOptions);
       }
 
       const result = localResult(
@@ -283,7 +312,7 @@ export function createDirectorClient(
 
     const levelsUrl = `${apiBaseUrl}${LEVELS_PATH}`;
     const requestBody: Record<string, unknown> = {
-      graph,
+      graph: postedGraph,
       date,
       tier,
     };
@@ -318,12 +347,14 @@ export function createDirectorClient(
       return useGenerator('invalid-plan');
     }
 
-    // B-02 mock plans use fixture surface ids, not the scanned graph.
-    // `validatePlan` reports UNKNOWN_SURFACE; try `repairPlan` first, then
-    // `generatePlan`. Fixture-id mismatch stays `graph-mismatch` (info).
-    const local = await validate(parsed.data.plan, graph);
+    logGraphDrift(graph, postedGraph);
+
+    // Re-validate against the POSTed snapshot, not a later rebuild of
+    // `graph`. B-02 mock plans still use fixture ids → UNKNOWN_SURFACE →
+    // repair, then generatePlan; that mismatch stays `graph-mismatch`.
+    const local = await validate(parsed.data.plan, postedGraph);
     if (!local.ok) {
-      const repaired = await repair(parsed.data.plan, graph);
+      const repaired = await repair(parsed.data.plan, postedGraph);
       if (repaired.result.ok) {
         const latencyMs = nowMs() - started;
         if (latencyMs > budgetMs) {

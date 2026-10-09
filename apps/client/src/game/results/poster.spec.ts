@@ -44,6 +44,17 @@ describe('resolveLevelKey', () => {
     ).toBe('abcd1234abcd1234');
   });
 
+  it('uses the server cacheKey when planSource is procedural (B-05, no LLM keys)', () => {
+    expect(
+      resolveLevelKey({
+        planSource: 'procedural',
+        cacheKey: '0123456789abcdef',
+        seed: 'f1a2b3c4d5e6-2026-10-09',
+        tier: 'normal',
+      })
+    ).toBe('0123456789abcdef');
+  });
+
   it('uses cacheKey for repaired server plans', () => {
     expect(
       resolveLevelKey({

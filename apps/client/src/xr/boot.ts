@@ -37,6 +37,7 @@ import {
   createGameStore,
   createResultPoster,
   getOrCreateDeviceId,
+  snapshotSurfaceGraph,
 } from '../game/index.js';
 import { bindGuidanceStore, GuidanceSystem } from '../ui/GuidanceSystem.js';
 import {
@@ -362,18 +363,19 @@ async function startPlayableLevel(
     fetch: (input, init) => fetch(input, init),
     apiBaseUrl: import.meta.env.VITE_API_BASE_URL ?? '',
   });
-  const result = await director.requestPlan(graph);
+  const postedGraph = snapshotSurfaceGraph(graph);
+  const result = await director.requestPlan(postedGraph);
   if (!canBuildFromDirector(gameStore.phase)) {
     return;
   }
   applyDirectorResult(gameStore, result);
-  builder.build(result.plan, graph);
-  worldInstance?.getSystem(ExplorerSystem)?.begin(result.plan, graph);
-  worldInstance?.getSystem(PlatformRailSystem)?.bindGraph(graph);
-  worldInstance?.getSystem(SlimeSystem)?.bindGraph(graph);
+  builder.build(result.plan, postedGraph);
+  worldInstance?.getSystem(ExplorerSystem)?.begin(result.plan, postedGraph);
+  worldInstance?.getSystem(PlatformRailSystem)?.bindGraph(postedGraph);
+  worldInstance?.getSystem(SlimeSystem)?.bindGraph(postedGraph);
   gameStore.startPlaying();
   exposeHooks(
-    graph,
+    postedGraph,
     result.plan,
     builder.getSnapTargets(),
     worldInstance ? countDrawCalls(worldInstance.scene) : 0,
