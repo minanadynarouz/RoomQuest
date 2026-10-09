@@ -6,8 +6,18 @@ export default defineConfig({
     environment: 'node',
     coverage: {
       provider: 'v8',
-      include: ['src/validate/**/*.ts'],
-      exclude: ['src/validate/**/*.spec.ts', 'src/validate/spec-helpers.ts'],
+      include: [
+        'src/validate/**/*.ts',
+        'src/repair/**/*.ts',
+        'src/generate/**/*.ts',
+      ],
+      exclude: [
+        'src/validate/**/*.spec.ts',
+        'src/validate/spec-helpers.ts',
+        'src/repair/**/*.spec.ts',
+        'src/generate/**/*.spec.ts',
+        'src/generate/test-graphs.ts',
+      ],
       thresholds: {
         lines: 90,
       },
