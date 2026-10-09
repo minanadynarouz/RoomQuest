@@ -1,16 +1,16 @@
 /**
  * Headed Chromium XR E2E for X-09 against `pnpm dev`.
  *
- * `?fixture=synthetic_living_room&xr=1` boots a real IWER AR session from a
- * user click. Session 1 creates/persists a village hut XRAnchor. Session 2
- * (same origin storage) restores if IWER persistent anchors work; otherwise
- * the clean largest-table fallback is asserted.
+ * Additional `e2e:xr` scenario (imported by x05-xr-hand-pinch.ts). Session 1
+ * creates/persists a village hut XRAnchor. Session 2 (same-origin storage)
+ * restores if IWER persistent anchors work; otherwise the clean largest-table
+ * fallback is asserted.
  */
 import { chromium, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLIENT_ROOT = path.resolve(__dirname, '..');
@@ -47,7 +47,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function startVite(): Promise<{ url: string; stop: () => void }> {
-  const fromEnv = process.env.X09_BASE_URL;
+  const fromEnv = process.env.X05_BASE_URL ?? process.env.X09_BASE_URL;
   if (fromEnv) {
     return { url: fromEnv, stop: () => undefined };
   }
@@ -240,14 +240,15 @@ async function runSession(
   return { status, handle, iwer };
 }
 
-async function main(): Promise<void> {
+export async function runVillageAnchorScenario(options: {
+  browser: Browser;
+  baseUrl: string;
+}): Promise<void> {
   await mkdir(OUT_DIR, { recursive: true });
-  const server = await startVite();
-  const browser = await launchBrowser();
-  const context = await browser.newContext({ ignoreHTTPSErrors: true });
+  const context = await options.browser.newContext({ ignoreHTTPSErrors: true });
   let restoreWorked = false;
   try {
-    const first = await runSession(context, server.url, 'session-1.png');
+    const first = await runSession(context, options.baseUrl, 'session-1.png');
     if (first.status.placement === 'restored') {
       throw new Error(
         `session 1 should not restore without a prior handle: ${JSON.stringify(first.status)}`
@@ -255,7 +256,7 @@ async function main(): Promise<void> {
     }
     assertFallback(first.status, 'session 1');
 
-    const second = await runSession(context, server.url, 'session-2.png');
+    const second = await runSession(context, options.baseUrl, 'session-2.png');
     const canRestore =
       first.status.persistentAnchorsSupported &&
       Boolean(first.handle) &&
@@ -296,12 +297,24 @@ async function main(): Promise<void> {
     );
   } finally {
     await context.close();
+  }
+}
+
+async function main(): Promise<void> {
+  const server = await startVite();
+  const browser = await launchBrowser();
+  try {
+    await runVillageAnchorScenario({ browser, baseUrl: server.url });
+  } finally {
     await browser.close();
     server.stop();
   }
 }
 
-main().catch((error: unknown) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+const entry = process.argv[1] ? path.resolve(process.argv[1]) : '';
+if (entry && import.meta.url === pathToFileURL(entry).href) {
+  main().catch((error: unknown) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}
