@@ -167,7 +167,30 @@ Requests with no `Origin` (curl, server-side) are allowed. Blocked origins are n
 
 - **helmet** security headers.
 - **nestjs-pino** structured JSON logs (pino-pretty in `NODE_ENV=development`). Each request has an id (`X-Request-Id`).
-- Env is validated with a zod schema at startup (`PORT`, `NODE_ENV`, `DIRECTOR_MODE`, `CORS_ORIGINS`, `GIT_SHA`, optional `GOOGLE_API_KEY` / `ANTHROPIC_API_KEY` / `DATABASE_URL` / `DIRECT_URL` / `DIRECTOR_MODEL` / `FALLBACK_MODEL`). See `.env.example`.
+- Env is validated with a zod schema at startup (see **Environment variables** below). Extra keys are stripped. Missing optional keys use the documented defaults.
+
+## Environment variables
+
+Validated in `apps/api/src/config/env.ts`. Copy `.env.example` (repo root or `apps/api/.env.example`) to `.env` — never commit secrets.
+
+None of these are required to start the API. CI does not set a database. Local DB, when used, is **Docker Postgres 17** only (B-10 does not create Render or Neon projects).
+
+| Name | Required | Default | Example | Environments |
+| --- | --- | --- | --- | --- |
+| `PORT` | optional | `3000` | `3000` | **local**. Render injects `PORT` at runtime; it is not in `render.yaml`. |
+| `NODE_ENV` | optional | `development` | `development` / `test` / `production` | **local** `development`; **CI** / Vitest `test`; **staging** / **prod** `production`. |
+| `DIRECTOR_MODE` | optional | `mock` | `mock` / `live` | **local** / **CI** `mock`; **staging** / **prod** `live` (or `mock` until B-05). |
+| `CORS_ORIGINS` | optional | `http://localhost:5173,https://localhost:5173` | `http://localhost:5173,https://localhost:5173,https://roomquest.vercel.app` | **all**. Comma-separated extra origins. Vercel preview hosts and `https://localhost:*` are hardcoded in CORS. |
+| `GIT_SHA` | optional | `dev` (empty/unset also becomes `dev`) | `9f8e7d6c5b4a3210` | **local** `dev`; **staging** / **prod** = deployed git sha (set by the deploy workflow). |
+| `DIRECTOR_MODEL` | optional | unset (B-05 uses `gemini-3.8-flash`) | `gemini-3.8-flash` | **staging** / **prod**; **local** only when exercising live director. |
+| `FALLBACK_MODEL` | optional | unset (B-05 uses `claude-haiku-4-5`) | `claude-haiku-4-5` | **staging** / **prod**; **local** only when exercising live director. |
+| `GOOGLE_API_KEY` | optional | unset | Gemini API key (never commit) | **staging** / **prod** when `DIRECTOR_MODE=live`; **local** only for live director tests. Blank → health `llm:"missing"`. |
+| `ANTHROPIC_API_KEY` | optional | unset | Anthropic API key (never commit) | **staging** / **prod** fallback; **local** only for live director tests. Either key makes health `llm:"configured"`. |
+| `DATABASE_URL` | optional | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **local** Docker Postgres 17 (runtime / pooled). **staging** / **prod**: Neon pooled URL — declared in `render.yaml`, values set later (M-10). Unset or unreachable → health `db:"down"`; process still 200. |
+| `DIRECT_URL` | optional | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **local** Docker (Prisma CLI / `pnpm --filter api db:migrate`). **staging** / **prod**: Neon unpooled URL for `migrate deploy` (GitHub Environments, L-03 / L-04). |
+| `NODE_VERSION` | Render build only (not read by Nest) | `22` in `render.yaml` | `22` | **staging** / **prod** Render native runtime. **local** uses `.nvmrc` (`22`). |
+
+`render.yaml` lists the staging/prod keys with `sync: false` so the blueprint never stores secret values. How to fill them later: `docs/deploy-api.md`.
 
 ## Local run (no database)
 

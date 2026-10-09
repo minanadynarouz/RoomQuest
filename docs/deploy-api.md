@@ -1,8 +1,12 @@
 # Deploy the Roomquest API (Render + Neon)
 
-The Nest API runs on **Render** (Oregon, Node 22). Postgres lives on **Neon Free** (AWS us-west-2). This ticket (B-10) ships the blueprint and Prisma config; staging/prod deploy hooks are L-03 / L-04.
+The Nest API is **meant** to run on **Render** (Oregon, Node 22) with Postgres on **Neon Free** (AWS us-west-2). This ticket (B-10) only ships the blueprint, Prisma config, and local Docker Postgres 17.
 
-## 1. Neon project and branches
+**Out of scope here:** do not create Render or Neon accounts, projects, services, or branches. Do not call the Render/Neon APIs or CLIs. Mina / the Lead create those later (M-10, L-03, L-04). Local verification is Docker only.
+
+The complete API env-var list (name, required/optional, default, example, environments) lives in **`docs/api.md` § Environment variables** and in **`.env.example`**.
+
+## 1. Neon project and branches (later — do not run in B-10)
 
 1. Create a Neon project named `roomquest` in **AWS us-west-2** (closest to Render Oregon).
 2. The default branch is **`main`** — use this for production.
@@ -11,9 +15,9 @@ The Nest API runs on **Render** (Oregon, Node 22). Postgres lives on **Neon Free
    - **Pooled** (`-pooler` in the hostname) → `DATABASE_URL` (runtime, Prisma Neon adapter).
    - **Direct** (no `-pooler`) → `DIRECT_URL` (Prisma CLI / `migrate deploy`).
 
-Locally you can skip Neon and use Docker Postgres 17 instead (see below).
+Until then, use Docker Postgres 17 (section 4).
 
-## 2. Create the Render blueprint
+## 2. Create the Render blueprint (later — do not run in B-10)
 
 1. In Render: **New → Blueprint**.
 2. Select this repo. Render reads `render.yaml` at the repo root.
@@ -27,9 +31,9 @@ Build: `corepack enable && pnpm i --frozen-lockfile && pnpm turbo run build --fi
 Start: `node apps/api/dist/main.js`  
 Health: `GET /api/health` (always 200 if the process is up; `db` may be `"down"`).
 
-## 3. Env vars (per Render service)
+## 3. Env vars (per Render service, later)
 
-Set these in the Render Dashboard. They are declared with `sync: false` so this file never holds secrets.
+Set these in the Render Dashboard. They are declared with `sync: false` so `render.yaml` never holds secrets. See `docs/api.md` for defaults and local examples.
 
 | Key | Staging | Production |
 | --- | --- | --- |
@@ -53,7 +57,7 @@ GitHub Actions (not Render) also needs:
 
 Migrations run in CI (`prisma migrate deploy` with `DIRECT_URL`) before the Render deploy hook, not inside the web process.
 
-## 4. Local Postgres 17
+## 4. Local Postgres 17 (this ticket)
 
 ```bash
 docker compose up -d
