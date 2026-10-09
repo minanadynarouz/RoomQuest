@@ -6,7 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 export interface HealthResponse {
   status: 'ok';
   version: string;
-  db: 'ok' | 'down';
+  db: 'up' | 'down' | 'disabled';
   llm: 'configured' | 'missing';
   /** ISO 8601 UTC timestamp. */
   time: string;
@@ -28,7 +28,7 @@ export class HealthService {
     return {
       status: 'ok',
       version: this.config.get('GIT_SHA', { infer: true }),
-      db: (await this.prisma.ping()) ? 'ok' : 'down',
+      db: await this.prisma.dbHealth(),
       llm: isLlmConfigured(env) ? 'configured' : 'missing',
       time: new Date().toISOString(),
     };

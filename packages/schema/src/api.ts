@@ -71,22 +71,49 @@ export const ApiError = z.object({
 export type ApiError = z.infer<typeof ApiError>;
 
 /**
+ * Upper bound on submitted play time. Sessions target 10 minutes; one hour
+ * is enough for abandoned runs without allowing multi-day junk values.
+ */
+export const RESULT_TIME_MS_MAX = 3_600_000;
+
+/**
  * Session result submission
  * POST /api/v1/levels/:cacheKey/result
  */
 export const ResultRequest = z.object({
+  /** Anonymous device id (UUID v4), same value as `X-Device-Id` on /levels */
+  deviceId: z.uuidv4(),
   /** Stars earned (0..3) */
   stars: z.number().int().min(0).max(3),
-  /** Gems collected (0..5) */
-  gems: z.number().int().min(0).max(5),
-  /** Time taken in milliseconds */
-  timeMs: z.number().int().min(0),
+  /** Gems collected */
+  gems: z.number().int().min(0),
+  /** Time taken in milliseconds (positive, ≤ 1 hour) */
+  timeMs: z.number().int().positive().max(RESULT_TIME_MS_MAX),
   /** Whether the level was completed */
   completed: z.boolean(),
-  /** Source of the plan that was played */
+  /** Source of the plan that was played (`LevelResponse.source`) */
   planSource: PlanSource,
 });
 export type ResultRequest = z.infer<typeof ResultRequest>;
+
+/**
+ * Successful insert
+ * 201 `{ id }`
+ */
+export const ResultResponse = z.object({
+  /** SessionResult primary key */
+  id: z.string().min(1),
+});
+export type ResultResponse = z.infer<typeof ResultResponse>;
+
+/**
+ * Accepted but not persisted (no database / unreachable database)
+ * 202 `{ stored: false }`
+ */
+export const ResultDeferred = z.object({
+  stored: z.literal(false),
+});
+export type ResultDeferred = z.infer<typeof ResultDeferred>;
 
 /**
  * Rate limit error with retry timing

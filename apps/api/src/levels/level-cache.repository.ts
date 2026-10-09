@@ -33,10 +33,7 @@ export class LevelCacheRepository {
    * in the same process can hit.
    */
   async lookup(key: string): Promise<LevelCacheRow | null> {
-    const pending = this.inflight.get(key);
-    if (pending !== undefined) {
-      await pending;
-    }
+    await this.waitForInflight(key);
 
     const client = this.prisma.getClient();
     if (client === null) {
@@ -118,6 +115,17 @@ export class LevelCacheRepository {
       if (this.inflight.get(row.key) !== undefined) {
         this.inflight.delete(row.key);
       }
+    }
+  }
+
+  /**
+   * Wait for an in-flight upsert of `key` so a follow-up `/result` in the
+   * same process can see the row before the HTTP write wait elapses.
+   */
+  async waitForInflight(key: string): Promise<void> {
+    const pending = this.inflight.get(key);
+    if (pending !== undefined) {
+      await pending;
     }
   }
 

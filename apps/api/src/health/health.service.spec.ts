@@ -5,23 +5,30 @@ import { validateEnv } from '../config/env';
 import { PrismaService } from '../prisma/prisma.service';
 import { HealthService } from './health.service';
 
-async function healthWithPing(ping: () => Promise<boolean>): Promise<{
-  db: 'ok' | 'down';
+async function healthWithDb(
+  db: 'up' | 'down' | 'disabled',
+  gitSha?: string
+): Promise<{
+  db: 'up' | 'down' | 'disabled';
   status: 'ok';
+  version: string;
 }> {
   const moduleRef = await Test.createTestingModule({
     imports: [
       ConfigModule.forRoot({
         isGlobal: true,
         ignoreEnvFile: true,
-        validate: (config: Record<string, unknown>) => validateEnv(config),
+        validate: (config: Record<string, unknown>) =>
+          validateEnv(
+            gitSha === undefined ? config : { ...config, GIT_SHA: gitSha }
+          ),
       }),
     ],
     providers: [
       HealthService,
       {
         provide: PrismaService,
-        useValue: { ping: vi.fn(ping) },
+        useValue: { dbHealth: vi.fn(() => Promise.resolve(db)) },
       },
     ],
   }).compile();
@@ -33,15 +40,27 @@ async function healthWithPing(ping: () => Promise<boolean>): Promise<{
 }
 
 describe('HealthService', () => {
-  it("reports db:'ok' when the Prisma ping succeeds", async () => {
-    const body = await healthWithPing(() => Promise.resolve(true));
+  it("reports db:'up' when the Prisma ping succeeds", async () => {
+    const body = await healthWithDb('up');
     expect(body.status).toBe('ok');
-    expect(body.db).toBe('ok');
+    expect(body.db).toBe('up');
+    expect(body.version.length).toBeGreaterThan(0);
   });
 
   it("reports db:'down' when the Prisma ping fails", async () => {
-    const body = await healthWithPing(() => Promise.resolve(false));
+    const body = await healthWithDb('down');
     expect(body.status).toBe('ok');
     expect(body.db).toBe('down');
+  });
+
+  it("reports db:'disabled' when DATABASE_URL is unset", async () => {
+    const body = await healthWithDb('disabled');
+    expect(body.status).toBe('ok');
+    expect(body.db).toBe('disabled');
+  });
+
+  it('reports GIT_SHA as version', async () => {
+    const body = await healthWithDb('up', 'abc123deadbeef');
+    expect(body.version).toBe('abc123deadbeef');
   });
 });

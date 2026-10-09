@@ -8,18 +8,24 @@ import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env';
 import { PrismaClient } from '../generated/prisma/client';
 import { createPrismaAdapter } from './create-adapter';
+import { pingWithTimeout } from './ping';
 
 export const PRISMA_PING_TIMEOUT_MS = 2_000;
+
+export type DbHealth = 'up' | 'down' | 'disabled';
 
 @Injectable()
 export class PrismaService implements OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
   private readonly client: PrismaClient | null;
+  /** True only when DATABASE_URL is unset — not when the URL is bad. */
+  private readonly disabled: boolean;
 
   constructor(
     @Inject(ConfigService) private readonly config: ConfigService<Env, true>
   ) {
     const url = this.config.get('DATABASE_URL', { infer: true });
+    this.disabled = url === undefined;
     this.client = url === undefined ? null : this.tryCreateClient(url);
   }
 
@@ -34,34 +40,29 @@ export class PrismaService implements OnModuleDestroy {
   /**
    * True when a client exists and `SELECT 1` succeeds within the ping budget.
    * Never throws: a missing URL, a bad URL, or an unreachable DB are all
-   * reported as down so the API can boot in mock mode.
+   * reported as false so the API can boot in mock mode.
    */
   async ping(): Promise<boolean> {
-    if (this.client === null) {
+    const client = this.client;
+    if (client === null) {
       return false;
     }
-    let handle: ReturnType<typeof setTimeout> | undefined;
-    try {
-      await Promise.race([
-        this.client.$queryRawUnsafe('SELECT 1'),
-        new Promise<never>((_, reject) => {
-          handle = setTimeout(() => {
-            reject(
-              new Error(
-                `Prisma ping timed out after ${String(PRISMA_PING_TIMEOUT_MS)}ms`
-              )
-            );
-          }, PRISMA_PING_TIMEOUT_MS);
-        }),
-      ]);
-      return true;
-    } catch {
-      return false;
-    } finally {
-      if (handle !== undefined) {
-        clearTimeout(handle);
-      }
+    return pingWithTimeout(
+      () => client.$queryRawUnsafe('SELECT 1'),
+      PRISMA_PING_TIMEOUT_MS
+    );
+  }
+
+  /**
+   * Health `db` field: `"disabled"` when `DATABASE_URL` is unset, `"up"`
+   * when a bounded ping succeeds, `"down"` when the URL is set but Postgres
+   * is unreachable or the client failed to start.
+   */
+  async dbHealth(): Promise<DbHealth> {
+    if (this.disabled) {
+      return 'disabled';
     }
+    return (await this.ping()) ? 'up' : 'down';
   }
 
   async onModuleDestroy(): Promise<void> {

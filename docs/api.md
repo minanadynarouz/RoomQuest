@@ -1,7 +1,7 @@
 # Roomquest API
 
 Source of truth for these endpoints: architecture §6 (`docs/ARCHITECTURE-AND-PLAN.md`).
-This document describes the API contract. B-02 shipped the skeleton and mock director; B-10 adds optional Prisma/Neon (health `db` ping); B-05 adds the live LangChain director; B-06 adds the Postgres level cache, daily seed, and rate limits; B-07 adds the LLM eval harness (`pnpm --filter api eval`). B-09 (results) still comes later.
+This document describes the API contract. B-02 shipped the skeleton and mock director; B-10 adds optional Prisma/Neon (health `db` ping); B-05 adds the live LangChain director; B-06 adds the Postgres level cache, daily seed, and rate limits; B-07 adds the LLM eval harness (`pnpm --filter api eval`); B-09 adds `POST /api/v1/levels/:cacheKey/result`, helmet, the 16 KB body limit, request ids, and health `version` + `db`.
 
 ## Base URL
 
@@ -19,12 +19,15 @@ JSON only. Request body ≤ **16 KB**.
 
 ## Routes
 
-| Method & path         | Request                                                                           | Success                                     | Errors                                                                                                                                                                          |
-| --------------------- | --------------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/health`     | none                                                                              | `200 {status:"ok", version, db, llm, time}` | none (always 200 if the process is up)                                                                                                                                          |
-| `POST /api/v1/levels` | Headers `X-Device-Id` (UUID v4), `X-Client-Version` (semver). Body `LevelRequest` | `200 LevelResponse`                         | `400 {error:{code:"INVALID_REQUEST", message, issues}}` · `413` oversized body (see below) · `429 {error:{code:"RATE_LIMITED", retryAfterS}}` · `500 {error:{code:"INTERNAL"}}` |
+| Method & path                              | Request                                                                           | Success                                     | Errors                                                                                                                       |
+| ------------------------------------------ | --------------------------------------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/health`                          | none                                                                              | `200 {status:"ok", version, db, llm, time}` | none (always 200 if the process is up)                                                                                       |
+| `POST /api/v1/levels`                      | Headers `X-Device-Id` (UUID v4), `X-Client-Version` (semver). Body `LevelRequest` | `200 LevelResponse`                         | `400 {error:{code:"INVALID_REQUEST", message, issues}}` · `413` oversized body (see below) · `429 {error:{code:"RATE_LIMITED", retryAfterS}}` · `500 {error:{code:"INTERNAL"}}` |
+| `POST /api/v1/levels/:cacheKey/result`     | Path `:cacheKey` (16-hex cache hash **or** `proc:<seed>:<tier>`). Body `ResultRequest` | `201 {id}` · `202 {stored:false}` (no DB)   | `400 {error:{code:"INVALID_REQUEST", message, issues}}` (bad body, malformed `proc:` key, or `proc:` + non-`procedural` `planSource`) · `404 {error:{code:"UNKNOWN_LEVEL"}}` (director cache key missing) · `413` · `429 {error:{code:"RATE_LIMITED", retryAfterS}}` |
 
-Out of scope here: `POST /api/v1/levels/:cacheKey/result` (B-09), `POST /api/v1/levels/:cacheKey/adapt` (post-MVP).
+Out of scope here: `POST /api/v1/levels/:cacheKey/adapt` (post-MVP).
+
+Every response includes `X-Request-Id` (echoed from the request, or a generated UUID). Helmet security headers are set on every response.
 
 ---
 
@@ -36,19 +39,19 @@ Always **200** while the Node process is up. Used by the landing-page pre-warm a
 {
   "status": "ok",
   "version": "dev",
-  "db": "down",
+  "db": "disabled",
   "llm": "missing",
   "time": "2026-10-09T08:00:00.000Z"
 }
 ```
 
-| Field     | Meaning                                                                                                                                                                             |
-| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `status`  | Always `"ok"`.                                                                                                                                                                      |
-| `version` | `GIT_SHA` env var. Local default `"dev"` when unset or empty. Staging/prod should set this to the git commit sha.                                                                   |
-| `db`      | `"ok"` or `"down"`. `"ok"` when `DATABASE_URL` is set and a `SELECT 1` ping succeeds; `"down"` when the URL is unset or the database is unreachable. The process still returns 200. |
-| `llm`     | `"configured"` if `GOOGLE_API_KEY` or `ANTHROPIC_API_KEY` is a non-empty string, else `"missing"`. Keys are not required to start the API.                                          |
-| `time`    | ISO 8601 UTC timestamp (`Date.toISOString()`).                                                                                                                                      |
+| Field     | Meaning                                                                                                                                    |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `status`  | Always `"ok"`.                                                                                                                             |
+| `version` | `GIT_SHA` env var. Local default `"dev"` when unset or empty. Staging/prod should set this to the git commit sha.                          |
+| `db`      | `"up"` \| `"down"` \| `"disabled"`. `"disabled"` when `DATABASE_URL` is unset; `"up"` when a bounded `SELECT 1` ping succeeds; `"down"` when the URL is set but Postgres is unreachable (the ping is capped at 2 s). The process still returns 200. |
+| `llm`     | `"configured"` if `GOOGLE_API_KEY` or `ANTHROPIC_API_KEY` is a non-empty string, else `"missing"`. Keys are not required to start the API. |
+| `time`    | ISO 8601 UTC timestamp (`Date.toISOString()`).                                                                                             |
 
 ---
 
@@ -60,7 +63,7 @@ Always **200** while the Node process is up. Used by the landing-page pre-warm a
 | ------------------ | --------------------------------------------------------------------------------------------- |
 | `X-Device-Id`      | UUID v4 (required). Missing or invalid → 400.                                                 |
 | `X-Client-Version` | Semver `MAJOR.MINOR.PATCH` with optional prerelease / build (required).                       |
-| `X-Request-Id`     | Optional. Echoed on the response and included in pino logs. Generated as a UUID when omitted. |
+| `X-Request-Id`     | Optional on every route. Echoed on the response and included as `requestId` in every pino log line. Generated as a UUID when omitted. |
 
 ### Body (`LevelRequest` from `@roomquest/schema`)
 
@@ -108,6 +111,78 @@ The API never returns 5xx for LLM problems (architecture §6.6): it degrades to 
 
 ---
 
+## `POST /api/v1/levels/:cacheKey/result`
+
+Anonymous session result. Covered by the same per-IP `@nestjs/throttler` guard as `POST /api/v1/levels` (60/hour). The per-device cache-miss limiter does **not** apply. `X-Device-Id` / `X-Client-Version` are not required on this route; `deviceId` is in the body.
+
+### Path `:cacheKey`
+
+Two key shapes. Client and server must build `proc:` keys with `procLevelKey(seed, tier)` from `@roomquest/schema` (regex `PROC_LEVEL_KEY_RE`).
+
+| Kind | Example | Lookup |
+| --- | --- | --- |
+| Director cache hash | `a1b2c3d4e5f67890` (first 16 hex chars of `sha256(roomHash\|date\|tier\|promptVersion)`) | Must exist on `LevelCache`. Missing → **404** `UNKNOWN_LEVEL` (only when the DB is up). |
+| Client procedural | `proc:<seed>:<tier>` e.g. `proc:f1a2b3c4d5e6-2026-10-14:easy` | **Not** looked up in `LevelCache`. `seed` is the same string (or stringified number) passed to `generatePlan`; `tier` is `"easy"` \| `"normal"`. Seed must be non-empty and must not contain `:`. |
+
+A key that starts with `proc:` but does not match `proc:<seed>:<easy\|normal>` is **400** (`INVALID_REQUEST`), not 404.
+
+A valid `proc:` key **requires** `planSource: "procedural"`. Any other `planSource` is **400**.
+
+Stored row: `SessionResult.levelKey` is always the posted key. `SessionResult.cacheKey` (FK to `LevelCache`) is set only for director cache hashes; it is `null` for `proc:` keys.
+
+### Headers
+
+| Header         | Rule                                                                                          |
+| -------------- | --------------------------------------------------------------------------------------------- |
+| `X-Request-Id` | Optional. Echoed on the response and included in pino logs. Generated as a UUID when omitted. |
+
+### Body (`ResultRequest` from `@roomquest/schema`)
+
+```json
+{
+  "deviceId": "550e8400-e29b-41d4-a716-446655440000",
+  "stars": 3,
+  "gems": 2,
+  "timeMs": 180000,
+  "completed": true,
+  "planSource": "procedural"
+}
+```
+
+| Field        | Rule                                                                                          |
+| ------------ | --------------------------------------------------------------------------------------------- |
+| `deviceId`   | UUID v4.                                                                                      |
+| `stars`      | Integer 0–3.                                                                                  |
+| `gems`       | Integer ≥ 0.                                                                                  |
+| `timeMs`     | Positive integer, max `3600000` (1 hour).                                                     |
+| `completed`  | Boolean.                                                                                      |
+| `planSource` | Same enum as `LevelResponse.source`: `"cache"` \| `"llm"` \| `"llm_repaired"` \| `"procedural"`. |
+
+### Success
+
+**201** when the row is inserted into `SessionResult`. For a director cache hash the `:cacheKey` must exist on `LevelCache`. For a valid `proc:` key there is no cache lookup.
+
+```json
+{ "id": "clxyz0123456789" }
+```
+
+**202** when `DATABASE_URL` is unset or Postgres is unreachable. The client must not treat this as an error:
+
+```json
+{ "stored": false }
+```
+
+### Errors
+
+| Status | Envelope |
+| --- | --- |
+| 400 | `{error:{code:"INVALID_REQUEST", message, issues}}` — zod failed on the body, the `proc:` key is malformed, or a `proc:` key was posted with `planSource` other than `"procedural"` |
+| 404 | `{error:{code:"UNKNOWN_LEVEL", message}}` — no `LevelCache` row for a **non-proc** `:cacheKey` (only when the DB is up). `proc:` keys never 404. |
+| 413 | `{error:{code:"INVALID_REQUEST", message:"Request body exceeds 16 KB limit"}}` |
+| 429 | `{error:{code:"RATE_LIMITED", retryAfterS}}` — per-IP budget |
+
+---
+
 ## Errors
 
 No stack traces are included in responses.
@@ -141,6 +216,19 @@ JSON bodies larger than 16 KB are rejected **before** zod parsing:
 
 Architecture §6 lists 400 / 429 / 500. 413 is the HTTP status for payload too large; the envelope still uses `INVALID_REQUEST`.
 
+### 404 Unknown level
+
+Returned only by `POST /api/v1/levels/:cacheKey/result` when the database is up, the key is **not** a `proc:` key, and no `LevelCache` row matches `:cacheKey`:
+
+```json
+{
+  "error": {
+    "code": "UNKNOWN_LEVEL",
+    "message": "Unknown cache key"
+  }
+}
+```
+
 ### 429 Rate limited
 
 ```json
@@ -157,10 +245,10 @@ The `Retry-After` header is set to the same `retryAfterS` value (seconds).
 
 Two independent limiters (both **in-memory in this process** for the MVP — they reset on deploy / Render sleep; not shared across instances, no Redis):
 
-| Limiter                              | Key                                                    | Budget        | Counts                                            |
-| ------------------------------------ | ------------------------------------------------------ | ------------- | ------------------------------------------------- |
-| `@nestjs/throttler` guard            | client IP (`X-Forwarded-For` when `trust proxy` is on) | **60 / hour** | every `POST /api/v1/levels`, including cache hits |
-| Custom limiter in the levels service | `X-Device-Id`                                          | **10 / hour** | **cache misses only** (a valid cache hit is free) |
+| Limiter | Key | Budget | Counts |
+| --- | --- | --- | --- |
+| `@nestjs/throttler` guard | client IP (`X-Forwarded-For` when `trust proxy` is on) | **60 / hour** | every `POST` under `/api/v1/levels`, including cache hits and `/result` |
+| Custom limiter in the levels service | `X-Device-Id` | **10 / hour** | **cache misses only** (a valid cache hit is free) |
 
 The 11th cache miss from one device in an hour is 429. Health is not throttled.
 
@@ -193,9 +281,10 @@ Requests with no `Origin` (curl, server-side) are allowed. Blocked origins are n
 
 ## Runtime extras
 
-- **helmet** security headers.
-- **nestjs-pino** structured JSON logs (pino-pretty in `NODE_ENV=development`). Each request has an id (`X-Request-Id`).
-- **`@nestjs/throttler`** per-IP guard (60/h) on `POST /api/v1/levels`, plus the per-device cache-miss limiter (10/h). In-memory; see **429 Rate limited**.
+- **helmet** security headers (`X-Content-Type-Options`, `X-Frame-Options`, `Cross-Origin-Resource-Policy: cross-origin`, and the rest of helmet 8 defaults).
+- **nestjs-pino** structured JSON logs (pino-pretty in `NODE_ENV=development`). Each request has an id (`X-Request-Id`); the same value is the `requestId` field on every log line.
+- **`@nestjs/throttler`** per-IP guard (60/h) on every `POST` under `/api/v1/levels` (including `/result`), plus the per-device cache-miss limiter (10/h) on `/levels` only. In-memory; see **429 Rate limited**.
+- **16 KB JSON body limit** — larger bodies return 413 before zod parsing.
 - Env is validated with a zod schema at startup (see **Environment variables** below). Extra keys are stripped. Missing optional keys use the documented defaults.
 
 ## Environment variables
@@ -204,21 +293,21 @@ Validated in `apps/api/src/config/env.ts`. Copy `.env.example` (repo root or `ap
 
 None of these are required to start the API. CI does not set a database. Local DB, when used, is **Docker Postgres 17** only (B-10 does not create Render or Neon projects).
 
-| Name                | Required                             | Default                                        | Example                                                                     | Environments                                                                                                                                                                                                                                                    |
-| ------------------- | ------------------------------------ | ---------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORT`              | optional                             | `3000`                                         | `3000`                                                                      | **local**. Render injects `PORT` at runtime; it is not in `render.yaml`.                                                                                                                                                                                        |
-| `NODE_ENV`          | optional                             | `development`                                  | `development` / `test` / `production`                                       | **local** `development`; **CI** / Vitest `test`; **staging** / **prod** `production`.                                                                                                                                                                           |
-| `DIRECTOR_MODE`     | optional                             | `mock`                                         | `mock` / `live`                                                             | **local** / **CI** `mock`; **staging** / **prod** `live`.                                                                                                                                                                                                       |
-| `CORS_ORIGINS`      | optional                             | `http://localhost:5173,https://localhost:5173` | `http://localhost:5173,https://localhost:5173,https://roomquest.vercel.app` | **all**. Comma-separated extra origins. Vercel preview hosts and `https://localhost:*` are hardcoded in CORS.                                                                                                                                                   |
-| `GIT_SHA`           | optional                             | `dev` (empty/unset also becomes `dev`)         | `9f8e7d6c5b4a3210`                                                          | **local** `dev`; **staging** / **prod** = deployed git sha (set by the deploy workflow).                                                                                                                                                                        |
-| `DIRECTOR_MODEL`    | optional                             | `gemini-3.8-flash`                             | `gemini-3.8-flash`                                                          | **staging** / **prod**; **local** only when exercising live director.                                                                                                                                                                                           |
-| `FALLBACK_MODEL`    | optional                             | `claude-haiku-4-5`                             | `claude-haiku-4-5`                                                          | **staging** / **prod**; **local** only when exercising live director.                                                                                                                                                                                           |
-| `GOOGLE_API_KEY`    | optional                             | unset                                          | Gemini API key (never commit)                                               | **staging** / **prod** when `DIRECTOR_MODE=live`; **local** live director / **eval** (`pnpm --filter api eval`). Also a **GitHub Actions repository secret** for `.github/workflows/eval.yml`. Blank → health `llm:"missing"`; live eval skips unless `--mock`. |
-| `ANTHROPIC_API_KEY` | optional                             | unset                                          | Anthropic API key (never commit)                                            | **staging** / **prod** fallback; **local** live director / **eval**. Optional **GitHub Actions repository secret** for `eval.yml`. Either key makes health `llm:"configured"`.                                                                                  |
-| `DATABASE_URL`      | optional                             | unset                                          | `postgresql://postgres:postgres@localhost:5432/roomquest`                   | **local** Docker Postgres 17 (runtime / pooled). **staging** / **prod**: Neon pooled URL — declared in `render.yaml`, values set later (M-10). Unset or unreachable → health `db:"down"`, `/levels` serves without cache (warning logged); process still 200.   |
-| `DIRECT_URL`        | optional                             | unset                                          | `postgresql://postgres:postgres@localhost:5432/roomquest`                   | **local** Docker (Prisma CLI / `pnpm --filter api db:migrate`). **staging** / **prod**: Neon unpooled URL for `migrate deploy` (GitHub Environments, L-03 / L-04).                                                                                              |
-| `NODE_VERSION`      | Render build only (not read by Nest) | `22` in `render.yaml`                          | `22`                                                                        | **staging** / **prod** Render native runtime. **local** uses `.nvmrc` (`22`).                                                                                                                                                                                   |
-| `TEST_DATABASE_URL` | tests only (not read by Nest)        | unset                                          | `postgresql://postgres:postgres@localhost:5432/roomquest`                   | **CI** test job (GitHub Actions `postgres:17` service). **local** cache integration tests when Docker Postgres is up. When unset, those tests skip unless `CI=true` (then they fail).                                                                           |
+| Name | Required | Default | Example | Environments |
+| --- | --- | --- | --- | --- |
+| `PORT` | optional | `3000` | `3000` | **local**. Render injects `PORT` at runtime; it is not in `render.yaml`. |
+| `NODE_ENV` | optional | `development` | `development` / `test` / `production` | **local** `development`; **CI** / Vitest `test`; **staging** / **prod** `production`. |
+| `DIRECTOR_MODE` | optional | `mock` | `mock` / `live` | **local** / **CI** `mock`; **staging** / **prod** `live`. |
+| `CORS_ORIGINS` | optional | `http://localhost:5173,https://localhost:5173` | `http://localhost:5173,https://localhost:5173,https://roomquest.vercel.app` | **all**. Comma-separated extra origins. Vercel preview hosts and `https://localhost:*` are hardcoded in CORS. |
+| `GIT_SHA` | optional | `dev` (empty/unset also becomes `dev`) | `9f8e7d6c5b4a3210` | **local** `dev`; **staging** / **prod** = deployed git sha (set by the deploy workflow). |
+| `DIRECTOR_MODEL` | optional | `gemini-3.8-flash` | `gemini-3.8-flash` | **staging** / **prod**; **local** only when exercising live director. |
+| `FALLBACK_MODEL` | optional | `claude-haiku-4-5` | `claude-haiku-4-5` | **staging** / **prod**; **local** only when exercising live director. |
+| `GOOGLE_API_KEY` | optional | unset | Gemini API key (never commit) | **staging** / **prod** when `DIRECTOR_MODE=live`; **local** live director / **eval** (`pnpm --filter api eval`). Also a **GitHub Actions repository secret** for `.github/workflows/eval.yml`. Blank → health `llm:"missing"`; live eval skips unless `--mock`. |
+| `ANTHROPIC_API_KEY` | optional | unset | Anthropic API key (never commit) | **staging** / **prod** fallback; **local** live director / **eval**. Optional **GitHub Actions repository secret** for `eval.yml`. Either key makes health `llm:"configured"`. |
+| `DATABASE_URL` | optional | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **local** Docker Postgres 17 (runtime / pooled). **staging** / **prod**: Neon pooled URL — declared in `render.yaml`, values set later (M-10). Unset → health `db:"disabled"`; unreachable → health `db:"down"`. `/levels` still serves without cache (warning logged); `/result` returns `202 {stored:false}`; process still 200. |
+| `DIRECT_URL` | optional | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **local** Docker (Prisma CLI / `pnpm --filter api db:migrate`). **staging** / **prod**: Neon unpooled URL for `migrate deploy` (GitHub Environments, L-03 / L-04). |
+| `NODE_VERSION` | Render build only (not read by Nest) | `22` in `render.yaml` | `22` | **staging** / **prod** Render native runtime. **local** uses `.nvmrc` (`22`). |
+| `TEST_DATABASE_URL` | tests only (not read by Nest) | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **CI** test job (GitHub Actions `postgres:17` service). **local** cache integration tests when Docker Postgres is up. When unset, those tests skip unless `CI=true` (then they fail). |
 
 No extra env knobs for rate limits: 60/h per IP and 10 cache-misses/h per device are constants. Counters live in process memory.
 
@@ -258,6 +347,6 @@ The workflow sets `DIRECTOR_MODE=live` and reads the API keys from those **exact
 pnpm --filter api dev
 ```
 
-Listens on `PORT` (default 3000). `GET /api/health` returns `db: "down"` when `DATABASE_URL` is unset.
+Listens on `PORT` (default 3000). `GET /api/health` returns `db: "disabled"` when `DATABASE_URL` is unset.
 
-With Docker Postgres 17 (`docker compose up -d` + `pnpm --filter api db:migrate`), the same endpoint returns `db: "ok"`. See `docs/deploy-api.md`.
+With Docker Postgres 17 (`docker compose up -d` + `pnpm --filter api db:migrate`), the same endpoint returns `db: "up"`. See `docs/deploy-api.md`.

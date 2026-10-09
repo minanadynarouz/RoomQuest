@@ -7,6 +7,7 @@ import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { JSON_BODY_LIMIT_BYTES } from './common/constants';
 import { isAllowedOrigin, parseCorsOrigins } from './common/cors';
+import { assignRequestId } from './common/request-id';
 import type { Env } from './config/env';
 
 function payloadLimitHandler(
@@ -75,6 +76,10 @@ export function configureApp(app: NestExpressApplication): void {
     config.get('CORS_ORIGINS', { infer: true })
   );
 
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    assignRequestId(req, res);
+    next();
+  });
   app.use(
     helmet({
       // JSON API consumed by the Vite client on another origin.
