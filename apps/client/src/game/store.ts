@@ -87,6 +87,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
   const cacheKey = signal<string | null>(null);
   const fallbackReason = signal<FallbackReason | null>(null);
   const apiErrorCode = signal<ErrorCode | null>(null);
+  const retryAfterS = signal<number | null>(null);
   const validationIssues = signal<Issue[]>([]);
 
   // Computed values
@@ -105,6 +106,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
     cacheKey: cacheKey.value,
     fallbackReason: fallbackReason.value,
     apiErrorCode: apiErrorCode.value,
+    retryAfterS: retryAfterS.value,
     validationIssues: validationIssues.value,
   }));
 
@@ -371,6 +373,9 @@ export function createGameStore(options: GameStoreOptions = {}) {
     get apiErrorCode() {
       return apiErrorCode.value;
     },
+    get retryAfterS() {
+      return retryAfterS.value;
+    },
     get validationIssues() {
       return validationIssues.value;
     },
@@ -403,6 +408,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
       cacheKey.value = options?.cacheKey ?? null;
       fallbackReason.value = options?.fallbackReason ?? null;
       apiErrorCode.value = options?.apiErrorCode ?? null;
+      retryAfterS.value = options?.retryAfterS ?? null;
       validationIssues.value = options?.issues ?? [];
       events.value = [];
       gemsCollected.value = 0;
@@ -475,6 +481,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
       cacheKey.value = null;
       fallbackReason.value = null;
       apiErrorCode.value = null;
+      retryAfterS.value = null;
       validationIssues.value = [];
       events.value = [];
       gemsCollected.value = 0;

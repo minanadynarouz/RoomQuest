@@ -18,6 +18,8 @@ export interface StartBuildingOptions {
   cacheKey?: string;
   fallbackReason?: FallbackReason;
   apiErrorCode?: ErrorCode;
+  /** Seconds until the director may POST again after a 429. */
+  retryAfterS?: number;
   issues?: Issue[];
 }
 
@@ -157,8 +159,10 @@ export interface GameState {
   cacheKey: string | null;
   /** Why the director fell back to the local generator, if it did. */
   fallbackReason: FallbackReason | null;
-  /** API `{error.code}` (`INVALID_REQUEST` / `INTERNAL`) when the envelope parsed. */
+  /** API `{error.code}` (`INVALID_REQUEST` / `INTERNAL` / `RATE_LIMITED`) when the envelope parsed. */
   apiErrorCode: ErrorCode | null;
+  /** Seconds until the director may POST again after a 429, if the API sent it. */
+  retryAfterS: number | null;
   /** Typed `validatePlan` issues for the debug overlay. */
   validationIssues: Issue[];
 }

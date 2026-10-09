@@ -18,6 +18,7 @@ export function applyDirectorResult(
     cacheKey: result.cacheKey,
     fallbackReason: result.fallbackReason,
     apiErrorCode: result.apiErrorCode,
+    retryAfterS: result.retryAfterS,
     issues: result.issues,
   });
 }

@@ -5,8 +5,10 @@
  * API plan only if it arrives within the budget, parses as LevelResponse,
  * and passes local re-validation against the scanned graph. An invalid
  * server plan is offered to `repairPlan` first; only if repair fails does
- * the client keep the racing `generatePlan` result. The player never sees
- * an API error.
+ * the client keep the racing `generatePlan` result. HTTP 429 is a silent
+ * `generatePlan` fallback (`fallbackReason: 'rate-limited'`); later live
+ * requests in this session skip the network until `retryAfterS` expires.
+ * The player never sees an API error.
  */
 
 import {
@@ -25,6 +27,11 @@ import {
   type SurfaceGraph,
 } from '@roomquest/schema';
 import { fallbackReasonFromIssues, issueCodesOf } from './issues.js';
+import {
+  cooldownUntilMs,
+  parseRetryAfterS,
+  remainingRetryAfterS,
+} from './rate-limit.js';
 import {
   DEFAULT_CLIENT_VERSION,
   DEFAULT_TIER,
@@ -71,6 +78,7 @@ interface PostFailure {
   ok: false;
   reason: FallbackReason;
   apiErrorCode?: ErrorCode;
+  retryAfterS?: number;
 }
 
 async function readJson(response: Pick<Response, 'json'>): Promise<unknown> {
@@ -111,6 +119,15 @@ async function postLevels(
 
     const payload = await readJson(response);
 
+    if (response.status === 429) {
+      return {
+        ok: false,
+        reason: 'rate-limited',
+        apiErrorCode: parseApiError(payload),
+        retryAfterS: parseRetryAfterS(payload),
+      };
+    }
+
     if (!response.ok) {
       const apiErrorCode = parseApiError(payload);
       if (apiErrorCode) {
@@ -142,6 +159,7 @@ function localResult(
   reason: FallbackReason,
   extras?: {
     apiErrorCode?: ErrorCode;
+    retryAfterS?: number;
     issues?: Issue[];
     repairs?: string[];
     cacheKey?: string;
@@ -160,6 +178,7 @@ function localResult(
     usedFallback: true,
     fallbackReason: reason,
     apiErrorCode: extras?.apiErrorCode,
+    retryAfterS: extras?.retryAfterS,
     issues: extras?.issues ?? [],
   };
 }
@@ -169,11 +188,13 @@ function logDirectorResult(result: DirectorResult): void {
     ? ` reason=${result.fallbackReason}`
     : '';
   const code = result.apiErrorCode ? ` apiError=${result.apiErrorCode}` : '';
+  const retry =
+    result.retryAfterS !== undefined ? ` retryAfterS=${result.retryAfterS}` : '';
   const issueCodes = result.issues?.length
     ? ` issues=${issueCodesOf(result.issues).join(',')}`
     : '';
   console.info(
-    `[director] source=${result.source} latencyMs=${result.latencyMs}${reason}${code}${issueCodes}`
+    `[director] source=${result.source} latencyMs=${result.latencyMs}${reason}${code}${retry}${issueCodes}`
   );
 }
 
@@ -195,6 +216,7 @@ export function createDirectorClient(
   const defaultTier = options.tier ?? DEFAULT_TIER;
   const budgetMs = options.budgetMs ?? DIRECTOR_BUDGET_MS;
   const nowMs = options.nowMs ?? (() => Date.now());
+  let skipUntilMs: number | undefined;
 
   async function requestPlan(
     graph: SurfaceGraph,
@@ -215,7 +237,11 @@ export function createDirectorClient(
 
     async function useGenerator(
       reason: FallbackReason,
-      extras?: { apiErrorCode?: ErrorCode; issues?: Issue[] }
+      extras?: {
+        apiErrorCode?: ErrorCode;
+        retryAfterS?: number;
+        issues?: Issue[];
+      }
     ): Promise<DirectorResult> {
       let plan: LevelPlan;
       try {
@@ -247,6 +273,11 @@ export function createDirectorClient(
       return useGenerator('director-mock');
     }
 
+    const remainingS = remainingRetryAfterS(nowMs(), skipUntilMs);
+    if (remainingS !== undefined) {
+      return useGenerator('rate-limited', { retryAfterS: remainingS });
+    }
+
     const levelsUrl = `${apiBaseUrl}${LEVELS_PATH}`;
     const requestBody: Record<string, unknown> = {
       graph,
@@ -270,7 +301,13 @@ export function createDirectorClient(
     );
 
     if (!api.ok) {
-      return useGenerator(api.reason, { apiErrorCode: api.apiErrorCode });
+      if (api.reason === 'rate-limited' && api.retryAfterS !== undefined) {
+        skipUntilMs = cooldownUntilMs(nowMs(), api.retryAfterS);
+      }
+      return useGenerator(api.reason, {
+        apiErrorCode: api.apiErrorCode,
+        retryAfterS: api.retryAfterS,
+      });
     }
 
     const parsed = LevelResponse.safeParse(api.payload);
