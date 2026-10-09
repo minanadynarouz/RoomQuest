@@ -5,19 +5,17 @@ import { Tier } from './level.js';
  * Client-generated procedural level key.
  * `POST /api/v1/levels/:cacheKey/result` accepts these without a LevelCache row.
  *
- * Format: `proc:<seed>:<tier>`
+ * Format: `proc:<seed>:<tier>` — same string as the F-07 client adapter in
+ * `apps/client/src/game/results/proc-key.ts` (do not drift; that file stays
+ * local until it can import this helper).
  * - `seed` is the same string `generatePlan` received (a number is stringified)
  * - `tier` is the schema `Tier` enum (`easy` | `normal`)
  * Seed must be non-empty and must not contain `:`, so the key round-trips.
  */
 export const PROC_LEVEL_KEY_PREFIX = 'proc:';
 
-const TIER_ALT = Tier.options.join('|');
-
 /** Anchored matcher for `proc:<seed>:<tier>`. Seed is `[^:]+`. */
-export const PROC_LEVEL_KEY_RE = new RegExp(
-  `^${PROC_LEVEL_KEY_PREFIX}([^:]+):(${TIER_ALT})$`
-);
+export const PROC_LEVEL_KEY_RE = /^proc:([^:]+):(easy|normal)$/;
 
 export const ProcLevelKey = z
   .string()
@@ -47,9 +45,15 @@ export interface ProcLevelKeyParts {
   tier: Tier;
 }
 
-/** Build the canonical key. Client and API must use this helper. */
+/**
+ * Build the canonical key. Must produce the same string as the F-07
+ * client-local `procLevelKey` (`proc:<seed>:<tier>`).
+ */
 export function procLevelKey(seed: string | number, tier: Tier): ProcLevelKey {
   const seedPart = stringifyProcSeed(seed);
+  if (seedPart.length === 0 || seedPart.includes(':')) {
+    throw new Error('proc seed must be non-empty and must not contain ":"');
+  }
   const parsedTier = Tier.parse(tier);
   return ProcLevelKey.parse(
     `${PROC_LEVEL_KEY_PREFIX}${seedPart}:${parsedTier}`

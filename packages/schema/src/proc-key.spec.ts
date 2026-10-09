@@ -22,6 +22,18 @@ describe('procLevelKey', () => {
     expect(procLevelKey(0, 'easy')).toBe('proc:0:easy');
   });
 
+  it('matches the F-07 client-local adapter string format', () => {
+    // Locked to apps/client/src/game/results/proc-key.ts (and poster.spec.ts).
+    expect(procLevelKey('abc', 'easy')).toBe('proc:abc:easy');
+    expect(procLevelKey('daily-seed', 'easy')).toBe('proc:daily-seed:easy');
+    expect(procLevelKey(42, 'normal')).toBe('proc:42:normal');
+    expect(procLevelKey('room-2026-10-09', 'normal')).toBe(
+      'proc:room-2026-10-09:normal'
+    );
+    expect(PROC_LEVEL_KEY_RE.source).toBe('^proc:([^:]+):(easy|normal)$');
+    expect(PROC_LEVEL_KEY_RE.test('proc:room-2026-10-09:normal')).toBe(true);
+  });
+
   it('round-trips through parseProcLevelKey', () => {
     const key = procLevelKey('room-seed', 'normal');
     expect(parseProcLevelKey(key)).toEqual({
@@ -31,8 +43,8 @@ describe('procLevelKey', () => {
   });
 
   it('rejects an empty seed, a colon in the seed, or a bad tier', () => {
-    expect(() => procLevelKey('', 'easy')).toThrow();
-    expect(() => procLevelKey('has:colon', 'easy')).toThrow();
+    expect(() => procLevelKey('', 'easy')).toThrow(/contain/);
+    expect(() => procLevelKey('has:colon', 'easy')).toThrow(/contain/);
     expect(() => procLevelKey('ok', 'hard' as 'easy')).toThrow();
     expect(() => procLevelKey(Number.NaN, 'easy')).toThrow();
   });
