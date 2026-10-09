@@ -111,19 +111,14 @@ async function launchBrowser(): Promise<Browser> {
 async function dismissViteOverlay(page: Page): Promise<void> {
   await page.keyboard.press('Escape');
   await page.evaluate(() => {
-    const overlay = document.querySelector('vite-error-overlay');
-    overlay?.remove();
+    document.querySelector('vite-error-overlay')?.remove();
+    document.querySelector('vite-plugin-checker-error-overlay')?.remove();
   });
 }
 
 async function shot(page: Page, name: string): Promise<void> {
   await dismissViteOverlay(page);
-  const canvas = page.locator('#scene-container canvas').first();
-  if ((await canvas.count()) > 0) {
-    await canvas.screenshot({ path: path.join(OUT_DIR, name) });
-  } else {
-    await page.screenshot({ path: path.join(OUT_DIR, name), type: 'png' });
-  }
+  await page.screenshot({ path: path.join(OUT_DIR, name), type: 'png' });
 }
 
 async function enterXrFixture(page: Page, baseUrl: string): Promise<void> {
@@ -139,6 +134,7 @@ async function enterXrFixture(page: Page, baseUrl: string): Promise<void> {
     waitUntil: 'networkidle',
     timeout: 60_000,
   });
+  await dismissViteOverlay(page);
 
   const button = page.locator('#enter-button');
   for (let i = 0; i < 60; i += 1) {
@@ -150,7 +146,8 @@ async function enterXrFixture(page: Page, baseUrl: string): Promise<void> {
       `Enter button never enabled. logs=${logs.slice(-30).join(' | ')}`
     );
   }
-  await button.click();
+  await dismissViteOverlay(page);
+  await button.click({ force: true });
 
   await page.waitForFunction(
     () => Boolean((window as unknown as RqWindow).__rq?.villageAnchor),
@@ -224,7 +221,8 @@ async function runSession(
   const page = await context.newPage();
   await enterXrFixture(page, baseUrl);
   const status = await waitForVillageReady(page);
-  await sleep(400);
+  await sleep(800);
+  await dismissViteOverlay(page);
   await shot(page, screenshot);
   const handle = await readStoredHandle(page);
   const iwer = await probeIwerRestore(page);

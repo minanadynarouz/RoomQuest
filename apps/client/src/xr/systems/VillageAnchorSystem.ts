@@ -97,6 +97,8 @@ export class VillageAnchorSystem extends createSystem({}, {}) {
   private persistentAnchorsSupported = false;
   private storageAvailable = false;
   private attached = false;
+  private restoredNative: NativeXrAnchor | null = null;
+  private poseWaitFrames = 0;
 
   configure(options: {
     builder: LevelBuilderSystem;
@@ -114,6 +116,8 @@ export class VillageAnchorSystem extends createSystem({}, {}) {
       this.persisted = false;
       this.handle = null;
       this.attached = false;
+      this.restoredNative = null;
+      this.poseWaitFrames = 0;
     });
   }
 
@@ -146,6 +150,10 @@ export class VillageAnchorSystem extends createSystem({}, {}) {
   }
 
   update(_delta: number, _time: number): void {
+    if (this.restoredNative && !this.ready) {
+      this.finishRestoredPose();
+      return;
+    }
     if (!this.pending || this.inFlight) return;
     if (this.expectSession && (!this.getSession() || !this.getFrame())) return;
     this.inFlight = true;
@@ -187,22 +195,13 @@ export class VillageAnchorSystem extends createSystem({}, {}) {
     if (decision.kind === 'restore' && session && decision.handle) {
       const restored = await this.restoreHandle(session, decision.handle);
       if (restored) {
-        const pose = this.poseFromNativeAnchor(restored, frame);
-        if (pose) {
-          this.applyWorldPose(hut, pose);
-        } else if (frame) {
-          warn('restored anchor had no pose this frame; keeping hut on table');
-          this.applyFallbackPose(hut, graph);
-        } else {
-          this.applyFallbackPose(hut, graph);
-        }
+        this.restoredNative = restored;
         this.placement = 'restored';
         this.reason = null;
         this.handle = decision.handle;
-        this.attachHut(hut);
+        this.poseWaitFrames = 0;
         this.pending = false;
-        this.ready = true;
-        console.log(LOG, 'restored village hut from persistent anchor');
+        this.finishRestoredPose();
         return;
       }
       this.reason = 'restore-failed';
@@ -222,6 +221,33 @@ export class VillageAnchorSystem extends createSystem({}, {}) {
       surfaceId: this.surfaceId,
       persisted: this.persisted,
     });
+  }
+
+  private finishRestoredPose(): void {
+    const hut = this.builder?.getVillageHutEntity();
+    const graph = this.builder?.getGraph();
+    if (!hut?.object3D) {
+      this.ready = true;
+      this.restoredNative = null;
+      return;
+    }
+    const pose = this.poseFromNativeAnchor(this.restoredNative, this.getFrame());
+    if (pose) {
+      this.applyWorldPose(hut, pose);
+      this.attached = true;
+      this.ready = true;
+      this.restoredNative = null;
+      console.log(LOG, 'restored village hut from persistent anchor');
+      return;
+    }
+    this.poseWaitFrames += 1;
+    if (this.poseWaitFrames < 30) return;
+    warn('restored anchor had no pose; keeping hut on largest table');
+    if (graph) this.applyFallbackPose(hut, graph);
+    this.attached = true;
+    this.ready = true;
+    this.restoredNative = null;
+    console.log(LOG, 'restored village hut handle; pose unavailable this session');
   }
 
   private applyFallback(reason: VillageAnchorFallbackReason): void {
@@ -344,11 +370,11 @@ export class VillageAnchorSystem extends createSystem({}, {}) {
   }
 
   private poseFromNativeAnchor(
-    anchor: NativeXrAnchor,
+    anchor: NativeXrAnchor | null,
     frame: NativeXrFrame | null
   ): VillageAnchorHutPose | null {
     const space = this.getReferenceSpace();
-    if (!frame || !space || !anchor.anchorSpace) return null;
+    if (!anchor || !frame || !space || !anchor.anchorSpace) return null;
     if (typeof frame.getPose !== 'function') return null;
     try {
       const pose = frame.getPose(anchor.anchorSpace, space);
