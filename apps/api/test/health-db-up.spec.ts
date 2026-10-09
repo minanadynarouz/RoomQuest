@@ -1,4 +1,4 @@
-import './cache-env';
+import './health-up-env';
 import type { Server } from 'node:http';
 import type { INestApplication } from '@nestjs/common';
 import { SYNTHETIC_LIVING_ROOM } from '@roomquest/fixtures';
@@ -30,7 +30,6 @@ describe.skipIf(dbUrl === undefined && process.env.CI !== 'true')(
         );
       }
       migrateTestDatabase(resolved);
-      process.env.GIT_SHA = 'b09testsha';
       app = await createApp();
       await app.init();
     });

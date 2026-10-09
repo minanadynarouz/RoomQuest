@@ -6,7 +6,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { HealthService } from './health.service';
 
 async function healthWithDb(
-  db: 'up' | 'down' | 'disabled'
+  db: 'up' | 'down' | 'disabled',
+  gitSha?: string
 ): Promise<{
   db: 'up' | 'down' | 'disabled';
   status: 'ok';
@@ -17,7 +18,10 @@ async function healthWithDb(
       ConfigModule.forRoot({
         isGlobal: true,
         ignoreEnvFile: true,
-        validate: (config: Record<string, unknown>) => validateEnv(config),
+        validate: (config: Record<string, unknown>) =>
+          validateEnv(
+            gitSha === undefined ? config : { ...config, GIT_SHA: gitSha }
+          ),
       }),
     ],
     providers: [
@@ -53,5 +57,10 @@ describe('HealthService', () => {
     const body = await healthWithDb('disabled');
     expect(body.status).toBe('ok');
     expect(body.db).toBe('disabled');
+  });
+
+  it('reports GIT_SHA as version', async () => {
+    const body = await healthWithDb('up', 'abc123deadbeef');
+    expect(body.version).toBe('abc123deadbeef');
   });
 });
