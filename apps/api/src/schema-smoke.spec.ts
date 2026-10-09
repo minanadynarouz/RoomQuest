@@ -142,9 +142,7 @@ describe('Schema smoke test (api)', () => {
           { goal: 'Build the bridge', uses: ['p3'] },
           { goal: 'Reach the shrine', uses: ['p2'] },
         ],
-        dialogue: [
-          { trigger: 'intro' as const, line: 'Welcome!' },
-        ],
+        dialogue: [{ trigger: 'intro' as const, line: 'Welcome!' }],
       },
       source: 'procedural' as const,
       cacheKey: 'test-key',
