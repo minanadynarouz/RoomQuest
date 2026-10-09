@@ -10,6 +10,7 @@ const STORE_EVENTS: GameEvent['type'][] = [
   'pieceBuilt',
   'gateOpened',
   'slimeStunned',
+  'slimeWoke',
   'gemCollected',
   'explorerBlocked',
   'explorerOutOfView',

@@ -5,6 +5,7 @@ import {
   emulatorRoomFromFlags,
   isFixtureXrSession,
   isSyntheticLivingRoomFixture,
+  isSyntheticSlimeFixture,
   readClientFlags,
   shouldExposeDebugHooks,
 } from './flags.js';
@@ -35,6 +36,13 @@ describe('client URL flags', () => {
       isFixtureXrSession(readClientFlags('?fixture=synthetic_living_room'))
     ).toBe(false);
     expect(isFixtureXrSession(readClientFlags('?xr=1'))).toBe(false);
+  });
+
+  it('reads the X-08 synthetic slime fixture', () => {
+    const flags = readClientFlags('?fixture=synthetic_slime&xr=1');
+    expect(isSyntheticSlimeFixture(flags)).toBe(true);
+    expect(isSyntheticLivingRoomFixture(flags)).toBe(false);
+    expect(isFixtureXrSession(flags)).toBe(true);
   });
 
   it('enables debug (the perf flag) only for the exact value 1', () => {

@@ -14,6 +14,7 @@ const bootFlags = readClientFlags(window.location.search);
 
 // X-03: desktop fixture auto-boots. `?xr=1` goes through landing so launchXR
 // runs from a user click inside a real IWER AR session.
+// X-07 / X-08: platform-portal and slime fixtures use the same desktop auto-boot.
 if (isSyntheticFixture(bootFlags) && !isFixtureXrSession(bootFlags)) {
   void import('./xr/index.js')
     .then(({ launchXR }) => launchXR())

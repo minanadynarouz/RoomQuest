@@ -181,6 +181,8 @@ export class ExplorerWalker {
         this.openGates.add(event.placementId);
       } else if (event.type === 'slimeStunned') {
         this.stunned.add(event.placementId);
+      } else if (event.type === 'slimeWoke') {
+        this.stunned.delete(event.placementId);
       } else if (event.type === 'gemCollected') {
         this.gems.add(event.placementId);
       } else if (event.type === 'platformAligned') {

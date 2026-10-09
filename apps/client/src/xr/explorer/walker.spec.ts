@@ -3,6 +3,7 @@ import {
   SYNTHETIC_LIVING_ROOM,
   SYNTHETIC_LIVING_ROOM_PLAN,
   SYNTHETIC_PLATFORM_PORTAL_PLAN,
+  SYNTHETIC_SLIME_PLAN,
 } from '@roomquest/fixtures';
 import { explorerPath } from '@roomquest/level-core';
 import type { LevelPlan } from '@roomquest/schema';
@@ -163,6 +164,55 @@ describe('ExplorerWalker blockers', () => {
     const moved = walker.pose.x !== x || walker.pose.z !== z;
     const celebrated = walker.state === 'celebrating' || store.phase === 'won';
     expect(moved || celebrated || walker.state === 'blocked').toBe(true);
+  });
+
+  it('never passes an awake slime and waits again after slimeWoke', () => {
+    const plan: LevelPlan = {
+      ...PLAN,
+      placements: [
+        ...PLAN.placements,
+        {
+          id: 'pslime',
+          piece: 'slime',
+          surface: 's1',
+          u: 0.85,
+          v: 0.5,
+          playerBuilt: false,
+          links: [],
+        },
+      ],
+    };
+    const { store, walker, tick } = playing(plan);
+    tick(80);
+    expect(walker.state).toBe('blocked');
+    expect(walker.reason).toBe('awakeSlime');
+    const blockedPose = { ...walker.pose };
+
+    tick(8);
+    expect(walker.pose.x).toBeCloseTo(blockedPose.x, 5);
+    expect(walker.pose.z).toBeCloseTo(blockedPose.z, 5);
+
+    store.slimeStunned('pslime');
+    tick(1);
+    expect(walker.reason).not.toBe('awakeSlime');
+    expect(walker.state).toBe('walking');
+
+    store.slimeWoke('pslime');
+    tick(2);
+    expect(walker.state).toBe('blocked');
+    expect(walker.reason).toBe('awakeSlime');
+  });
+
+  it('completes the X-08 slime fixture after slimeStunned', () => {
+    const { store, walker, tick } = playing(SYNTHETIC_SLIME_PLAN);
+    tick(40);
+    expect(walker.state).toBe('blocked');
+    expect(walker.reason).toBe('awakeSlime');
+
+    store.slimeStunned('p8');
+    tick(80);
+    expect(store.phase).toBe('won');
+    expect(walker.state).toBe('celebrating');
   });
 
   it('writes world position into a caller-owned out vector', () => {

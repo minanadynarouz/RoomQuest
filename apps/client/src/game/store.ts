@@ -301,6 +301,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
     | { type: 'leverPulled'; placementId: string }
     | { type: 'gateOpened'; placementId: string }
     | { type: 'slimeStunned'; placementId: string }
+    | { type: 'slimeWoke'; placementId: string }
     | { type: 'gemCollected'; placementId: string }
     | {
         type: 'explorerBlocked';
@@ -532,6 +533,10 @@ export function createGameStore(options: GameStoreOptions = {}) {
 
     slimeStunned(placementId: string) {
       emitEvent({ type: 'slimeStunned' as const, placementId });
+    },
+
+    slimeWoke(placementId: string) {
+      emitEvent({ type: 'slimeWoke' as const, placementId });
     },
 
     gemCollected(placementId: string) {

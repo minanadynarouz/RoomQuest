@@ -295,6 +295,7 @@ jobs:
           path: |
             docs/img/x05/
             docs/img/x06/
+            docs/img/x08/
             docs/img/x09/
             docs/img/x07/
             /tmp/client-dev.log

@@ -33,7 +33,12 @@ export {
 } from './gate.js';
 export { createLever, createLeverGeometry, LEVER_FOOTPRINT } from './lever.js';
 export { createGem, createGemGeometry, GEM_FOOTPRINT } from './gem.js';
-export { createSlime, createSlimeGeometry, SLIME_FOOTPRINT } from './slime.js';
+export {
+  createSlime,
+  createSlimeGeometry,
+  createSlimeStarGeometry,
+  SLIME_FOOTPRINT,
+} from './slime.js';
 export {
   createPortal,
   createPortalGeometry,

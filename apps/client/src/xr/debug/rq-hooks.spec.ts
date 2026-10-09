@@ -133,6 +133,23 @@ describe('registerRqHook / installRqHooks', () => {
     expect(target.__rq?.explorer?.getWorldPosition(out).y).toBe(0.2);
   });
 
+  it('lets X-08 register slime without dropping autoSolve', () => {
+    const autoSolve = async (): Promise<void> => {
+      /* X-05 */
+    };
+    const slime = {
+      stun: () => true,
+      boundCount: () => 1,
+      isAwake: () => false,
+      canPass: () => true,
+    };
+    registerRqHook('autoSolve', autoSolve, { ...debugOn, target });
+    registerRqHook('slime', slime, { ...debugOn, target });
+    installRqHooks({ drawCalls: 3 }, { ...debugOn, target });
+    expect(target.__rq?.autoSolve).toBe(autoSolve);
+    expect(target.__rq?.slime?.stun('p8')).toBe(true);
+  });
+
   it('installs in dev without the debug flag', () => {
     expect(installRqHooks({ drawCalls: 1 }, { ...devOn, target })).toBe(true);
     expect(target.__rq?.drawCalls).toBe(1);
