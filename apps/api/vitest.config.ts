@@ -14,7 +14,9 @@ export default defineConfig({
     ],
     pool: 'forks',
     isolate: true,
-    fileParallelism: true,
+    // Postgres integration specs share one database and wipe tables in
+    // beforeEach. Parallel files delete each other's SessionResult rows.
+    fileParallelism: false,
   },
   plugins: [
     swc.vite({
