@@ -64,7 +64,7 @@ export function showUnsupportedState(ui: LandingUIElements, message: string): vo
   ui.statusMessage.classList.remove('text-green-300');
   ui.statusMessage.classList.add('text-red-300');
   
-  ui.tryEmulatorLink.classList.remove('hidden');
+  ui.tryEmulatorLink.classList.remove('hidden', 'invisible', 'pointer-events-none');
 }
 
 export function showErrorState(ui: LandingUIElements, message: string): void {
