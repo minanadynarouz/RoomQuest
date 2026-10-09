@@ -1,5 +1,13 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDirectorDeadline, type DirectorDeadline } from './deadline';
+import {
+  DIRECTOR_BUDGET_MS,
+  DIRECTOR_LLM_WINDOW_MS,
+  FALLBACK_MIN_REMAINING_MS,
+  LLM_REPAIR_MIN_REMAINING_MS,
+  PROCEDURAL_RESERVE_MS,
+} from './director.constants';
+import { useDirectorFakeTimers } from './test-clock';
 
 describe('createDirectorDeadline', () => {
   const deadlines: DirectorDeadline[] = [];
@@ -22,32 +30,47 @@ describe('createDirectorDeadline', () => {
   it('subtracts the procedural reserve from remaining LLM time', () => {
     let t = 1000;
     const deadline = tracked({
-      budgetMs: 7000,
-      proceduralReserveMs: 250,
+      budgetMs: DIRECTOR_BUDGET_MS,
+      proceduralReserveMs: PROCEDURAL_RESERVE_MS,
       now: () => t,
       startedMs: 1000,
     });
-    expect(deadline.remainingMs()).toBe(7000);
-    expect(deadline.remainingForLlm()).toBe(6750);
+    expect(deadline.remainingMs()).toBe(DIRECTOR_BUDGET_MS);
+    expect(deadline.remainingForLlm()).toBe(DIRECTOR_LLM_WINDOW_MS);
     t = 5000;
     expect(deadline.remainingMs()).toBe(3000);
     expect(deadline.remainingForLlm()).toBe(2750);
-    expect(deadline.canStartLlm(3000)).toBe(false);
-    expect(deadline.canStartLlm(2000)).toBe(true);
+    expect(deadline.canStartLlm(FALLBACK_MIN_REMAINING_MS)).toBe(false);
+    expect(deadline.canStartLlm(LLM_REPAIR_MIN_REMAINING_MS)).toBe(true);
   });
 
-  it('aborts LLM work at budget minus reserve so generatePlan still fits', async () => {
-    const deadline = tracked({
-      budgetMs: 40,
-      proceduralReserveMs: 10,
-    });
-    expect(deadline.signal.aborted).toBe(false);
-    await new Promise<void>((resolve) => {
-      deadline.signal.addEventListener('abort', () => {
-        resolve();
+  describe('abort timer', () => {
+    useDirectorFakeTimers();
+
+    it('aborts LLM work 250 ms before the 7 s whole-request deadline', async () => {
+      const deadline = tracked({});
+      expect(deadline.signal.aborted).toBe(false);
+      expect(deadline.remainingMs()).toBe(DIRECTOR_BUDGET_MS);
+      expect(deadline.remainingForLlm()).toBe(DIRECTOR_LLM_WINDOW_MS);
+
+      const aborted = new Promise<void>((resolve) => {
+        deadline.signal.addEventListener('abort', () => {
+          resolve();
+        });
       });
+
+      await vi.advanceTimersByTimeAsync(DIRECTOR_LLM_WINDOW_MS - 1);
+      expect(deadline.signal.aborted).toBe(false);
+      expect(deadline.canStartLlm(1)).toBe(true);
+      expect(deadline.remainingMs()).toBe(PROCEDURAL_RESERVE_MS + 1);
+      expect(deadline.remainingForLlm()).toBe(1);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await aborted;
+      expect(deadline.signal.aborted).toBe(true);
+      expect(deadline.canStartLlm(1)).toBe(false);
+      expect(deadline.remainingForLlm()).toBe(0);
+      expect(deadline.remainingMs()).toBe(PROCEDURAL_RESERVE_MS);
     });
-    expect(deadline.signal.aborted).toBe(true);
-    expect(deadline.canStartLlm(1)).toBe(false);
   });
 });

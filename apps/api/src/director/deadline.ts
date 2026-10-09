@@ -33,7 +33,7 @@ export interface CreateDirectorDeadlineOptions {
 export function createDirectorDeadline(
   options: CreateDirectorDeadlineOptions = {}
 ): DirectorDeadline {
-  const now = options.now ?? Date.now;
+  const now = options.now ?? (() => Date.now());
   const startedMs = options.startedMs ?? now();
   const budgetMs = options.budgetMs ?? DIRECTOR_BUDGET_MS;
   const reserveMs = Math.min(

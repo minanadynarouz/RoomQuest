@@ -37,7 +37,7 @@ export class DirectorService {
   }
 
   async run(request: LevelRequest): Promise<DirectorOutcome> {
-    const now = this.runtime?.now ?? Date.now;
+    const now = this.runtime?.now ?? (() => Date.now());
     const startedMs = now();
     const mode = this.config.get('DIRECTOR_MODE', { infer: true });
     const promptVersion = PROMPT_VERSION;
