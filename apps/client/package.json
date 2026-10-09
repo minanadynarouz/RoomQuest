@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "perf:rooms": "tsx scripts/perf-rooms.ts",
     "e2e:xr": "tsx scripts/x05-xr-hand-pinch.ts && tsx scripts/x07-xr-platform-portal.ts && tsx scripts/x08-xr-slime.ts",
     "clean": "rm -rf dist .turbo node_modules/.vite"
   },

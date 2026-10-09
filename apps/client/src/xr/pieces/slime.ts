@@ -55,7 +55,7 @@ export function createSlime(kit: GreyboxKit): Object3D {
   const stars = new Group();
   stars.name = 'slime-stars';
   stars.visible = false;
-  const starGeo = createSlimeStarGeometry(kit.palette);
+  const starGeo = kit.cachedGeometry('slime-star', createSlimeStarGeometry);
   for (let i = 0; i < SLIME_STAR_COUNT; i += 1) {
     const star = new Mesh(starGeo, kit.material);
     star.name = `slime-star-${String(i)}`;
@@ -63,20 +63,21 @@ export function createSlime(kit: GreyboxKit): Object3D {
     star.receiveShadow = false;
     stars.add(star);
   }
-  stars.userData.starGeometry = starGeo;
   root.add(stars);
   root.userData.stars = stars;
 
-  const hitGeo = new BoxGeometry(0.2, 0.14, 0.2);
-  const hit = new Mesh(hitGeo, kit.material);
+  const hitGeo = kit.cachedGeometry('slime-hit', () => {
+    const geo = new BoxGeometry(0.2, 0.14, 0.2);
+    geo.translate(0, 0.07, 0);
+    return geo;
+  });
+  const hit = new Mesh(hitGeo, kit.interactHitMaterial());
   hit.name = 'slime-hit';
   hit.visible = false;
   hit.castShadow = false;
   hit.receiveShadow = false;
-  hit.position.set(0, 0.07, 0);
   hit.pointerEvents = 'auto';
   root.add(hit);
   root.userData.hit = hit;
-  root.userData.hitGeometry = hitGeo;
   return root;
 }

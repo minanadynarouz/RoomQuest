@@ -22,7 +22,7 @@ export { SlimeSystem } from './systems/SlimeSystem.js';
 export { SurfaceGraphSystem } from './systems/SurfaceGraphSystem.js';
 export { VillageAnchorSystem } from './systems/VillageAnchorSystem.js';
 export { mountGreyboxLevel } from './level/mount-level.js';
-export { countDrawCalls } from './level/draw-calls.js';
+export { countDrawCalls, countTriangles } from './level/draw-calls.js';
 export { createPiece, createGreyboxKit } from './pieces/index.js';
 export { HudSystem, bindHudStore, bindHudActions } from '../ui/HudSystem.js';
 export { PlacementController } from './placement/controller.js';

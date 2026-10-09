@@ -2,23 +2,15 @@
  * Placeholder explorer until X-05 lands. Dialogue billboards above this.
  */
 
-import {
-  Mesh,
-  MeshStandardMaterial,
-  SphereGeometry,
-  type Object3D,
-} from '@iwsdk/core';
+import { Color, Mesh, SphereGeometry, type Object3D } from '@iwsdk/core';
+import { paint } from '../xr/pieces/geometry.js';
+import { sharedVertexColorMaterial } from '../xr/pieces/shared-material.js';
 
 export const EXPLORER_STUB_NAME = 'explorer-stub';
 
 export function createExplorerStub(): Object3D {
-  const geometry = new SphereGeometry(0.045, 12, 10);
-  const material = new MeshStandardMaterial({
-    color: 0xe8a87c,
-    roughness: 0.7,
-    metalness: 0.05,
-  });
-  const mesh = new Mesh(geometry, material);
+  const geometry = paint(new SphereGeometry(0.045, 8, 6), new Color(0xe8a87c));
+  const mesh = new Mesh(geometry, sharedVertexColorMaterial());
   mesh.name = EXPLORER_STUB_NAME;
   mesh.castShadow = false;
   mesh.receiveShadow = false;

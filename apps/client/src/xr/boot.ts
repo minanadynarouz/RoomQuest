@@ -12,12 +12,14 @@
  * X-09: VillageAnchorSystem persist/restore (largest-table fallback)
  * X-07: PlatformRailSystem + PortalSystem (rail clamp, portal pair)
  * X-08: SlimeSystem (patrol, poke / ray-tap stun, slimeStunned / slimeWoke)
+ * X-10: shared materials, instancing, foveation, room budgets
  */
 
 import {
   AmbientLight,
   Color,
   DirectionalLight,
+  SceneUnderstandingSystem,
   SessionMode,
   World,
 } from '@iwsdk/core';
@@ -28,11 +30,7 @@ import {
   SYNTHETIC_PLATFORM_PORTAL_PLAN,
   SYNTHETIC_SLIME_PLAN,
 } from '@roomquest/fixtures';
-import {
-  bindAudioStore,
-  preloadSounds,
-  unlockAudio,
-} from '../audio/index.js';
+import { bindAudioStore, preloadSounds, unlockAudio } from '../audio/index.js';
 import {
   applyDirectorResult,
   createDirectorClientFromEnv,
@@ -78,6 +76,8 @@ import {
 import { SurfaceGraphSystem } from './systems/SurfaceGraphSystem.js';
 import { VillageAnchorSystem } from './systems/VillageAnchorSystem.js';
 import { countDrawCalls } from './level/draw-calls.js';
+import { applyInjectedEmulatorRoom } from './perf/apply-room.js';
+import { bindFixedFoveation } from './perf/foveation.js';
 import type { LevelPlan, SurfaceGraph } from '@roomquest/schema';
 import type { SnapTarget } from './level/types.js';
 
@@ -449,7 +449,7 @@ export async function launchXR(): Promise<World> {
             locomotion: false,
             grabbing,
             physics: false,
-            sceneUnderstanding: false,
+            sceneUnderstanding: false as const,
             environmentRaycast: false,
             spatialUI: {
               kit: 'horizon' as const,
@@ -480,7 +480,7 @@ export async function launchXR(): Promise<World> {
           features: {
             locomotion: false,
             grabbing,
-            sceneUnderstanding: true,
+            sceneUnderstanding: { showWireFrame: false },
             environmentRaycast: true,
             gaze: {
               logDiagnostics: true,
@@ -492,6 +492,20 @@ export async function launchXR(): Promise<World> {
         };
 
   worldInstance = await World.create(container, xrOptions);
+  bindFixedFoveation(worldInstance.renderer.xr);
+  try {
+    const sceneUnderstanding = worldInstance.getSystem(
+      SceneUnderstandingSystem
+    );
+    if (sceneUnderstanding) {
+      sceneUnderstanding.config.showWireFrame.value = false;
+    }
+  } catch {
+    /* fixture desktop path has no scene understanding */
+  }
+  if (flags.room) {
+    await applyInjectedEmulatorRoom(flags.room);
+  }
   worldInstance.registerSystem(LevelBuilderSystem, { priority: 5 });
   bindHudStore(gameStore);
   bindGuidanceStore(gameStore);

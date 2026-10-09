@@ -4,13 +4,14 @@ import {
   LineBasicMaterial,
   Mesh,
   MeshBasicMaterial,
-  MeshStandardMaterial,
   type BufferGeometry,
+  type MeshStandardMaterial,
   type Object3D,
 } from '@iwsdk/core';
 import type { PieceFootprint } from './geometry.js';
 import { paletteFor, type ToyPalette } from './palette.js';
 import { InstancePool } from './instance-pool.js';
+import { sharedVertexColorMaterial } from './shared-material.js';
 import { createVillageHutGeometry } from './village-hut.js';
 import { createCrystalShrineGeometry } from './crystal-shrine.js';
 import { createPlankBridgeGeometry } from './plank-bridge.js';
@@ -46,8 +47,9 @@ export interface GreyboxKitOptions {
 
 /**
  * Shared greybox resources for one level build.
- * One MeshStandardMaterial (vertex colours) plus instance pools for gems
- * and planks. Unique piece types reuse a cached merged BufferGeometry.
+ * Shared vertex-colour MeshStandardMaterial (also used by the explorer)
+ * plus instance pools for gems and planks. Unique piece types reuse a
+ * cached merged BufferGeometry.
  */
 export class GreyboxKit {
   readonly theme: Theme;
@@ -63,11 +65,7 @@ export class GreyboxKit {
   constructor(options: GreyboxKitOptions) {
     this.theme = options.theme;
     this.palette = paletteFor(options.theme);
-    this.material = new MeshStandardMaterial({
-      vertexColors: true,
-      roughness: 0.55,
-      metalness: 0.08,
-    });
+    this.material = sharedVertexColorMaterial();
     this.debugLineMaterial = new LineBasicMaterial({
       color: 0x7ec8e3,
       toneMapped: false,
@@ -152,8 +150,8 @@ export class GreyboxKit {
   }
 
   /**
-   * Dispose pooled meshes, cached geometries and the shared materials.
-   * Call only when the kit is no longer used by any placed piece.
+   * Dispose pooled meshes and cached geometries. Does not dispose the
+   * process-lifetime shared vertex-colour material.
    */
   dispose(): void {
     this.resetInstances();
@@ -169,7 +167,6 @@ export class GreyboxKit {
     this.extraGeometries.clear();
     this.hitMaterial?.dispose();
     this.hitMaterial = null;
-    this.material.dispose();
     this.debugLineMaterial.dispose();
   }
 }

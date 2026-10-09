@@ -101,6 +101,15 @@ export class GuidanceSystem extends createSystem({}) {
   private wasOutOfView = false;
   private gazeAvailable = false;
   private storage: OnboardingStorage | null = null;
+  private readonly overlayScratch = {
+    onboardingActive: false,
+    skipVisible: false,
+    hintVisible: false,
+    arrowVisible: false,
+    angleDeg: 0,
+    looking: false,
+    line: null as string | null,
+  };
 
   init(): void {
     this.storage = boundStorage ?? browserStorage();
@@ -132,15 +141,14 @@ export class GuidanceSystem extends createSystem({}) {
         resetDwell(this.dwell);
       }
       this.setArrowVisible(false);
-      writeGuidanceOverlay({
-        onboardingActive: false,
-        skipVisible: false,
-        hintVisible: false,
-        arrowVisible: false,
-        angleDeg: 0,
-        looking: false,
-        line: null,
-      });
+      this.overlayScratch.onboardingActive = false;
+      this.overlayScratch.skipVisible = false;
+      this.overlayScratch.hintVisible = false;
+      this.overlayScratch.arrowVisible = false;
+      this.overlayScratch.angleDeg = 0;
+      this.overlayScratch.looking = false;
+      this.overlayScratch.line = null;
+      writeGuidanceOverlay(this.overlayScratch);
       this.publishDebug();
       return;
     }
@@ -235,15 +243,14 @@ export class GuidanceSystem extends createSystem({}) {
     if (!onboardingActive && hintVisible) {
       line = selectGazeHint(store.plan);
     }
-    writeGuidanceOverlay({
-      onboardingActive,
-      skipVisible: onboardingActive,
-      hintVisible: hintVisible && !onboardingActive,
-      arrowVisible,
-      angleDeg,
-      looking,
-      line,
-    });
+    this.overlayScratch.onboardingActive = onboardingActive;
+    this.overlayScratch.skipVisible = onboardingActive;
+    this.overlayScratch.hintVisible = hintVisible && !onboardingActive;
+    this.overlayScratch.arrowVisible = arrowVisible;
+    this.overlayScratch.angleDeg = angleDeg;
+    this.overlayScratch.looking = looking;
+    this.overlayScratch.line = line;
+    writeGuidanceOverlay(this.overlayScratch);
   }
 
   private sampleViewRay(origin: Vector3, dir: Vector3): void {
@@ -303,6 +310,21 @@ export class GuidanceSystem extends createSystem({}) {
   private publishDebug(): void {
     if (typeof window === 'undefined' || !window.__rq) return;
     const overlay = readGuidanceOverlay();
+    const existing = window.__rq.guidance;
+    if (existing) {
+      existing.ready = true;
+      existing.onboardingActive = overlay.onboardingActive;
+      existing.hintVisible = overlay.hintVisible;
+      existing.arrowVisible = overlay.arrowVisible;
+      existing.angleDeg = overlay.angleDeg;
+      existing.looking = overlay.looking;
+      existing.line = overlay.line;
+      existing.skipOnboarding = overlay.skipOnboarding;
+      existing.placeTargetAtAngle = (deg: number) => {
+        this.placeTargetAtAngle(deg);
+      };
+      return;
+    }
     window.__rq.guidance = {
       ready: true,
       onboardingActive: overlay.onboardingActive,

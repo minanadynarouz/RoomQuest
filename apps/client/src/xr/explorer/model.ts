@@ -1,11 +1,6 @@
-import {
-  Color,
-  Group,
-  Mesh,
-  MeshStandardMaterial,
-  type Object3D,
-} from '@iwsdk/core';
+import { Color, Group, Mesh, type Object3D } from '@iwsdk/core';
 import { box, mergePainted } from '../pieces/geometry.js';
+import { sharedVertexColorMaterial } from '../pieces/shared-material.js';
 
 export const EXPLORER_NAME = 'explorer';
 
@@ -28,12 +23,7 @@ export function createExplorerModel(): Object3D {
     box(0.008, 0.008, 0.008, -0.008, 0.108, 0.014, ACCENT),
     box(0.008, 0.008, 0.008, 0.008, 0.108, 0.014, ACCENT),
   ]);
-  const material = new MeshStandardMaterial({
-    vertexColors: true,
-    roughness: 0.62,
-    metalness: 0.04,
-  });
-  const mesh = new Mesh(geometry, material);
+  const mesh = new Mesh(geometry, sharedVertexColorMaterial());
   mesh.castShadow = false;
   mesh.receiveShadow = false;
   mesh.name = 'explorer-mesh';

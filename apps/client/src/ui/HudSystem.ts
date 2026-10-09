@@ -19,9 +19,13 @@ import {
   type Entity,
   type Object3D,
 } from '@iwsdk/core';
-import type { GameStore } from '../game/index.js';
+import type { GamePhase, GameStore } from '../game/index.js';
 import type { HudActions } from './hud-actions.js';
-import { asExplorerTarget, setExplorerTarget, setFallbackExplorerTarget } from './explorer-target.js';
+import {
+  asExplorerTarget,
+  setExplorerTarget,
+  setFallbackExplorerTarget,
+} from './explorer-target.js';
 import { readGuidanceOverlay } from './guidance/overlay.js';
 import { createExplorerStub } from './explorer-stub.js';
 import {
@@ -134,6 +138,14 @@ export class HudSystem extends createSystem({}) {
   private lastSignature = '';
   private usingStub = true;
   private stubPinned = false;
+  private lastPhase: GamePhase | null = null;
+  private lastBeat = -1;
+  private lastEventCount = -1;
+  private lastOverlayLine: string | null = null;
+  private lastSkip = false;
+  private lastStars = -1;
+  private lastGems = -1;
+  private lastTimeMs = -1;
 
   init(): void {
     this.cleanupFuncs.push(() => {
@@ -169,6 +181,7 @@ export class HudSystem extends createSystem({}) {
     }
     this.syncStubPose();
     this.billboardDialogue();
+    if (!this.hudInputsChanged(boundStore)) return;
     const overlay = readGuidanceOverlay();
     const view = mapStoreToHud(snapshotGameStore(boundStore), {
       line: overlay.line,
@@ -178,6 +191,36 @@ export class HudSystem extends createSystem({}) {
     if (signature === this.lastSignature) return;
     this.lastSignature = signature;
     this.applyView(view);
+  }
+
+  /** Primitive-field dirty check; allocates nothing. */
+  private hudInputsChanged(store: GameStore): boolean {
+    const overlay = readGuidanceOverlay();
+    const result = store.result;
+    const stars = result?.stars ?? -1;
+    const gems = result?.gems ?? -1;
+    const timeMs = result?.timeMs ?? -1;
+    if (
+      store.phase === this.lastPhase &&
+      store.state.currentBeatIndex === this.lastBeat &&
+      store.events.length === this.lastEventCount &&
+      overlay.line === this.lastOverlayLine &&
+      overlay.skipVisible === this.lastSkip &&
+      stars === this.lastStars &&
+      gems === this.lastGems &&
+      timeMs === this.lastTimeMs
+    ) {
+      return false;
+    }
+    this.lastPhase = store.phase;
+    this.lastBeat = store.state.currentBeatIndex;
+    this.lastEventCount = store.events.length;
+    this.lastOverlayLine = overlay.line;
+    this.lastSkip = overlay.skipVisible;
+    this.lastStars = stars;
+    this.lastGems = gems;
+    this.lastTimeMs = timeMs;
+    return true;
   }
 
   private hideScaffoldWelcome(): void {
@@ -351,9 +394,9 @@ export class HudSystem extends createSystem({}) {
     const dialogue = this.panels.get('dialogue');
     if (dialogue && view.dialogue.visible) {
       setText(dialogue.asset, 'dialogue-line', view.dialogue.line);
-      const skip = dialogue.asset.getElementById('dialogue-skip') as
-        | { setProperties: (props: { display?: string }) => void }
-        | null;
+      const skip = dialogue.asset.getElementById('dialogue-skip') as {
+        setProperties: (props: { display?: string }) => void;
+      } | null;
       skip?.setProperties({
         display: view.dialogue.skipVisible ? 'flex' : 'none',
       });
