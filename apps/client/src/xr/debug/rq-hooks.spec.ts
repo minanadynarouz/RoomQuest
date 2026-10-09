@@ -93,6 +93,8 @@ describe('registerRqHook / installRqHooks', () => {
     registerRqHook('pause', pause, { ...debugOn, target });
     registerRqHook('resume', pause, { ...debugOn, target });
     registerRqHook('forceWin', pause, { ...debugOn, target });
+    registerRqHook('replay', pause, { ...debugOn, target });
+    registerRqHook('exit', pause, { ...debugOn, target });
     registerRqHook('gateLever', { pull: () => true, boundCount: () => 1 }, {
       ...debugOn,
       target,
@@ -101,6 +103,8 @@ describe('registerRqHook / installRqHooks', () => {
     expect(target.__rq?.autoSolve).toBe(autoSolve);
     expect(target.__rq?.pause).toBe(pause);
     expect(target.__rq?.forceWin).toBe(pause);
+    expect(target.__rq?.replay).toBe(pause);
+    expect(target.__rq?.exit).toBe(pause);
     expect(target.__rq?.gateLever?.boundCount()).toBe(1);
   });
 

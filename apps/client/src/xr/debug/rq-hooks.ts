@@ -67,6 +67,10 @@ export interface RqHooks {
   resume?: () => void;
   /** F-07: jump to the win HUD without walking. */
   forceWin?: () => void;
+  /** F-07: rebuild the current plan (win / pause HUD Replay). */
+  replay?: () => void;
+  /** F-07: Done / Exit — post an incomplete result if needed and return to landing. */
+  exit?: () => void;
   /** X-09: village hut XRAnchor persist / restore status. */
   villageAnchor?: VillageAnchorDebugApi;
   gateLever?: GateLeverDebugApi | null;
