@@ -56,6 +56,12 @@ export interface RqHooks {
   /** Debug/e2e: force the synthetic living-room plan into `playing`. */
   playSynthetic?: () => boolean;
   explorer?: RqExplorerDebug | null;
+  /** F-07: pause the run (timer + explorer). */
+  pause?: () => void;
+  /** F-07: resume from the pause HUD. */
+  resume?: () => void;
+  /** F-07: jump to the win HUD without walking. */
+  forceWin?: () => void;
 }
 
 /** X-05 walker debug surface. `getWorldPosition` matches F-06's ExplorerTarget. */

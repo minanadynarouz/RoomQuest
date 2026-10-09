@@ -4,8 +4,9 @@
  */
 
 import type { Issue } from '@roomquest/level-core';
-import type { ErrorCode, LevelPlan, PlanSource } from '@roomquest/schema';
+import type { ErrorCode, LevelPlan, PlanSource, Tier } from '@roomquest/schema';
 import type { FallbackReason } from './director/types.js';
+import type { StarCount } from './stars.js';
 
 /**
  * Options for startBuilding, including F-03 director metadata.
@@ -21,6 +22,8 @@ export interface StartBuildingOptions {
   /** Seconds until the director may POST again after a 429. */
   retryAfterS?: number;
   issues?: Issue[];
+  /** Difficulty used for procedural result keys (`proc:<seed>:<tier>`). */
+  tier?: Tier;
 }
 
 /**
@@ -131,7 +134,7 @@ export interface StuckPlayerSignal {
  * Game session result
  */
 export interface GameResult {
-  stars: 1 | 2 | 3;
+  stars: StarCount;
   gems: number;
   timeMs: number;
   completed: boolean;
@@ -165,4 +168,6 @@ export interface GameState {
   retryAfterS: number | null;
   /** Typed `validatePlan` issues for the debug overlay. */
   validationIssues: Issue[];
+  /** Difficulty used when posting `proc:<seed>:<tier>` (F-07). */
+  tier: Tier | null;
 }

@@ -217,6 +217,7 @@ describe('store-to-panel visibility mapping', () => {
     expect(view.win.statsLabel).toContain('Gems 3');
     expect(view.win.tomorrowLabel).toBe('New quest tomorrow - 2026-10-09');
     expect(view.win.replayLabel).toBe('Replay');
+    expect(view.win.exitLabel).toBe('Done');
   });
 
   it('shows the no-surfaces panel with Retry', () => {

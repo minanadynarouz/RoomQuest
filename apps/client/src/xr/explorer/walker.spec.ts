@@ -103,6 +103,25 @@ describe('ExplorerWalker blockers', () => {
     expect(walker.reason).not.toBe('awakeSlime');
   });
 
+  it('freezes movement while the store is paused', () => {
+    const { store, walker, tick } = playing();
+    store.pieceBuilt('p2');
+    tick(20);
+    const x = walker.pose.x;
+    const z = walker.pose.z;
+    const state = walker.state;
+    expect(state === 'walking' || state === 'blocked').toBe(true);
+    store.pause();
+    tick(40);
+    expect(walker.pose.x).toBe(x);
+    expect(walker.pose.z).toBe(z);
+    store.resume();
+    tick(40);
+    const moved = walker.pose.x !== x || walker.pose.z !== z;
+    const celebrated = walker.state === 'celebrating' || store.phase === 'won';
+    expect(moved || celebrated || walker.state === 'blocked').toBe(true);
+  });
+
   it('writes world position into a caller-owned out vector', () => {
     const { walker } = playing();
     const out = { x: 9, y: 9, z: 9 };

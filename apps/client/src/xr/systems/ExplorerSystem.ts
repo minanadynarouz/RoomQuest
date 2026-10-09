@@ -45,6 +45,8 @@ export class ExplorerSystem
   private entity: Entity | null = null;
   private started = false;
   private gemHideCursor = 0;
+  /** F-07: freeze kinematic stepping (pause HUD / XR blur). */
+  private movementFrozen = false;
 
   configure(options: { builder: LevelBuilderSystem; store: GameStore }): void {
     this.builder = options.builder;
@@ -70,11 +72,22 @@ export class ExplorerSystem
   begin(plan: LevelPlan, graph: SurfaceGraph): void {
     const path = explorerPath(plan, graph);
     this.gemHideCursor = 0;
+    this.movementFrozen = false;
     if (this.store) {
       this.walker.begin(path, plan, this.store);
     }
     this.started = true;
     this.syncModel(0);
+  }
+
+  /** F-07: stop walking without resetting pose or path. */
+  pause(): void {
+    this.movementFrozen = true;
+  }
+
+  /** F-07: continue from the frozen pose. */
+  resume(): void {
+    this.movementFrozen = false;
   }
 
   /** F-06 `ExplorerTarget`: writes walker world pose into caller-owned `out`. */
@@ -93,6 +106,10 @@ export class ExplorerSystem
 
   update(delta: number, time: number): void {
     if (!this.started || !this.store) return;
+    if (this.movementFrozen || this.store.phase === 'paused') {
+      this.syncModel(time);
+      return;
+    }
     this.walker.update(delta, time);
     this.syncModel(time);
     this.emitOutOfView();

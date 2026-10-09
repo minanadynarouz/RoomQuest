@@ -6,8 +6,9 @@
 
 import { signal, computed } from '@preact/signals-core';
 import { clampParTimeMs, type Issue } from '@roomquest/level-core';
-import type { ErrorCode, LevelPlan, PlanSource } from '@roomquest/schema';
+import type { ErrorCode, LevelPlan, PlanSource, Tier } from '@roomquest/schema';
 import type { FallbackReason } from './director/types.js';
+import { DEFAULT_TIER } from './director/types.js';
 import type {
   GamePhase,
   GameEvent,
@@ -89,6 +90,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
   const apiErrorCode = signal<ErrorCode | null>(null);
   const retryAfterS = signal<number | null>(null);
   const validationIssues = signal<Issue[]>([]);
+  const tier = signal<Tier | null>(null);
 
   // Computed values
   const state = computed<GameState>(() => ({
@@ -108,6 +110,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
     apiErrorCode: apiErrorCode.value,
     retryAfterS: retryAfterS.value,
     validationIssues: validationIssues.value,
+    tier: tier.value,
   }));
 
   // Helper to get current elapsed time (not a computed to avoid caching issues)
@@ -127,17 +130,19 @@ export function createGameStore(options: GameStoreOptions = {}) {
     const currentParTimeMs = parTimeMs.value;
     if (!currentPlan || currentParTimeMs === 0) return null;
 
-    const stars = calculateStars(
-      getElapsedMs(),
-      currentParTimeMs,
-      gemsCollected.value
-    );
+    const completed = phase.value === 'won';
+    const stars = calculateStars({
+      plan: currentPlan,
+      gemsCollected: gemsCollected.value,
+      elapsedMs: getElapsedMs(),
+      completed,
+    });
 
     return {
       stars,
       gems: gemsCollected.value,
       timeMs: getElapsedMs(),
-      completed: phase.value === 'won',
+      completed,
     };
   });
 
@@ -308,12 +313,21 @@ export function createGameStore(options: GameStoreOptions = {}) {
         timestamp: number;
       };
 
+  const eventListeners = new Set<(event: GameEvent) => void>();
+
+  function notifyEvent(event: GameEvent): void {
+    for (const listener of eventListeners) {
+      listener(event);
+    }
+  }
+
   function emitEvent(event: EmittableEvent) {
     const now = clock.now();
 
     // beatCompleted already has all fields
     if (event.type === 'beatCompleted') {
       events.value = [...events.value, event];
+      notifyEvent(event);
       return;
     }
 
@@ -324,6 +338,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
     };
 
     events.value = [...events.value, fullEvent];
+    notifyEvent(fullEvent);
 
     // Update gems counter for gem collection events
     if (event.type === 'gemCollected') {
@@ -379,6 +394,9 @@ export function createGameStore(options: GameStoreOptions = {}) {
     get validationIssues() {
       return validationIssues.value;
     },
+    get tier() {
+      return tier.value;
+    },
 
     // Phase transitions
     requestLevel() {
@@ -410,6 +428,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
       apiErrorCode.value = options?.apiErrorCode ?? null;
       retryAfterS.value = options?.retryAfterS ?? null;
       validationIssues.value = options?.issues ?? [];
+      tier.value = options?.tier ?? DEFAULT_TIER;
       events.value = [];
       gemsCollected.value = 0;
       beatTimings.value = [];
@@ -483,6 +502,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
       apiErrorCode.value = null;
       retryAfterS.value = null;
       validationIssues.value = [];
+      tier.value = null;
       events.value = [];
       gemsCollected.value = 0;
       beatTimings.value = [];
@@ -515,6 +535,17 @@ export function createGameStore(options: GameStoreOptions = {}) {
 
     explorerOutOfView() {
       emitEvent({ type: 'explorerOutOfView' as const });
+    },
+
+    /**
+     * Subscribe to typed game events (F-08 audio binds here).
+     * `won` is emitted from `win()` before the phase change.
+     */
+    subscribeEvents(listener: (event: GameEvent) => void): () => void {
+      eventListeners.add(listener);
+      return () => {
+        eventListeners.delete(listener);
+      };
     },
 
     // Beat management

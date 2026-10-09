@@ -20,6 +20,7 @@ import {
   type Object3D,
 } from '@iwsdk/core';
 import type { GameStore } from '../game/index.js';
+import type { HudActions } from './hud-actions.js';
 import { asExplorerTarget, setExplorerTarget, setFallbackExplorerTarget } from './explorer-target.js';
 import { readGuidanceOverlay } from './guidance/overlay.js';
 import { createExplorerStub } from './explorer-stub.js';
@@ -44,9 +45,16 @@ import {
 
 let boundStore: GameStore | null = null;
 let explorerAnchor: Object3D | null = null;
+let hudActions: HudActions | null = null;
+
+export type { HudActions };
 
 export function bindHudStore(store: GameStore): void {
   boundStore = store;
+}
+
+export function bindHudActions(actions: HudActions | null): void {
+  hudActions = actions;
 }
 
 /**
@@ -284,7 +292,8 @@ export class HudSystem extends createSystem({}) {
     }
     if (id === 'beatGoal') {
       click('beat-pause', () => {
-        store.pause();
+        if (hudActions) hudActions.pause();
+        else store.pause();
       });
     }
     if (id === 'noSurfaces') {
@@ -294,21 +303,26 @@ export class HudSystem extends createSystem({}) {
     }
     if (id === 'pause') {
       click('pause-resume', () => {
-        store.resume();
+        if (hudActions) hudActions.resume();
+        else store.resume();
       });
       click('pause-restart', () => {
-        store.replay();
+        if (hudActions) hudActions.replay();
+        else store.replay();
       });
       click('pause-exit', () => {
-        this.exitToLanding(store);
+        if (hudActions) hudActions.exit();
+        else this.exitToLanding(store);
       });
     }
     if (id === 'win') {
       click('win-replay', () => {
-        store.replay();
+        if (hudActions) hudActions.replay();
+        else store.replay();
       });
       click('win-exit', () => {
-        this.exitToLanding(store);
+        if (hudActions) hudActions.exit();
+        else this.exitToLanding(store);
       });
     }
   }

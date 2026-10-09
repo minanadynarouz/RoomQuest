@@ -134,6 +134,8 @@ export interface DirectorResult {
   retryAfterS?: number;
   /** Typed `validatePlan` issues for the debug overlay. */
   issues?: Issue[];
+  /** Difficulty used for this request (F-07 proc keys). */
+  tier?: Tier;
 }
 
 export interface DirectorClient {

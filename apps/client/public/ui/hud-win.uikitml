@@ -91,6 +91,6 @@
     <ButtonLabel>Replay</ButtonLabel>
   </Button>
   <Button id="win-exit" class="button-last">
-    <ButtonLabel>Exit</ButtonLabel>
+    <ButtonLabel>Done</ButtonLabel>
   </Button>
 </Panel>

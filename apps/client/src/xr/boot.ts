@@ -24,9 +24,17 @@ import {
   applyDirectorResult,
   createDirectorClientFromEnv,
   createGameStore,
+  createResultPoster,
+  getOrCreateDeviceId,
 } from '../game/index.js';
 import { bindGuidanceStore, GuidanceSystem } from '../ui/GuidanceSystem.js';
-import { bindHudStore, HudSystem, setExplorerAnchor } from '../ui/HudSystem.js';
+import {
+  bindHudActions,
+  bindHudStore,
+  HudSystem,
+  setExplorerAnchor,
+} from '../ui/HudSystem.js';
+import { createSessionController, type SessionController } from './session.js';
 import { setExplorerTarget } from '../ui/explorer-target.js';
 import { createStatsGetter, isOverlayReady } from './debug/hooks.js';
 import { installRqHooks, registerRqHook } from './debug/rq-hooks.js';
@@ -65,6 +73,9 @@ let latestPlacement: PlacementDebugApi | null = null;
 let clientFlags: ClientFlags = readClientFlags('');
 let overlayRequested = false;
 let autoSolveHookRegistered = false;
+let sessionController: SessionController | null = null;
+let sessionHooksRegistered = false;
+let visibilityBound = false;
 
 const statsGetter = createStatsGetter(() =>
   collectPerfStats({
@@ -79,6 +90,64 @@ const statsGetter = createStatsGetter(() =>
     validationIssues: gameStore.validationIssues.length,
   })
 );
+
+function showLandingPage(): void {
+  const landing = document.getElementById('landing-page');
+  if (landing) landing.style.display = '';
+}
+
+function ensureSessionController(): SessionController {
+  if (sessionController) return sessionController;
+  const storage = browserKv();
+  const deviceId = getOrCreateDeviceId(storage);
+  const poster = createResultPoster({
+    fetch: async (input, init) => fetch(input, init),
+    apiBaseUrl: import.meta.env.VITE_API_BASE_URL ?? '',
+    deviceId,
+  });
+  sessionController = createSessionController({
+    store: gameStore,
+    getWorld: () => worldInstance,
+    getBuilder: () => worldInstance?.getSystem(LevelBuilderSystem) ?? null,
+    getExplorer: () => worldInstance?.getSystem(ExplorerSystem) ?? null,
+    getGraph: () => latestGraph,
+    postResult: (input) => {
+      void poster.post(input);
+    },
+    deviceId,
+    showLanding: showLandingPage,
+  });
+  bindHudActions(sessionController);
+  return sessionController;
+}
+
+function registerSessionHooks(): void {
+  if (sessionHooksRegistered || !sessionController) return;
+  sessionHooksRegistered = true;
+  const gate = { flags: clientFlags, isDev: import.meta.env.DEV };
+  registerRqHook('pause', () => sessionController?.pause(), gate);
+  registerRqHook('resume', () => sessionController?.resume(), gate);
+  registerRqHook('forceWin', () => sessionController?.forceWin(), gate);
+}
+
+function bindVisibilityPause(world: World): void {
+  if (visibilityBound) return;
+  visibilityBound = true;
+  const session = ensureSessionController();
+  world.visibilityState.subscribe((state) => {
+    session.onVisibilityState(state);
+  });
+  const xr = world.renderer.xr;
+  const onSessionStart = (): void => {
+    const xrSession = xr.getSession();
+    if (!xrSession) return;
+    const onVis = (): void => {
+      session.onVisibilityState(xrSession.visibilityState);
+    };
+    xrSession.addEventListener('visibilitychange', onVis);
+  };
+  xr.addEventListener('sessionstart', onSessionStart);
+}
 
 function registerAutoSolveHook(): void {
   if (autoSolveHookRegistered) return;
@@ -256,6 +325,8 @@ export async function launchXR(): Promise<World> {
   const flags = clientFlags;
   const fixtureMode = isSyntheticLivingRoomFixture(flags);
   const fixtureXr = isFixtureXrSession(flags);
+  ensureSessionController();
+  registerSessionHooks();
 
   if (worldInstance) {
     if (!fixtureMode || fixtureXr) {
@@ -350,6 +421,7 @@ export async function launchXR(): Promise<World> {
   }
   explorer.configure({ builder, store: gameStore });
   setExplorerTarget(explorer);
+  bindVisibilityPause(worldInstance);
   registerRqHook('explorer', explorer.debugApi(), {
     flags: clientFlags,
     isDev: import.meta.env.DEV,
@@ -364,7 +436,9 @@ export async function launchXR(): Promise<World> {
     addFixtureLights(worldInstance);
     gameStore.requestLevel();
     gameStore.startSurveying();
-    gameStore.startBuilding(SYNTHETIC_LIVING_ROOM_PLAN);
+    gameStore.startBuilding(SYNTHETIC_LIVING_ROOM_PLAN, {
+      source: 'procedural',
+    });
     builder.build(SYNTHETIC_LIVING_ROOM_PLAN, SYNTHETIC_LIVING_ROOM);
     explorer.begin(SYNTHETIC_LIVING_ROOM_PLAN, SYNTHETIC_LIVING_ROOM);
     if (flags.debug) {

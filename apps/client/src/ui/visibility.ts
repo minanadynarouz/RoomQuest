@@ -222,7 +222,7 @@ export function mapStoreToHud(
       statsLabel: formatWinStats(gems, timeMs),
       tomorrowLabel: formatTomorrowLine(todayIso),
       replayLabel: HUD_COPY.replay,
-      exitLabel: HUD_COPY.exit,
+      exitLabel: HUD_COPY.done,
     },
   };
 }

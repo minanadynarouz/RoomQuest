@@ -18,5 +18,5 @@ export { SurfaceGraphSystem } from './systems/SurfaceGraphSystem.js';
 export { mountGreyboxLevel } from './level/mount-level.js';
 export { countDrawCalls } from './level/draw-calls.js';
 export { createPiece, createGreyboxKit } from './pieces/index.js';
-export { HudSystem, bindHudStore } from '../ui/HudSystem.js';
+export { HudSystem, bindHudStore, bindHudActions } from '../ui/HudSystem.js';
 export { PlacementController } from './placement/controller.js';

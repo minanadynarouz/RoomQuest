@@ -25,6 +25,7 @@ import {
   type LevelPlan,
   type PlanSource,
   type SurfaceGraph,
+  type Tier,
 } from '@roomquest/schema';
 import { fallbackReasonFromIssues, issueCodesOf } from './issues.js';
 import {
@@ -165,12 +166,14 @@ function localResult(
     cacheKey?: string;
     model?: string;
     promptVersion?: string;
+    tier?: Tier;
   }
 ): DirectorResult {
   return {
     plan: clampPlanPar(plan),
     source,
     cacheKey: extras?.cacheKey ?? `procedural:${seed}`,
+    tier: extras?.tier,
     model: extras?.model,
     promptVersion: extras?.promptVersion ?? 'local',
     latencyMs,
@@ -260,7 +263,7 @@ export function createDirectorClient(
         nowMs() - started,
         'procedural',
         reason,
-        extras
+        { ...extras, tier }
       );
       logDirectorResult(result);
       return result;
@@ -339,6 +342,7 @@ export function createDirectorClient(
             cacheKey: parsed.data.cacheKey,
             model: parsed.data.model,
             promptVersion: parsed.data.promptVersion,
+            tier,
           }
         );
         logDirectorResult(result);
@@ -366,6 +370,7 @@ export function createDirectorClient(
       repairs: parsed.data.repairs,
       usedFallback: false,
       issues: [],
+      tier,
     };
     logDirectorResult(result);
     return result;
