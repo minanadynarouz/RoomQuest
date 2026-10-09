@@ -10,24 +10,25 @@ import type { SurfaceGraph, SurfaceLabel } from '@roomquest/schema';
 import type { SurfaceDescriptor } from '@roomquest/level-core';
 import { buildSurfaceGraph } from '@roomquest/level-core';
 
+const VALID_LABELS: readonly SurfaceLabel[] = [
+  'table',
+  'desk',
+  'couch',
+  'bed',
+  'shelf',
+  'storage',
+  'floor',
+  'seat_like',
+  'other',
+];
+
 /**
  * Normalize native semantic label to schema SurfaceLabel
  */
 function normalizeSurfaceLabel(nativeLabel: string): string {
   const lower = nativeLabel.toLowerCase();
-  const validLabels: SurfaceLabel[] = [
-    'table',
-    'desk',
-    'couch',
-    'bed',
-    'shelf',
-    'storage',
-    'floor',
-    'seat_like',
-    'other',
-  ];
 
-  for (const valid of validLabels) {
+  for (const valid of VALID_LABELS) {
     if (lower === valid) {
       return valid;
     }
@@ -47,11 +48,11 @@ function normalizeSurfaceLabel(nativeLabel: string): string {
 
 /**
  * SurfaceGraphSystem - Queries XRPlane and XRMesh entities to build a SurfaceGraph
- * 
+ *
  * Emits events:
  * - 'graphReady': graph is built and stable
  * - 'noSurfaces': fewer than 2 usable surfaces found
- * 
+ *
  * Design Doc §5, Architecture §7
  */
 export class SurfaceGraphSystem extends createSystem(
@@ -61,7 +62,7 @@ export class SurfaceGraphSystem extends createSystem(
   },
   {
     stabilizationTimeMs: { type: Types.Float32, default: 2500 },
-  },
+  }
 ) {
   private graph: SurfaceGraph | null = null;
   private startTime = 0;
@@ -69,6 +70,12 @@ export class SurfaceGraphSystem extends createSystem(
   private eventEmitter = new EventTarget();
   private captureAttempted = false;
   private inFlight = false;
+  private readonly tmpVec = new Vector3();
+  private readonly tmpQuat = new Quaternion();
+  private readonly startPose = {
+    position: [0, 0, 0] as [number, number, number],
+    forward: [0, 0, -1] as [number, number, number],
+  };
 
   init() {
     this.startTime = performance.now();
@@ -131,16 +138,19 @@ export class SurfaceGraphSystem extends createSystem(
         this.graph = graph;
         const buildTime = performance.now() - buildStart;
 
-        console.log(`[SurfaceGraphSystem] Built graph in ${buildTime.toFixed(1)}ms:`, {
-          nodes: graph.nodes.length,
-          edges: graph.edges.length,
-          roomHash: graph.roomHash,
-          size: JSON.stringify(graph).length,
-        });
+        console.log(
+          `[SurfaceGraphSystem] Built graph in ${buildTime.toFixed(1)}ms:`,
+          {
+            nodes: graph.nodes.length,
+            edges: graph.edges.length,
+            roomHash: graph.roomHash,
+            size: JSON.stringify(graph).length,
+          }
+        );
 
         this.stabilized = true;
         this.eventEmitter.dispatchEvent(
-          new CustomEvent('graphReady', { detail: graph }),
+          new CustomEvent('graphReady', { detail: graph })
         );
       })
       .catch((error: unknown) => {
@@ -155,8 +165,8 @@ export class SurfaceGraphSystem extends createSystem(
 
   private extractDescriptors(): SurfaceDescriptor[] {
     const descriptors: SurfaceDescriptor[] = [];
-    const tmpVec = new Vector3();
-    const tmpQuat = new Quaternion();
+    const tmpVec = this.tmpVec;
+    const tmpQuat = this.tmpQuat;
 
     for (const entity of this.queries.planes.entities) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -169,8 +179,13 @@ export class SurfaceGraphSystem extends createSystem(
       obj.getWorldPosition(tmpVec);
       obj.getWorldQuaternion(tmpQuat);
 
-      const pos = tmpVec.toArray();
-      const quat = tmpQuat.toArray();
+      const pos: [number, number, number] = [tmpVec.x, tmpVec.y, tmpVec.z];
+      const quat: [number, number, number, number] = [
+        tmpQuat.x,
+        tmpQuat.y,
+        tmpQuat.z,
+        tmpQuat.w,
+      ];
 
       let label = 'other';
       if (planeData.semanticLabel) {
@@ -188,12 +203,8 @@ export class SurfaceGraphSystem extends createSystem(
         orientation: planeData.orientation ?? 'horizontal',
         pose: { position: pos, orientation: quat },
         polygon: planeData.polygon
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
-          ? Array.from(planeData.polygon).map((p: any) => [
-              p.x,
-              p.y,
-              p.z,
-            ])
+          ? // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
+            Array.from(planeData.polygon).map((p: any) => [p.x, p.y, p.z])
           : undefined,
       });
     }
@@ -210,8 +221,13 @@ export class SurfaceGraphSystem extends createSystem(
       obj.getWorldPosition(tmpVec);
       obj.getWorldQuaternion(tmpQuat);
 
-      const pos = tmpVec.toArray();
-      const quat = tmpQuat.toArray();
+      const pos: [number, number, number] = [tmpVec.x, tmpVec.y, tmpVec.z];
+      const quat: [number, number, number, number] = [
+        tmpQuat.x,
+        tmpQuat.y,
+        tmpQuat.z,
+        tmpQuat.w,
+      ];
 
       let adjustedPos = pos;
       if (isBounded && max) {
@@ -235,7 +251,11 @@ export class SurfaceGraphSystem extends createSystem(
 
     for (const desc of descriptors) {
       const y = desc.pose.position[1];
-      if (desc.type === 'plane' && desc.orientation === 'horizontal' && y < 0.2) {
+      if (
+        desc.type === 'plane' &&
+        desc.orientation === 'horizontal' &&
+        y < 0.2
+      ) {
         minY = Math.min(minY, y);
       }
     }
@@ -248,13 +268,14 @@ export class SurfaceGraphSystem extends createSystem(
     forward: [number, number, number];
   } {
     const camera = this.camera;
-    const pos = camera.position.toArray();
-
-    const tmpVec = new Vector3();
-    camera.getWorldDirection(tmpVec);
-    const forward = tmpVec.toArray();
-
-    return { position: pos, forward };
+    this.startPose.position[0] = camera.position.x;
+    this.startPose.position[1] = camera.position.y;
+    this.startPose.position[2] = camera.position.z;
+    camera.getWorldDirection(this.tmpVec);
+    this.startPose.forward[0] = this.tmpVec.x;
+    this.startPose.forward[1] = this.tmpVec.y;
+    this.startPose.forward[2] = this.tmpVec.z;
+    return this.startPose;
   }
 
   private async initiateRoomCapture(): Promise<void> {
@@ -271,7 +292,10 @@ export class SurfaceGraphSystem extends createSystem(
         console.log('[SurfaceGraphSystem] Initiating room capture...');
         await sessionAny.initiateRoomCapture();
       } catch (error) {
-        console.warn('[SurfaceGraphSystem] Room capture failed or not supported:', error);
+        console.warn(
+          '[SurfaceGraphSystem] Room capture failed or not supported:',
+          error
+        );
       }
     }
   }
@@ -299,14 +323,14 @@ export class SurfaceGraphSystem extends createSystem(
 
   public addEventListener(
     type: 'graphReady' | 'noSurfaces',
-    listener: EventListener,
+    listener: EventListener
   ): void {
     this.eventEmitter.addEventListener(type, listener);
   }
 
   public removeEventListener(
     type: 'graphReady' | 'noSurfaces',
-    listener: EventListener,
+    listener: EventListener
   ): void {
     this.eventEmitter.removeEventListener(type, listener);
   }

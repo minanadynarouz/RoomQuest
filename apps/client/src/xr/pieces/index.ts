@@ -1,6 +1,7 @@
 export { paletteFor, THEME_PALETTES, type ToyPalette } from './palette.js';
 export { type PieceFootprint } from './geometry.js';
 export { GreyboxKit, createGreyboxKit } from './kit.js';
+export { sharedVertexColorMaterial } from './shared-material.js';
 export { createPiece, pieceFactoryIds } from './create-piece.js';
 export { InstancePool } from './instance-pool.js';
 

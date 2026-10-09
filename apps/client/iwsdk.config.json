@@ -44,7 +44,9 @@
         "logDiagnostics": true
       },
       "physics": false,
-      "sceneUnderstanding": true,
+      "sceneUnderstanding": {
+        "showWireFrame": false
+      },
       "environmentRaycast": true,
       "spatialUI": {
         "kit": "horizon"

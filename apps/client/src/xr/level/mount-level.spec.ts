@@ -4,10 +4,15 @@ import {
   SYNTHETIC_LIVING_ROOM,
   SYNTHETIC_LIVING_ROOM_PLAN,
 } from '@roomquest/fixtures';
-import type { LevelPlan, Placement } from '@roomquest/schema';
 import { PIECE_IDS } from '@roomquest/schema';
+import { fullKitPlan } from '../perf/full-kit-plan.js';
 import { mountGreyboxLevel } from './mount-level.js';
-import { countDrawCalls } from './draw-calls.js';
+import {
+  countDrawCalls,
+  countTriangles,
+  DRAW_CALL_BUDGET,
+  TRIANGLE_BUDGET,
+} from './draw-calls.js';
 
 const TOP_TOLERANCE_M = 0.02;
 
@@ -17,83 +22,6 @@ function surfaceTop(surfaceId: string): number {
     throw new Error(`missing surface ${surfaceId}`);
   }
   return SYNTHETIC_LIVING_ROOM.floorY + node.topHeight;
-}
-
-function fourteenPiecePlan(): LevelPlan {
-  const extras: Placement[] = [
-    {
-      id: 'p8',
-      piece: 'ramp',
-      surface: 's1',
-      to: 's5',
-      u: 0.2,
-      v: 0.8,
-      playerBuilt: true,
-      links: [],
-    },
-    {
-      id: 'p9',
-      piece: 'moving_platform',
-      surface: 's5',
-      u: 0.5,
-      v: 0.5,
-      playerBuilt: false,
-      links: [],
-    },
-    {
-      id: 'p10',
-      piece: 'slime',
-      surface: 's2',
-      u: 0.2,
-      v: 0.2,
-      playerBuilt: false,
-      links: [],
-    },
-    {
-      id: 'p11',
-      piece: 'portal',
-      surface: 's1',
-      to: 's3',
-      u: 0.1,
-      v: 0.5,
-      playerBuilt: false,
-      links: ['p12'],
-    },
-    {
-      id: 'p12',
-      piece: 'portal',
-      surface: 's3',
-      to: 's1',
-      u: 0.5,
-      v: 0.5,
-      playerBuilt: false,
-      links: ['p11'],
-    },
-    {
-      id: 'p13',
-      piece: 'gem',
-      surface: 's4',
-      u: 0.5,
-      v: 0.2,
-      playerBuilt: false,
-      links: [],
-    },
-    {
-      id: 'p14',
-      piece: 'gem',
-      surface: 's5',
-      u: 0.3,
-      v: 0.3,
-      playerBuilt: false,
-      links: [],
-    },
-  ];
-
-  return {
-    ...SYNTHETIC_LIVING_ROOM_PLAN,
-    title: 'Fourteen Piece Budget',
-    placements: [...SYNTHETIC_LIVING_ROOM_PLAN.placements, ...extras],
-  };
 }
 
 describe('mountGreyboxLevel', () => {
@@ -138,7 +66,7 @@ describe('mountGreyboxLevel', () => {
 
   it('keeps a 14-piece level under 60 draw calls', () => {
     const scene = new Group();
-    const plan = fourteenPiecePlan();
+    const plan = fullKitPlan();
     expect(plan.placements).toHaveLength(14);
     const used = new Set(plan.placements.map((p) => p.piece));
     for (const id of PIECE_IDS) {
@@ -149,9 +77,13 @@ describe('mountGreyboxLevel', () => {
     mounted.syncInstances();
 
     const drawCalls = countDrawCalls(scene);
-    console.log('[X-03] 14-piece draw calls:', drawCalls);
+    const triangles = countTriangles(scene);
+    console.log('[X-03] 14-piece draw calls:', drawCalls, 'tris:', triangles);
     expect(drawCalls).toBeGreaterThan(0);
     expect(drawCalls).toBeLessThan(60);
+    expect(drawCalls).toBeLessThan(DRAW_CALL_BUDGET);
+    expect(triangles).toBeGreaterThan(0);
+    expect(triangles).toBeLessThan(TRIANGLE_BUDGET);
 
     mounted.dispose();
   });

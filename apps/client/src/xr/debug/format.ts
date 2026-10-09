@@ -10,7 +10,9 @@ export interface DebugLine {
 }
 
 function padLabel(label: string, width = 9): string {
-  return label.length >= width ? `${label} ` : label + ' '.repeat(width - label.length);
+  return label.length >= width
+    ? `${label} `
+    : label + ' '.repeat(width - label.length);
 }
 
 export function formatDash(value: string | number | null | undefined): string {
@@ -28,44 +30,38 @@ export function formatLatency(ms: number | null): string {
   return `${String(Math.round(ms))}ms`;
 }
 
+const DEBUG_LINES: DebugLine[] = [
+  { id: 'debug-fps', text: '' },
+  { id: 'debug-draws', text: '' },
+  { id: 'debug-tris', text: '' },
+  { id: 'debug-surfaces', text: '' },
+  { id: 'debug-source', text: '' },
+  { id: 'debug-latency', text: '' },
+  { id: 'debug-repairs', text: '' },
+  { id: 'debug-fallback', text: '' },
+  { id: 'debug-issues', text: '' },
+];
+
+function setLineText(index: number, text: string): void {
+  const line = DEBUG_LINES[index];
+  if (line) line.text = text;
+}
+
 export function formatDebugLines(stats: RqPerfStats): DebugLine[] {
-  return [
-    { id: 'debug-fps', text: `${padLabel('fps')}${formatFps(stats.fps)}` },
-    {
-      id: 'debug-draws',
-      text: `${padLabel('draws')}${String(stats.drawCalls)}`,
-    },
-    {
-      id: 'debug-tris',
-      text: `${padLabel('tris')}${String(stats.triangles)}`,
-    },
-    {
-      id: 'debug-surfaces',
-      text: `${padLabel('surfaces')}${String(stats.surfaces)}`,
-    },
-    {
-      id: 'debug-source',
-      text: `${padLabel('source')}${formatDash(stats.source)}`,
-    },
-    {
-      id: 'debug-latency',
-      text: `${padLabel('latency')}${formatLatency(stats.latencyMs)}`,
-    },
-    {
-      id: 'debug-repairs',
-      text: `${padLabel('repairs')}${String(stats.repairs)}`,
-    },
-    {
-      id: 'debug-fallback',
-      text: `${padLabel('fallback')}${formatDash(stats.fallbackReason)}`,
-    },
-    {
-      id: 'debug-issues',
-      text: `${padLabel('issues')}${String(stats.validationIssues)}`,
-    },
-  ];
+  setLineText(0, `${padLabel('fps')}${formatFps(stats.fps)}`);
+  setLineText(1, `${padLabel('draws')}${String(stats.drawCalls)}`);
+  setLineText(2, `${padLabel('tris')}${String(stats.triangles)}`);
+  setLineText(3, `${padLabel('surfaces')}${String(stats.surfaces)}`);
+  setLineText(4, `${padLabel('source')}${formatDash(stats.source)}`);
+  setLineText(5, `${padLabel('latency')}${formatLatency(stats.latencyMs)}`);
+  setLineText(6, `${padLabel('repairs')}${String(stats.repairs)}`);
+  setLineText(7, `${padLabel('fallback')}${formatDash(stats.fallbackReason)}`);
+  setLineText(8, `${padLabel('issues')}${String(stats.validationIssues)}`);
+  return DEBUG_LINES;
 }
 
 export function formatDebugBlock(stats: RqPerfStats): string {
-  return ['PERF', ...formatDebugLines(stats).map((line) => line.text)].join('\n');
+  return ['PERF', ...formatDebugLines(stats).map((line) => line.text)].join(
+    '\n'
+  );
 }
