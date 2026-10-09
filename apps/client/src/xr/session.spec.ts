@@ -162,6 +162,8 @@ describe('createSessionController', () => {
       planSource: 'procedural',
       deviceId: DEVICE,
       gems: 1,
+      stars: 3,
+      timeMs: 50_000,
     });
   });
 
