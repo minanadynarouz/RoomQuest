@@ -5,6 +5,7 @@ import {
   LevelResponse,
   ResultRequest,
   ResultResponse,
+  procLevelKey,
   PIECE_IDS,
   KIT_CATALOG,
 } from '@roomquest/schema';
@@ -165,5 +166,6 @@ describe('Schema smoke test (api)', () => {
       })
     ).not.toThrow();
     expect(() => ResultResponse.parse({ id: 'result_1' })).not.toThrow();
+    expect(procLevelKey('seed-1', 'easy')).toBe('proc:seed-1:easy');
   });
 });

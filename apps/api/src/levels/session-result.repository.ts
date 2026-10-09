@@ -1,5 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { ResultRequest } from '@roomquest/schema';
+import {
+  isProcLevelKey,
+  type ResultRequest,
+} from '@roomquest/schema';
 import { PrismaService } from '../prisma/prisma.service';
 import { LevelCacheRepository } from './level-cache.repository';
 
@@ -9,7 +12,7 @@ export type SessionResultInsert =
   | { kind: 'unknown' };
 
 export interface SessionResultWrite extends ResultRequest {
-  cacheKey: string;
+  levelKey: string;
 }
 
 @Injectable()
@@ -25,10 +28,14 @@ export class SessionResultRepository {
   /**
    * Insert a session result. Never throws for a missing/unreachable DB —
    * those are `deferred` so the client can treat the write as optional.
-   * Unknown cache keys (DB up, no LevelCache row) are `unknown`.
+   * Unknown director cache keys (DB up, no LevelCache row) are `unknown`.
+   * `proc:<seed>:<tier>` keys skip LevelCache and store `cacheKey = null`.
    */
   async insert(row: SessionResultWrite): Promise<SessionResultInsert> {
-    await this.cache.waitForInflight(row.cacheKey);
+    const procedural = isProcLevelKey(row.levelKey);
+    if (!procedural) {
+      await this.cache.waitForInflight(row.levelKey);
+    }
 
     const client = this.prisma.getClient();
     if (client === null) {
@@ -36,17 +43,22 @@ export class SessionResultRepository {
     }
 
     try {
-      const found = await client.levelCache.findUnique({
-        where: { key: row.cacheKey },
-        select: { key: true },
-      });
-      if (found === null) {
-        return { kind: 'unknown' };
+      let cacheKey: string | null = null;
+      if (!procedural) {
+        const found = await client.levelCache.findUnique({
+          where: { key: row.levelKey },
+          select: { key: true },
+        });
+        if (found === null) {
+          return { kind: 'unknown' };
+        }
+        cacheKey = found.key;
       }
 
       const created = await client.sessionResult.create({
         data: {
-          cacheKey: row.cacheKey,
+          levelKey: row.levelKey,
+          cacheKey,
           deviceId: row.deviceId,
           stars: row.stars,
           gems: row.gems,

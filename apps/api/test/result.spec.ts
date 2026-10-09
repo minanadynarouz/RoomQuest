@@ -7,6 +7,7 @@ import {
   LevelResponse,
   ResultRequest,
   ResultResponse,
+  procLevelKey,
 } from '@roomquest/schema';
 import request from 'supertest';
 import {
@@ -104,12 +105,35 @@ describe.skipIf(dbUrl === undefined && process.env.CI !== 'true')(
         where: { id: parsed.id },
       });
       expect(row).not.toBeNull();
+      expect(row?.levelKey).toBe(parsedLevel.cacheKey);
       expect(row?.cacheKey).toBe(parsedLevel.cacheKey);
       expect(row?.deviceId).toBe(DEVICE_ID);
       expect(row?.stars).toBe(2);
       expect(row?.gems).toBe(3);
       expect(row?.completed).toBe(true);
       expect(row?.planSource).toBe(parsedLevel.source);
+    });
+
+    it('returns 201 for a proc: key without a LevelCache row', async () => {
+      const key = procLevelKey('f1a2b3c4d5e6-2026-10-14', 'easy');
+      const res = await request(httpServer(app))
+        .post(`/api/v1/levels/${key}/result`)
+        .send(resultBody('procedural'))
+        .expect(201);
+      const parsed = ResultResponse.parse(res.body as unknown);
+      expect(parsed.id.length).toBeGreaterThan(0);
+
+      const client = app.get(PrismaService).getClient();
+      if (client === null) {
+        throw new Error('expected a Prisma client in the postgres spec');
+      }
+      const row = await client.sessionResult.findUnique({
+        where: { id: parsed.id },
+      });
+      expect(row).not.toBeNull();
+      expect(row?.levelKey).toBe(key);
+      expect(row?.cacheKey).toBeNull();
+      expect(row?.planSource).toBe('procedural');
     });
 
     it('returns 404 UNKNOWN_LEVEL for an unknown cacheKey', async () => {

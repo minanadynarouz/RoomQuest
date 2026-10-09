@@ -7,6 +7,7 @@ import {
   LevelResponse,
   ResultDeferred,
   ResultRequest,
+  procLevelKey,
 } from '@roomquest/schema';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -216,6 +217,34 @@ describe('API contract (B-02)', () => {
       expect(res.status).toBe(413);
       expect(body.error.code).toBe('INVALID_REQUEST');
       expect(body.error.message ?? '').toMatch(/16 KB/i);
+    });
+
+    it('returns 400 for a malformed proc: key', async () => {
+      for (const bad of ['proc:not-a-valid-key', 'proc:seed:hard', 'proc:']) {
+        const res = await resultPost(bad).send(validResult);
+        expect(res.status).toBe(400);
+        const body = res.body as ErrorEnvelope;
+        expect(body.error.code).toBe('INVALID_REQUEST');
+      }
+    });
+
+    it('returns 400 when a proc: key is not planSource procedural', async () => {
+      const key = procLevelKey('client-seed-1', 'easy');
+      const res = await resultPost(key)
+        .send({ ...validResult, planSource: 'llm' })
+        .expect(400);
+      const body = res.body as ErrorEnvelope;
+      expect(body.error.code).toBe('INVALID_REQUEST');
+      expect(body.error.message ?? '').toMatch(/procedural/i);
+    });
+
+    it('returns 202 { stored:false } for a valid proc: key when there is no database', async () => {
+      const key = procLevelKey('client-seed-1', 'easy');
+      const res = await resultPost(key).send(validResult);
+      expect(res.status).toBe(202);
+      expect(ResultDeferred.parse(res.body as unknown)).toEqual({
+        stored: false,
+      });
     });
   });
 

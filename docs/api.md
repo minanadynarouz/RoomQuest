@@ -23,7 +23,7 @@ JSON only. Request body ≤ **16 KB**.
 | ------------------------------------------ | --------------------------------------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `GET /api/health`                          | none                                                                              | `200 {status:"ok", version, db, llm, time}` | none (always 200 if the process is up)                                                                                       |
 | `POST /api/v1/levels`                      | Headers `X-Device-Id` (UUID v4), `X-Client-Version` (semver). Body `LevelRequest` | `200 LevelResponse`                         | `400 {error:{code:"INVALID_REQUEST", message, issues}}` · `413` oversized body (see below) · `429 {error:{code:"RATE_LIMITED", retryAfterS}}` · `500 {error:{code:"INTERNAL"}}` |
-| `POST /api/v1/levels/:cacheKey/result`     | Body `ResultRequest`                                                              | `201 {id}` · `202 {stored:false}` (no DB)   | `400 {error:{code:"INVALID_REQUEST", message, issues}}` · `404 {error:{code:"UNKNOWN_LEVEL"}}` · `413` · `429 {error:{code:"RATE_LIMITED", retryAfterS}}` |
+| `POST /api/v1/levels/:cacheKey/result`     | Path `:cacheKey` (16-hex cache hash **or** `proc:<seed>:<tier>`). Body `ResultRequest` | `201 {id}` · `202 {stored:false}` (no DB)   | `400 {error:{code:"INVALID_REQUEST", message, issues}}` (bad body, malformed `proc:` key, or `proc:` + non-`procedural` `planSource`) · `404 {error:{code:"UNKNOWN_LEVEL"}}` (director cache key missing) · `413` · `429 {error:{code:"RATE_LIMITED", retryAfterS}}` |
 
 Out of scope here: `POST /api/v1/levels/:cacheKey/adapt` (post-MVP).
 
@@ -115,6 +115,21 @@ The API never returns 5xx for LLM problems (architecture §6.6): it degrades to 
 
 Anonymous session result. Covered by the same per-IP `@nestjs/throttler` guard as `POST /api/v1/levels` (60/hour). The per-device cache-miss limiter does **not** apply. `X-Device-Id` / `X-Client-Version` are not required on this route; `deviceId` is in the body.
 
+### Path `:cacheKey`
+
+Two key shapes. Client and server must build `proc:` keys with `procLevelKey(seed, tier)` from `@roomquest/schema` (regex `PROC_LEVEL_KEY_RE`).
+
+| Kind | Example | Lookup |
+| --- | --- | --- |
+| Director cache hash | `a1b2c3d4e5f67890` (first 16 hex chars of `sha256(roomHash\|date\|tier\|promptVersion)`) | Must exist on `LevelCache`. Missing → **404** `UNKNOWN_LEVEL` (only when the DB is up). |
+| Client procedural | `proc:<seed>:<tier>` e.g. `proc:f1a2b3c4d5e6-2026-10-14:easy` | **Not** looked up in `LevelCache`. `seed` is the same string (or stringified number) passed to `generatePlan`; `tier` is `"easy"` \| `"normal"`. Seed must be non-empty and must not contain `:`. |
+
+A key that starts with `proc:` but does not match `proc:<seed>:<easy\|normal>` is **400** (`INVALID_REQUEST`), not 404.
+
+A valid `proc:` key **requires** `planSource: "procedural"`. Any other `planSource` is **400**.
+
+Stored row: `SessionResult.levelKey` is always the posted key. `SessionResult.cacheKey` (FK to `LevelCache`) is set only for director cache hashes; it is `null` for `proc:` keys.
+
 ### Headers
 
 | Header         | Rule                                                                                          |
@@ -145,7 +160,7 @@ Anonymous session result. Covered by the same per-IP `@nestjs/throttler` guard a
 
 ### Success
 
-**201** when the row is inserted into `SessionResult` (the `:cacheKey` must exist on `LevelCache`):
+**201** when the row is inserted into `SessionResult`. For a director cache hash the `:cacheKey` must exist on `LevelCache`. For a valid `proc:` key there is no cache lookup.
 
 ```json
 { "id": "clxyz0123456789" }
@@ -161,8 +176,8 @@ Anonymous session result. Covered by the same per-IP `@nestjs/throttler` guard a
 
 | Status | Envelope |
 | --- | --- |
-| 400 | `{error:{code:"INVALID_REQUEST", message, issues}}` — zod failed on the body |
-| 404 | `{error:{code:"UNKNOWN_LEVEL", message}}` — no `LevelCache` row for `:cacheKey` (only when the DB is up) |
+| 400 | `{error:{code:"INVALID_REQUEST", message, issues}}` — zod failed on the body, the `proc:` key is malformed, or a `proc:` key was posted with `planSource` other than `"procedural"` |
+| 404 | `{error:{code:"UNKNOWN_LEVEL", message}}` — no `LevelCache` row for a **non-proc** `:cacheKey` (only when the DB is up). `proc:` keys never 404. |
 | 413 | `{error:{code:"INVALID_REQUEST", message:"Request body exceeds 16 KB limit"}}` |
 | 429 | `{error:{code:"RATE_LIMITED", retryAfterS}}` — per-IP budget |
 
@@ -203,7 +218,7 @@ Architecture §6 lists 400 / 429 / 500. 413 is the HTTP status for payload too l
 
 ### 404 Unknown level
 
-Returned only by `POST /api/v1/levels/:cacheKey/result` when the database is up and no `LevelCache` row matches `:cacheKey`:
+Returned only by `POST /api/v1/levels/:cacheKey/result` when the database is up, the key is **not** a `proc:` key, and no `LevelCache` row matches `:cacheKey`:
 
 ```json
 {

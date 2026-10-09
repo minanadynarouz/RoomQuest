@@ -27,17 +27,21 @@ model LevelCache {
   results       SessionResult[]
 }
 
-/// Anonymous session result (written by B-09). FK keeps results attached to
-/// the cached plan that was played.
+/// Anonymous session result (written by B-09). `levelKey` is whatever key
+/// the client posted (director cache hash or `proc:<seed>:<tier>`).
+/// `cacheKey` is set only for real LevelCache rows; null for proc keys.
 model SessionResult {
-  id         String     @id @default(cuid())
-  cacheKey   String
-  cache      LevelCache @relation(fields: [cacheKey], references: [key], onDelete: Restrict, onUpdate: Cascade)
+  id         String      @id @default(cuid())
+  levelKey   String
+  cacheKey   String?
+  cache      LevelCache? @relation(fields: [cacheKey], references: [key], onDelete: Restrict, onUpdate: Cascade)
   deviceId   String
   stars      Int
   gems       Int
   timeMs     Int
   completed  Boolean
   planSource String
-  createdAt  DateTime   @default(now())
+  createdAt  DateTime    @default(now())
+
+  @@index([levelKey])
 }

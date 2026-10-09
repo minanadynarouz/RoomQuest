@@ -12,6 +12,7 @@ import {
 import type { Response } from 'express';
 import {
   LevelRequest,
+  ResultLevelKey,
   ResultRequest,
   type LevelResponse,
   type ResultDeferred,
@@ -45,7 +46,8 @@ export class LevelsController {
 
   @Post(':cacheKey/result')
   async submitResult(
-    @Param('cacheKey') cacheKey: string,
+    @Param('cacheKey', new ZodValidationPipe(ResultLevelKey))
+    cacheKey: ResultLevelKey,
     @Body(new ZodValidationPipe(ResultRequest)) body: ResultRequest,
     @Res({ passthrough: true }) res: Response
   ): Promise<ResultResponse | ResultDeferred> {
