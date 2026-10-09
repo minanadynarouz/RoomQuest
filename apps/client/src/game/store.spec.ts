@@ -92,6 +92,14 @@ describe('createGameStore', () => {
       const store = createGameStore({ clock: mockClock });
       expect(store.elapsedMs).toBe(0);
     });
+
+    it('has no director metadata initially', () => {
+      const store = createGameStore({ clock: mockClock });
+      expect(store.planSource).toBeNull();
+      expect(store.directorLatencyMs).toBeNull();
+      expect(store.repairs).toEqual([]);
+      expect(store.cacheKey).toBeNull();
+    });
   });
 
   describe('phase transitions', () => {
@@ -116,6 +124,21 @@ describe('createGameStore', () => {
       store.startBuilding(plan);
       expect(store.phase).toBe('building');
       expect(store.plan).toEqual(plan);
+    });
+
+    it('records director source and latency on startBuilding', () => {
+      const store = createGameStore({ clock: mockClock });
+      store.requestLevel();
+      store.startSurveying();
+      store.startBuilding(createMockPlan(), {
+        source: 'procedural',
+        latencyMs: 18,
+        repairs: [],
+        cacheKey: 'procedural:test-seed',
+      });
+      expect(store.planSource).toBe('procedural');
+      expect(store.directorLatencyMs).toBe(18);
+      expect(store.cacheKey).toBe('procedural:test-seed');
     });
 
     it('allows building → playing', () => {
@@ -926,6 +949,23 @@ describe('createGameStore', () => {
       expect(store.phase).toBe('building');
     });
 
+    it('keeps director metadata on replay', () => {
+      const store = createGameStore({ clock: mockClock });
+      store.requestLevel();
+      store.startSurveying();
+      store.startBuilding(createMockPlan(), {
+        source: 'cache',
+        latencyMs: 90,
+        cacheKey: 'hit',
+      });
+      store.startPlaying();
+      store.win();
+      store.replay();
+      expect(store.planSource).toBe('cache');
+      expect(store.directorLatencyMs).toBe(90);
+      expect(store.cacheKey).toBe('hit');
+    });
+
     it('resets all counters on replay', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
@@ -971,6 +1011,9 @@ describe('createGameStore', () => {
       expect(store.state.gemsCollected).toBe(0);
       expect(store.elapsedMs).toBe(0);
       expect(store.state.error).toBeNull();
+      expect(store.planSource).toBeNull();
+      expect(store.directorLatencyMs).toBeNull();
+      expect(store.cacheKey).toBeNull();
     });
   });
 });

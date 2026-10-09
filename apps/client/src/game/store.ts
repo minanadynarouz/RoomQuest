@@ -5,7 +5,7 @@
  */
 
 import { signal, computed } from '@preact/signals-core';
-import type { LevelPlan } from '@roomquest/schema';
+import type { LevelPlan, PlanSource } from '@roomquest/schema';
 import type {
   GamePhase,
   GameEvent,
@@ -15,6 +15,7 @@ import type {
   GameState,
   GameResult,
   StuckPlayerSignal,
+  StartBuildingOptions,
 } from './types.js';
 import { defaultClock } from './types.js';
 import { calculateStars } from './stars.js';
@@ -26,7 +27,7 @@ export class TransitionError extends Error {
   constructor(
     public from: GamePhase,
     public to: GamePhase,
-    message?: string,
+    message?: string
   ) {
     super(message || `Invalid transition from ${from} to ${to}`);
     this.name = 'TransitionError';
@@ -78,6 +79,10 @@ export function createGameStore(options: GameStoreOptions = {}) {
   const currentBeatIndex = signal<number>(0);
   const gemsCollected = signal<number>(0);
   const error = signal<string | null>(null);
+  const planSource = signal<PlanSource | null>(null);
+  const directorLatencyMs = signal<number | null>(null);
+  const repairs = signal<string[]>([]);
+  const cacheKey = signal<string | null>(null);
 
   // Computed values
   const state = computed<GameState>(() => ({
@@ -89,6 +94,10 @@ export function createGameStore(options: GameStoreOptions = {}) {
     currentBeatIndex: currentBeatIndex.value,
     gemsCollected: gemsCollected.value,
     error: error.value,
+    planSource: planSource.value,
+    directorLatencyMs: directorLatencyMs.value,
+    repairs: repairs.value,
+    cacheKey: cacheKey.value,
   }));
 
   // Helper to get current elapsed time (not a computed to avoid caching issues)
@@ -111,7 +120,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
     const stars = calculateStars(
       getElapsedMs(),
       currentParTimeMs,
-      gemsCollected.value,
+      gemsCollected.value
     );
 
     return {
@@ -143,7 +152,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
         (e) =>
           e.type === 'explorerBlocked' &&
           e.beatIndex === beatIndex &&
-          e.timestamp > currentBeat.startTime,
+          e.timestamp > currentBeat.startTime
       )
       .map((e) => ({
         reason: (e as Extract<GameEvent, { type: 'explorerBlocked' }>).reason,
@@ -194,7 +203,8 @@ export function createGameStore(options: GameStoreOptions = {}) {
     if (timerState.value.isPaused) return;
 
     const now = clock.now();
-    const elapsed = timerState.value.elapsedMs + (now - timerState.value.startTime);
+    const elapsed =
+      timerState.value.elapsedMs + (now - timerState.value.startTime);
 
     timerState.value = {
       ...timerState.value,
@@ -249,14 +259,16 @@ export function createGameStore(options: GameStoreOptions = {}) {
       return;
     }
     if (beatTiming.durationMs !== null) {
-      console.warn(`[GameStore] Cannot complete beat ${beatIndex}: already completed`);
+      console.warn(
+        `[GameStore] Cannot complete beat ${beatIndex}: already completed`
+      );
       return;
     }
 
     const durationMs = now - beatTiming.startTime;
 
     beatTimings.value = timings.map((bt) =>
-      bt.beatIndex === beatIndex ? { ...bt, durationMs } : bt,
+      bt.beatIndex === beatIndex ? { ...bt, durationMs } : bt
     );
 
     emitEvent({
@@ -273,20 +285,28 @@ export function createGameStore(options: GameStoreOptions = {}) {
     | { type: 'gateOpened'; placementId: string }
     | { type: 'slimeStunned'; placementId: string }
     | { type: 'gemCollected'; placementId: string }
-    | { type: 'explorerBlocked'; reason: 'unbuiltGap' | 'closedGate' | 'awakeSlime' }
+    | {
+        type: 'explorerBlocked';
+        reason: 'unbuiltGap' | 'closedGate' | 'awakeSlime';
+      }
     | { type: 'explorerOutOfView' }
     | { type: 'won' }
-    | { type: 'beatCompleted'; beatIndex: number; durationMs: number; timestamp: number };
+    | {
+        type: 'beatCompleted';
+        beatIndex: number;
+        durationMs: number;
+        timestamp: number;
+      };
 
   function emitEvent(event: EmittableEvent) {
     const now = clock.now();
-    
+
     // beatCompleted already has all fields
     if (event.type === 'beatCompleted') {
       events.value = [...events.value, event];
       return;
     }
-    
+
     const fullEvent: GameEvent = {
       ...event,
       timestamp: now,
@@ -325,6 +345,18 @@ export function createGameStore(options: GameStoreOptions = {}) {
     get stuckPlayerSignal() {
       return stuckPlayerSignal.value;
     },
+    get planSource() {
+      return planSource.value;
+    },
+    get directorLatencyMs() {
+      return directorLatencyMs.value;
+    },
+    get repairs() {
+      return repairs.value;
+    },
+    get cacheKey() {
+      return cacheKey.value;
+    },
 
     // Phase transitions
     requestLevel() {
@@ -339,9 +371,13 @@ export function createGameStore(options: GameStoreOptions = {}) {
       transition('noSurfaces');
     },
 
-    startBuilding(levelPlan: LevelPlan, options?: { parTimeMs?: number }) {
+    startBuilding(levelPlan: LevelPlan, options?: StartBuildingOptions) {
       plan.value = levelPlan;
       parTimeMs.value = options?.parTimeMs ?? levelPlan.parTimeMs;
+      planSource.value = options?.source ?? null;
+      directorLatencyMs.value = options?.latencyMs ?? null;
+      repairs.value = options?.repairs ?? [];
+      cacheKey.value = options?.cacheKey ?? null;
       events.value = [];
       gemsCollected.value = 0;
       beatTimings.value = [];
@@ -379,7 +415,9 @@ export function createGameStore(options: GameStoreOptions = {}) {
 
     replay() {
       if (phase.value !== 'won' && phase.value !== 'paused') {
-        console.warn('[GameStore] Replay only available from won or paused state');
+        console.warn(
+          '[GameStore] Replay only available from won or paused state'
+        );
         return;
       }
 
@@ -405,6 +443,10 @@ export function createGameStore(options: GameStoreOptions = {}) {
       // Exit returns to landing
       plan.value = null;
       parTimeMs.value = 0;
+      planSource.value = null;
+      directorLatencyMs.value = null;
+      repairs.value = [];
+      cacheKey.value = null;
       events.value = [];
       gemsCollected.value = 0;
       beatTimings.value = [];

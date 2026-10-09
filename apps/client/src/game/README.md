@@ -1,10 +1,11 @@
-# Game Store (F-02)
+# Game Store (F-02) and Director Client (F-03)
 
-Pure TypeScript state management for Roomquest using `@preact/signals-core`.
+Pure TypeScript state management for Roomquest using `@preact/signals-core`, plus the director client that races `POST /api/v1/levels` against a local generator.
 
 ## Architecture
 
 The game store is completely isolated from DOM, IWSDK, and Three.js dependencies. This makes it:
+
 - **Testable**: Pure functions with injected clock for deterministic tests
 - **Type-safe**: Explicit state machine with typed transitions
 - **Observable**: Reactive signals for UI binding
@@ -21,7 +22,7 @@ landing → requesting → surveying → building → playing ⇄ paused → won
 
 - `landing`: Initial state
 - `requesting → surveying`: Level request sent
-- `surveying → building`: Valid surfaces found  
+- `surveying → building`: Valid surfaces found
 - `building → playing`: Level built, timer starts
 - `playing ⇄ paused`: Pause/resume
 - `playing → won`: Goal reached
@@ -50,11 +51,13 @@ interface Clock {
 ## Events
 
 All events carry:
+
 - `timestamp`: Clock time when emitted
 - `beatIndex`: Current beat index
 - Type-specific data
 
 Event types:
+
 - `pieceBuilt`, `gateOpened`, `slimeStunned`, `gemCollected`: Game actions
 - `explorerBlocked`: Blocked with reason (`unbuiltGap`, `closedGate`, `awakeSlime`)
 - `explorerOutOfView`: Explorer outside player FoV
@@ -64,6 +67,7 @@ Event types:
 ## Beat Tracking
 
 Beats track progression through the level:
+
 - Start when entering `playing` (beat 0)
 - Advance via `advanceBeat()`
 - Each beat records start time and duration
@@ -75,7 +79,7 @@ Time-per-beat data enables future "adapt" agent to detect stuck players.
 
 ```ts
 3 stars: time ≤ par AND gems ≥ 3
-2 stars: time ≤ par OR gems ≥ 3  
+2 stars: time ≤ par OR gems ≥ 3
 1 star:  otherwise
 ```
 
@@ -87,7 +91,7 @@ Read-only selector for future "adapt" agent:
 interface StuckPlayerSignal {
   beatIndex: number;
   timeOnBeatMs: number;
-  recentBlocks: { reason, timestamp }[];
+  recentBlocks: { reason; timestamp }[];
 }
 ```
 
@@ -109,7 +113,7 @@ store.startSurveying();
 
 // Building requires a plan (par time read from plan.parTimeMs)
 const plan = getLevelPlan();
-store.startBuilding(plan);
+store.startBuilding(plan, { source, latencyMs, repairs, cacheKey });
 
 store.startPlaying();
 store.pause();
@@ -131,7 +135,29 @@ console.log(store.phase); // Current phase
 console.log(store.elapsedMs); // Timer value
 console.log(store.result); // Stars, gems, time
 console.log(store.stuckPlayerSignal); // For adapt agent
+console.log(store.planSource, store.directorLatencyMs); // F-03
 ```
+
+## Director client (F-03)
+
+Races the director API against a local generator. The API plan is used only if
+it arrives in ≤ 8 s (`AbortController`) **and** passes local re-validation
+against the scanned graph. Otherwise the local procedural plan is used. API
+failures are invisible to the player.
+
+```
+?director=live|mock|off   live (default) races the API; mock/off skip the network
+?seed=                    overrides the local generator seed
+?date=YYYY-MM-DD          overrides the daily date sent to the API
+```
+
+`createDirectorClient` takes injected `fetch`, `generate`, `validate`, and
+device id. `createDirectorClientFromEnv` reads flags from a query string and
+persists a UUID v4 in injected storage (`roomquest:deviceId`).
+
+Until B-03/B-04 merge, `schemaValidate` + `stubGenerate` stand in for
+`level-core.validate` / `level-core.generate`. Same function signatures, so
+the swap is a one-line import.
 
 ## Design Decisions
 
@@ -139,7 +165,8 @@ console.log(store.stuckPlayerSignal); // For adapt agent
 
 **Decision**: Par time is read from `plan.parTimeMs` (required field in `LevelPlan` from `@roomquest/schema`).
 
-**Rationale**: 
+**Rationale**:
+
 - The B-01 schema package (PR #5) now includes `parTimeMs` as a required field with bounds 60000-480000ms (1-8 minutes)
 - Backend's `level-core` clamps par time to these bounds during plan generation
 - The store accepts an optional `parTimeMs` override in `startBuilding(plan, { parTimeMs })` for testing, but production code uses `plan.parTimeMs`
@@ -151,6 +178,7 @@ The timer is a getter (`store.elapsedMs`) that calculates on access rather than 
 ### 3. Exit Transitions
 
 The spec said "Exit returns to landing" but didn't specify from which states. I allowed exit from:
+
 - `playing`: Direct exit during gameplay
 - `paused`: Exit from pause menu
 - `won`: Exit from win screen
@@ -160,9 +188,15 @@ The spec said "Exit returns to landing" but didn't specify from which states. I 
 
 `beatCompleted` includes its own `beatIndex` and `timestamp` since it refers to the completed beat, not the current one. Other events use the current beat index.
 
+### 5. Local generator until B-04
+
+**Decision**: ship a deterministic stub generator so F-03 always resolves to a
+valid plan. B-04 replaces `stubGenerate` with `level-core.generate`.
+
 ## Purity Enforcement
 
 The `purity.spec.ts` test scans all `game/` files to ensure zero DOM, IWSDK, or Three.js imports. This keeps the game logic:
+
 - Framework-agnostic
 - Fast to test
 - Safe to refactor

@@ -3,7 +3,18 @@
  * Pure TypeScript, no DOM, IWSDK or Three.js imports
  */
 
-import type { LevelPlan } from '@roomquest/schema';
+import type { LevelPlan, PlanSource } from '@roomquest/schema';
+
+/**
+ * Options for startBuilding, including F-03 director metadata.
+ */
+export interface StartBuildingOptions {
+  parTimeMs?: number;
+  source?: PlanSource;
+  latencyMs?: number;
+  repairs?: string[];
+  cacheKey?: string;
+}
 
 /**
  * Game phase state machine
@@ -24,10 +35,30 @@ export type GamePhase =
  * Typed game events with timestamps and beat tracking
  */
 export type GameEvent =
-  | { type: 'pieceBuilt'; placementId: string; timestamp: number; beatIndex: number }
-  | { type: 'gateOpened'; placementId: string; timestamp: number; beatIndex: number }
-  | { type: 'slimeStunned'; placementId: string; timestamp: number; beatIndex: number }
-  | { type: 'gemCollected'; placementId: string; timestamp: number; beatIndex: number }
+  | {
+      type: 'pieceBuilt';
+      placementId: string;
+      timestamp: number;
+      beatIndex: number;
+    }
+  | {
+      type: 'gateOpened';
+      placementId: string;
+      timestamp: number;
+      beatIndex: number;
+    }
+  | {
+      type: 'slimeStunned';
+      placementId: string;
+      timestamp: number;
+      beatIndex: number;
+    }
+  | {
+      type: 'gemCollected';
+      placementId: string;
+      timestamp: number;
+      beatIndex: number;
+    }
   | {
       type: 'explorerBlocked';
       reason: 'unbuiltGap' | 'closedGate' | 'awakeSlime';
@@ -35,7 +66,12 @@ export type GameEvent =
       beatIndex: number;
     }
   | { type: 'explorerOutOfView'; timestamp: number; beatIndex: number }
-  | { type: 'beatCompleted'; beatIndex: number; durationMs: number; timestamp: number }
+  | {
+      type: 'beatCompleted';
+      beatIndex: number;
+      durationMs: number;
+      timestamp: number;
+    }
   | { type: 'won'; timestamp: number; beatIndex: number };
 
 /**
@@ -106,4 +142,12 @@ export interface GameState {
   currentBeatIndex: number;
   gemsCollected: number;
   error: string | null;
+  /** How the current plan was obtained (F-03 director client). */
+  planSource: PlanSource | null;
+  /** Director request latency in milliseconds. */
+  directorLatencyMs: number | null;
+  /** Validator repairs reported by the API. */
+  repairs: string[];
+  /** Cache key from the director response, if any. */
+  cacheKey: string | null;
 }
