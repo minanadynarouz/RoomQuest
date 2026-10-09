@@ -13,6 +13,7 @@ export {
 export type { RqHooks, ExplorerTarget } from './boot.js';
 export { LevelBuilderSystem } from './systems/LevelBuilderSystem.js';
 export { PlacementSystem } from './systems/PlacementSystem.js';
+export { ExplorerSystem } from './systems/ExplorerSystem.js';
 export { SurfaceGraphSystem } from './systems/SurfaceGraphSystem.js';
 export { mountGreyboxLevel } from './level/mount-level.js';
 export { countDrawCalls } from './level/draw-calls.js';

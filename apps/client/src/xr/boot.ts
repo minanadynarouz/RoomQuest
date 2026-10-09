@@ -5,6 +5,7 @@
  * X-04: PlacementSystem pinch-place with snap
  * F-05: debug overlay + window.__rq (dev or ?debug=1); overlay lazy-loads
  * F-06: onboarding, gaze hint, FoV edge arrow (ExplorerTarget for X-05)
+ * X-05: ExplorerSystem + registerRqHook('autoSolve')
  */
 
 import {
@@ -28,14 +29,17 @@ import { bindGuidanceStore, GuidanceSystem } from '../ui/GuidanceSystem.js';
 import { bindHudStore, HudSystem, setExplorerAnchor } from '../ui/HudSystem.js';
 import { setExplorerTarget } from '../ui/explorer-target.js';
 import { createStatsGetter, isOverlayReady } from './debug/hooks.js';
-import { installRqHooks } from './debug/rq-hooks.js';
+import { installRqHooks, registerRqHook } from './debug/rq-hooks.js';
 import { collectPerfStats } from './debug/stats.js';
+import { autoSolve } from './explorer/auto-solve.js';
 import {
+  isFixtureXrSession,
   isSyntheticLivingRoomFixture,
   readClientFlags,
   type ClientFlags,
 } from './flags.js';
 import { LevelBuilderSystem } from './systems/LevelBuilderSystem.js';
+import { ExplorerSystem } from './systems/ExplorerSystem.js';
 import {
   PlacementSystem,
   type PlacementDebugApi,
@@ -60,6 +64,7 @@ let latestSceneDrawCalls = 0;
 let latestPlacement: PlacementDebugApi | null = null;
 let clientFlags: ClientFlags = readClientFlags('');
 let overlayRequested = false;
+let autoSolveHookRegistered = false;
 
 const statsGetter = createStatsGetter(() =>
   collectPerfStats({
@@ -75,6 +80,24 @@ const statsGetter = createStatsGetter(() =>
   })
 );
 
+function registerAutoSolveHook(): void {
+  if (autoSolveHookRegistered) return;
+  autoSolveHookRegistered = true;
+  registerRqHook(
+    'autoSolve',
+    () => {
+      if (!latestPlan) return Promise.resolve();
+      autoSolve({
+        store: gameStore,
+        plan: latestPlan,
+        placement: latestPlacement,
+      });
+      return Promise.resolve();
+    },
+    { flags: clientFlags, isDev: import.meta.env.DEV }
+  );
+}
+
 function exposeHooks(
   graph: SurfaceGraph | null = latestGraph,
   plan: LevelPlan | null = latestPlan,
@@ -88,6 +111,7 @@ function exposeHooks(
   latestSceneDrawCalls = drawCalls;
   latestPlacement = placement;
   if (typeof window === 'undefined') return;
+  registerAutoSolveHook();
   installRqHooks(
     {
       store: gameStore,
@@ -143,6 +167,10 @@ function playSyntheticLevel(): boolean {
       source: 'procedural',
     });
     builder.build(SYNTHETIC_LIVING_ROOM_PLAN, SYNTHETIC_LIVING_ROOM);
+    world.getSystem(ExplorerSystem)?.begin(
+      SYNTHETIC_LIVING_ROOM_PLAN,
+      SYNTHETIC_LIVING_ROOM
+    );
   }
   if (gameStore.phase === 'building') {
     gameStore.startPlaying();
@@ -177,6 +205,7 @@ async function startPlayableLevel(
   }
   applyDirectorResult(gameStore, result);
   builder.build(result.plan, graph);
+  worldInstance?.getSystem(ExplorerSystem)?.begin(result.plan, graph);
   gameStore.startPlaying();
   exposeHooks(
     graph,
@@ -215,7 +244,8 @@ function addFixtureLights(world: World): void {
 
 /**
  * Launch the XR session, or the desktop fixture path when
- * `?fixture=synthetic_living_room` is set.
+ * `?fixture=synthetic_living_room` is set. `?xr=1` with that fixture
+ * starts a real IWER emulated AR session from this user-gesture call.
  *
  * Grab config always uses `features.grabbing: { useHandPinchForGrab: true }`.
  */
@@ -225,9 +255,10 @@ export async function launchXR(): Promise<World> {
   );
   const flags = clientFlags;
   const fixtureMode = isSyntheticLivingRoomFixture(flags);
+  const fixtureXr = isFixtureXrSession(flags);
 
   if (worldInstance) {
-    if (!fixtureMode) {
+    if (!fixtureMode || fixtureXr) {
       worldInstance.launchXR();
     }
     return worldInstance;
@@ -240,56 +271,57 @@ export async function launchXR(): Promise<World> {
 
   const grabbing = { useHandPinchForGrab: true as const };
 
-  const xrOptions = fixtureMode
-    ? {
-        ...projectOptions,
-        xr: false as const,
-        level: undefined,
-        features: {
-          locomotion: false,
-          grabbing,
-          physics: false,
-          sceneUnderstanding: false,
-          environmentRaycast: false,
-          spatialUI: {
-            kit: 'horizon' as const,
-          },
-        },
-        render: {
-          ...projectOptions.render,
-          camera: {
-            position: [1.15, 1.25, 0.35] as [number, number, number],
-            lookAt: [0.2, 0.5, -1.65] as [number, number, number],
-          },
-        },
-      }
-    : {
-        ...projectOptions,
-        xr: {
-          sessionMode: SessionMode.ImmersiveAR,
-          offer: 'none' as const,
+  const xrOptions =
+    fixtureMode && !fixtureXr
+      ? {
+          ...projectOptions,
+          xr: false as const,
+          level: undefined,
           features: {
-            handTracking: { required: true },
-            planeDetection: true,
-            meshDetection: true,
-            anchors: true,
-            hitTest: true,
-            gazeTracking: true,
+            locomotion: false,
+            grabbing,
+            physics: false,
+            sceneUnderstanding: false,
+            environmentRaycast: false,
+            spatialUI: {
+              kit: 'horizon' as const,
+            },
           },
-        },
-        features: {
-          locomotion: false,
-          grabbing,
-          sceneUnderstanding: true,
-          environmentRaycast: true,
-          gaze: {
-            logDiagnostics: true,
+          render: {
+            ...projectOptions.render,
+            camera: {
+              position: [1.15, 1.25, 0.35] as [number, number, number],
+              lookAt: [0.2, 0.5, -1.65] as [number, number, number],
+            },
           },
-          spatialUI: {
-            kit: 'horizon' as const,
+        }
+      : {
+          ...projectOptions,
+          xr: {
+            sessionMode: SessionMode.ImmersiveAR,
+            offer: 'none' as const,
+            features: {
+              handTracking: { required: true },
+              planeDetection: true,
+              meshDetection: true,
+              anchors: true,
+              hitTest: true,
+              gazeTracking: true,
+            },
           },
-        },
-      };
+          features: {
+            locomotion: false,
+            grabbing,
+            sceneUnderstanding: true,
+            environmentRaycast: true,
+            gaze: {
+              logDiagnostics: true,
+            },
+            spatialUI: {
+              kit: 'horizon' as const,
+            },
+          },
+        };
 
   worldInstance = await World.create(container, xrOptions);
   worldInstance.registerSystem(LevelBuilderSystem, { priority: 5 });
@@ -299,6 +331,8 @@ export async function launchXR(): Promise<World> {
   worldInstance.registerSystem(GuidanceSystem, { priority: 1 });
   // After GrabSystem (-3) so the held world pose is current for the ghost.
   worldInstance.registerSystem(PlacementSystem, { priority: -2 });
+  // Before GuidanceSystem (1) so gaze/edge-arrow read the current pose.
+  worldInstance.registerSystem(ExplorerSystem, { priority: -1 });
   await loadDebugOverlay();
 
   const builder = worldInstance.getSystem(LevelBuilderSystem);
@@ -310,6 +344,16 @@ export async function launchXR(): Promise<World> {
     throw new Error('PlacementSystem failed to register');
   }
   placement.configure({ builder, store: gameStore });
+  const explorer = worldInstance.getSystem(ExplorerSystem);
+  if (!explorer) {
+    throw new Error('ExplorerSystem failed to register');
+  }
+  explorer.configure({ builder, store: gameStore });
+  setExplorerTarget(explorer);
+  registerRqHook('explorer', explorer.debugApi(), {
+    flags: clientFlags,
+    isDev: import.meta.env.DEV,
+  });
   builder.addEventListener('levelBuilt', () => {
     placement.onLevelRebuilt();
   });
@@ -322,6 +366,7 @@ export async function launchXR(): Promise<World> {
     gameStore.startSurveying();
     gameStore.startBuilding(SYNTHETIC_LIVING_ROOM_PLAN);
     builder.build(SYNTHETIC_LIVING_ROOM_PLAN, SYNTHETIC_LIVING_ROOM);
+    explorer.begin(SYNTHETIC_LIVING_ROOM_PLAN, SYNTHETIC_LIVING_ROOM);
     if (flags.debug) {
       builder.setDebugGraph(SYNTHETIC_LIVING_ROOM);
     }
@@ -333,13 +378,17 @@ export async function launchXR(): Promise<World> {
       countDrawCalls(worldInstance.scene),
       placement.debugApi()
     );
-    console.log('[X-04] Fixture level built', {
+    console.log('[X-05] Fixture level built', {
       pieces: SYNTHETIC_LIVING_ROOM_PLAN.placements.length,
       snapTargets: builder.getSnapTargets().length,
       drawCalls: window.__rq?.drawCalls,
       debug: flags.debug,
+      xr: fixtureXr,
       grabbing: grabbing.useHandPinchForGrab,
     });
+    if (fixtureXr) {
+      worldInstance.launchXR();
+    }
   } else {
     gameStore.requestLevel();
     gameStore.startSurveying();
@@ -351,6 +400,9 @@ export async function launchXR(): Promise<World> {
         const graph = (event as CustomEvent<SurfaceGraph>).detail;
         if (flags.debug) {
           builder.setDebugGraph(graph);
+        }
+        if (gameStore.plan) {
+          explorer.begin(gameStore.plan, graph);
         }
         exposeHooks(
           graph,

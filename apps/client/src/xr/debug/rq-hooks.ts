@@ -55,6 +55,19 @@ export interface RqHooks {
   autoSolve?: () => Promise<void>;
   /** Debug/e2e: force the synthetic living-room plan into `playing`. */
   playSynthetic?: () => boolean;
+  explorer?: RqExplorerDebug | null;
+}
+
+/** X-05 walker debug surface. `getWorldPosition` matches F-06's ExplorerTarget. */
+export interface RqExplorerDebug {
+  state: () => string;
+  reason: () => string | undefined;
+  pose: () => { x: number; y: number; z: number; yaw: number };
+  getWorldPosition: (out: { x: number; y: number; z: number }) => {
+    x: number;
+    y: number;
+    z: number;
+  };
 }
 
 export type RqHookName = keyof RqHooks;

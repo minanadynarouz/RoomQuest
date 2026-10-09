@@ -116,7 +116,12 @@ export function addUndirected(
   fromB.add(a);
 }
 
-const LINK_PIECES = new Set(['plank_bridge', 'ramp', 'portal']);
+const LINK_PIECES = new Set([
+  'plank_bridge',
+  'ramp',
+  'portal',
+  'moving_platform',
+]);
 
 export interface WalkState {
   /** Placement ids whose two-surface links are built */
@@ -236,6 +241,70 @@ export function bfsReachable(
     }
   }
   return seen;
+}
+
+/**
+ * Shortest start→goal walk using the same BFS as {@link bfsReachable}.
+ * Returns `null` when `goal` is unreachable.
+ */
+export function bfsPath(
+  start: string,
+  goal: string,
+  adj: ReadonlyMap<string, ReadonlySet<string>>
+): string[] | null {
+  if (start === goal) {
+    return [start];
+  }
+  const parent = new Map<string, string>();
+  const seen = new Set<string>();
+  const queue: string[] = [];
+  seen.add(start);
+  queue.push(start);
+  let head = 0;
+  let found = false;
+  while (head < queue.length) {
+    const current = queue[head];
+    head += 1;
+    if (current === undefined) {
+      continue;
+    }
+    const nexts = adj.get(current);
+    if (!nexts) {
+      continue;
+    }
+    for (const next of nexts) {
+      if (seen.has(next)) {
+        continue;
+      }
+      seen.add(next);
+      parent.set(next, current);
+      if (next === goal) {
+        found = true;
+        break;
+      }
+      queue.push(next);
+    }
+    if (found) {
+      break;
+    }
+  }
+  if (!found) {
+    return null;
+  }
+  const path: string[] = [];
+  let node: string | undefined = goal;
+  while (node !== undefined) {
+    path.push(node);
+    if (node === start) {
+      break;
+    }
+    node = parent.get(node);
+  }
+  path.reverse();
+  if (path[0] !== start) {
+    return null;
+  }
+  return path;
 }
 
 /**
