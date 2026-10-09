@@ -82,6 +82,32 @@ describe('registerRqHook / installRqHooks', () => {
     expect(target.__rq?.autoSolve).toBe(autoSolve);
   });
 
+  it('lets X-05 register explorer without dropping autoSolve', () => {
+    const autoSolve = async (): Promise<void> => {
+      /* X-05 */
+    };
+    const explorer = {
+      state: () => 'blocked',
+      reason: () => 'unbuiltGap' as const,
+      pose: () => ({ x: 0, y: 0, z: 0, yaw: 0 }),
+      getTarget: () => ({
+        object3D: { position: { x: 1, y: 0.2, z: -1 } },
+        worldPosition: (out: { x: number; y: number; z: number }) => {
+          out.x = 1;
+          out.y = 0.2;
+          out.z = -1;
+          return out;
+        },
+      }),
+    };
+    registerRqHook('autoSolve', autoSolve, { ...debugOn, target });
+    registerRqHook('explorer', explorer, { ...debugOn, target });
+    installRqHooks({ drawCalls: 3 }, { ...debugOn, target });
+    expect(target.__rq?.autoSolve).toBe(autoSolve);
+    expect(target.__rq?.explorer?.state()).toBe('blocked');
+    expect(target.__rq?.explorer?.getTarget().object3D?.position.y).toBe(0.2);
+  });
+
   it('installs in dev without the debug flag', () => {
     expect(installRqHooks({ drawCalls: 1 }, { ...devOn, target })).toBe(true);
     expect(target.__rq?.drawCalls).toBe(1);
