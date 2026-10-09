@@ -2,6 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { buildSurfaceGraph } from './pipeline';
 import type { SurfaceDescriptor } from './types';
 
+/** L-02 budget. CI gates on 5× so slow runners don't flake. */
+const GRAPH_BUILD_BUDGET_MS = 50;
+const GRAPH_BUILD_CI_BOUND_MS = GRAPH_BUILD_BUDGET_MS * 5;
+const GRAPH_BUILD_SAMPLES = 11;
+
 describe('Integration: Native-shaped Input', () => {
   const defaultStartPose = {
     position: [0, 1.7, 0] as [number, number, number],
@@ -203,18 +208,20 @@ describe('Integration: Native-shaped Input', () => {
 
     const graph = await buildSurfaceGraph(descriptors, 0, defaultStartPose);
     const samples: number[] = [];
-    for (let i = 0; i < 11; i += 1) {
+    for (let i = 0; i < GRAPH_BUILD_SAMPLES; i += 1) {
       const start = performance.now();
       await buildSurfaceGraph(descriptors, 0, defaultStartPose);
       samples.push(performance.now() - start);
     }
     samples.sort((a, b) => a - b);
     const median = samples[Math.floor(samples.length / 2)] ?? 0;
-    console.log(`native-shaped buildSurfaceGraph median ${median.toFixed(3)} ms`);
+    console.log(
+      `native-shaped buildSurfaceGraph median ${median.toFixed(3)} ms (budget ${String(GRAPH_BUILD_BUDGET_MS)} ms, CI bound ${String(GRAPH_BUILD_CI_BOUND_MS)} ms)`
+    );
 
     expect(graph.nodes.length).toBeLessThanOrEqual(12);
     expect(JSON.stringify(graph).length).toBeLessThan(2048);
-    expect(median).toBeLessThan(250);
+    expect(median).toBeLessThan(GRAPH_BUILD_CI_BOUND_MS);
 
     const hash1 = graph.roomHash;
     const graph2 = await buildSurfaceGraph(descriptors, 0, defaultStartPose);
