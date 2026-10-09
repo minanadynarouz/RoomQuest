@@ -1,0 +1,246 @@
+{
+  "generatedAt": "2026-10-09T11:50:19.620Z",
+  "mock": true,
+  "promptVersion": "v1.0",
+  "directorModel": "gemini-3.8-flash",
+  "fallbackModel": "claude-haiku-4-5",
+  "roomIds": [
+    "synthetic_living_room"
+  ],
+  "seedDates": [
+    "2026-10-01",
+    "2026-10-02",
+    "2026-10-03",
+    "2026-10-04"
+  ],
+  "tiers": [
+    "easy",
+    "normal"
+  ],
+  "bar": {
+    "validAfterRepairMinPct": 90,
+    "p95MaxMs": 7000,
+    "met": true
+  },
+  "aggregate": {
+    "runCount": 8,
+    "validBeforeRepairCount": 8,
+    "validAfterRepairCount": 8,
+    "fallbackToProceduralCount": 0,
+    "validBeforeRepairPct": 100,
+    "validAfterRepairPct": 100,
+    "fallbackToProceduralPct": 0,
+    "models": {
+      "gemini-3.8-flash": 8
+    },
+    "p50LatencyMs": 1,
+    "p95LatencyMs": 3.6,
+    "estimatedCostUsd": 0.001092,
+    "inputTokens": 96,
+    "outputTokens": 272,
+    "missingUsageCalls": 0,
+    "unknownModelCalls": 0
+  },
+  "runs": [
+    {
+      "roomId": "synthetic_living_room",
+      "roomHash": "f1a2b3c4d5e6",
+      "date": "2026-10-01",
+      "seed": "f1a2b3c4d5e6-2026-10-01",
+      "tier": "easy",
+      "source": "llm",
+      "model": "gemini-3.8-flash",
+      "validBeforeRepair": true,
+      "validAfterRepair": true,
+      "fallbackToProcedural": false,
+      "latencyMs": 5,
+      "repairs": [],
+      "estimatedCostUsd": 0.0001365,
+      "telemetry": [
+        {
+          "provider": "google",
+          "model": "gemini-3.8-flash",
+          "inputTokens": 12,
+          "outputTokens": 34,
+          "latencyMs": 3,
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "roomId": "synthetic_living_room",
+      "roomHash": "f1a2b3c4d5e6",
+      "date": "2026-10-01",
+      "seed": "f1a2b3c4d5e6-2026-10-01",
+      "tier": "normal",
+      "source": "llm",
+      "model": "gemini-3.8-flash",
+      "validBeforeRepair": true,
+      "validAfterRepair": true,
+      "fallbackToProcedural": false,
+      "latencyMs": 1,
+      "repairs": [],
+      "estimatedCostUsd": 0.0001365,
+      "telemetry": [
+        {
+          "provider": "google",
+          "model": "gemini-3.8-flash",
+          "inputTokens": 12,
+          "outputTokens": 34,
+          "latencyMs": 0,
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "roomId": "synthetic_living_room",
+      "roomHash": "f1a2b3c4d5e6",
+      "date": "2026-10-02",
+      "seed": "f1a2b3c4d5e6-2026-10-02",
+      "tier": "easy",
+      "source": "llm",
+      "model": "gemini-3.8-flash",
+      "validBeforeRepair": true,
+      "validAfterRepair": true,
+      "fallbackToProcedural": false,
+      "latencyMs": 0,
+      "repairs": [],
+      "estimatedCostUsd": 0.0001365,
+      "telemetry": [
+        {
+          "provider": "google",
+          "model": "gemini-3.8-flash",
+          "inputTokens": 12,
+          "outputTokens": 34,
+          "latencyMs": 0,
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "roomId": "synthetic_living_room",
+      "roomHash": "f1a2b3c4d5e6",
+      "date": "2026-10-02",
+      "seed": "f1a2b3c4d5e6-2026-10-02",
+      "tier": "normal",
+      "source": "llm",
+      "model": "gemini-3.8-flash",
+      "validBeforeRepair": true,
+      "validAfterRepair": true,
+      "fallbackToProcedural": false,
+      "latencyMs": 1,
+      "repairs": [],
+      "estimatedCostUsd": 0.0001365,
+      "telemetry": [
+        {
+          "provider": "google",
+          "model": "gemini-3.8-flash",
+          "inputTokens": 12,
+          "outputTokens": 34,
+          "latencyMs": 1,
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "roomId": "synthetic_living_room",
+      "roomHash": "f1a2b3c4d5e6",
+      "date": "2026-10-03",
+      "seed": "f1a2b3c4d5e6-2026-10-03",
+      "tier": "easy",
+      "source": "llm",
+      "model": "gemini-3.8-flash",
+      "validBeforeRepair": true,
+      "validAfterRepair": true,
+      "fallbackToProcedural": false,
+      "latencyMs": 1,
+      "repairs": [],
+      "estimatedCostUsd": 0.0001365,
+      "telemetry": [
+        {
+          "provider": "google",
+          "model": "gemini-3.8-flash",
+          "inputTokens": 12,
+          "outputTokens": 34,
+          "latencyMs": 0,
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "roomId": "synthetic_living_room",
+      "roomHash": "f1a2b3c4d5e6",
+      "date": "2026-10-03",
+      "seed": "f1a2b3c4d5e6-2026-10-03",
+      "tier": "normal",
+      "source": "llm",
+      "model": "gemini-3.8-flash",
+      "validBeforeRepair": true,
+      "validAfterRepair": true,
+      "fallbackToProcedural": false,
+      "latencyMs": 1,
+      "repairs": [],
+      "estimatedCostUsd": 0.0001365,
+      "telemetry": [
+        {
+          "provider": "google",
+          "model": "gemini-3.8-flash",
+          "inputTokens": 12,
+          "outputTokens": 34,
+          "latencyMs": 1,
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "roomId": "synthetic_living_room",
+      "roomHash": "f1a2b3c4d5e6",
+      "date": "2026-10-04",
+      "seed": "f1a2b3c4d5e6-2026-10-04",
+      "tier": "easy",
+      "source": "llm",
+      "model": "gemini-3.8-flash",
+      "validBeforeRepair": true,
+      "validAfterRepair": true,
+      "fallbackToProcedural": false,
+      "latencyMs": 0,
+      "repairs": [],
+      "estimatedCostUsd": 0.0001365,
+      "telemetry": [
+        {
+          "provider": "google",
+          "model": "gemini-3.8-flash",
+          "inputTokens": 12,
+          "outputTokens": 34,
+          "latencyMs": 0,
+          "outcome": "ok"
+        }
+      ]
+    },
+    {
+      "roomId": "synthetic_living_room",
+      "roomHash": "f1a2b3c4d5e6",
+      "date": "2026-10-04",
+      "seed": "f1a2b3c4d5e6-2026-10-04",
+      "tier": "normal",
+      "source": "llm",
+      "model": "gemini-3.8-flash",
+      "validBeforeRepair": true,
+      "validAfterRepair": true,
+      "fallbackToProcedural": false,
+      "latencyMs": 1,
+      "repairs": [],
+      "estimatedCostUsd": 0.0001365,
+      "telemetry": [
+        {
+          "provider": "google",
+          "model": "gemini-3.8-flash",
+          "inputTokens": 12,
+          "outputTokens": 34,
+          "latencyMs": 1,
+          "outcome": "ok"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+name: Eval
+
+on:
+  workflow_dispatch:
+    inputs:
+      mock:
+        description: Run with --mock (FakeListChatModel; no live LLM keys)
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eval:
+    name: eval
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DIRECTOR_MODE: live
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.6
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace packages
+        run: pnpm turbo run build --filter=api...
+
+      - name: Require GOOGLE_API_KEY for live eval
+        if: ${{ inputs.mock != true }}
+        run: |
+          if [ -z "$GOOGLE_API_KEY" ]; then
+            echo "GOOGLE_API_KEY repository secret is missing."
+            echo "Add it under Settings → Secrets and variables → Actions."
+            echo "ANTHROPIC_API_KEY is optional (provider fallback)."
+            echo "Re-run with mock=true to exercise FakeListChatModel."
+            exit 1
+          fi
+
+      - name: Run director eval
+        env:
+          DIRECTOR_MODEL: ${{ vars.DIRECTOR_MODEL }}
+          FALLBACK_MODEL: ${{ vars.FALLBACK_MODEL }}
+        run: |
+          if [ "${{ inputs.mock }}" = "true" ]; then
+            pnpm --filter api eval -- --mock
+          else
+            pnpm --filter api eval
+          fi
+
+      - name: Upload eval report
+        uses: actions/upload-artifact@v4
+        with:
+          name: director-eval-report
+          path: docs/eval/
+          if-no-files-found: error
