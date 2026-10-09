@@ -1,15 +1,25 @@
 import { SURFACE_INSET_M } from '../placement/pose';
 import {
   SLIME_BODY_WIDTH_M,
+  SLIME_GROGGY_SCALE_Y,
+  SLIME_GROGGY_STAR_FADE_S,
+  SLIME_GROGGY_STAR_MIN_SCALE,
+  SLIME_GROGGY_STRETCH,
+  SLIME_GROGGY_TILT_RAD,
   SLIME_PATROL_SPEED_MPS,
+  SLIME_SQUISH_SCALE_Y,
+  SLIME_SQUISH_STRETCH,
   SLIME_STAR_COUNT,
   SLIME_STAR_HEIGHT_M,
   SLIME_STAR_RADIUS_M,
   SLIME_STAR_SPIN_RAD_S,
   SLIME_STUN_DURATION_S,
-  SLIME_SQUISH_SCALE_Y,
+  SLIME_ZONE_HEIGHT_M,
+  SLIME_ZONE_PAD_M,
 } from './constants';
 import type {
+  SlimeBodyScale,
+  SlimeExplorerLocal,
   SlimePatrolConfig,
   SlimeRuntime,
   SlimeStarPose,
@@ -43,6 +53,8 @@ export function slimePatrolConfig(
     halfLengthM: half,
     speedMps,
     axis: alongWidth ? 'u' : 'v',
+    surfaceWidthM,
+    surfaceDepthM,
   };
 }
 
@@ -52,50 +64,96 @@ export function createSlimeRuntime(placementId: string): SlimeRuntime {
     offsetM: 0,
     dir: 1,
     stunRemainingS: 0,
+    groggy: false,
+    groggyElapsedS: 0,
   };
 }
 
 export function isSlimeAwake(state: SlimeRuntime): boolean {
-  return state.stunRemainingS <= 0;
+  return state.stunRemainingS <= 0 && !state.groggy;
 }
 
-/** Explorer may cross the slime's path segment only while it is stunned. */
+export function isSlimeGroggy(state: SlimeRuntime): boolean {
+  return state.groggy;
+}
+
+/**
+ * Explorer may cross the slime's path while stunned or groggy (the hop
+ * latch after `slimeWoke`). Fully awake slimes block.
+ */
 export function canExplorerPassSlime(state: SlimeRuntime): boolean {
   return !isSlimeAwake(state);
 }
 
 /**
- * Stun (or refresh) for `durationS`. Returns true when the slime was awake
- * and is now stunned, so the caller can emit `slimeStunned` once.
+ * Stun (or refresh) for `durationS`. Returns true when the slime was not
+ * already in the 4 s stun timer, so the caller can emit `slimeStunned`.
+ * Poking a groggy slime starts a fresh stun.
  */
 export function stunSlime(
   state: SlimeRuntime,
   durationS = SLIME_STUN_DURATION_S
 ): boolean {
-  const wasAwake = isSlimeAwake(state);
+  const newly = state.stunRemainingS <= 0;
   state.stunRemainingS = durationS;
-  return wasAwake;
+  state.groggy = false;
+  state.groggyElapsedS = 0;
+  return newly;
 }
 
 /**
- * Advance patrol / stun with injected `dt` seconds. No allocations.
- * Returns `'woke'` on the frame the timer hits zero.
+ * True when the explorer is still on the slime's surface-sized occupancy
+ * box (home-local). Used to keep groggy until they have cleared the zone.
+ */
+export function explorerInSlimePatrolZone(
+  config: SlimePatrolConfig,
+  local: SlimeExplorerLocal
+): boolean {
+  if (Math.abs(local.y) > SLIME_ZONE_HEIGHT_M) return false;
+  const halfW = config.surfaceWidthM * 0.5 + SLIME_ZONE_PAD_M;
+  const halfD = config.surfaceDepthM * 0.5 + SLIME_ZONE_PAD_M;
+  return Math.abs(local.x) <= halfW && Math.abs(local.z) <= halfD;
+}
+
+/**
+ * Advance patrol / stun / groggy with injected `dt` seconds. No allocations.
+ * Pass caller-owned `explorerLocal` from the XR system so groggy tracks
+ * occupancy; omit it in tests that only care about the 4 s stun.
+ *
+ * Returns `'woke'` on the frame the timer hits zero (still emit `slimeWoke`).
+ * Returns `'cleared'` on the frame groggy ends and patrol may resume.
  */
 export function tickSlime(
   state: SlimeRuntime,
   dt: number,
-  config: SlimePatrolConfig
+  config: SlimePatrolConfig,
+  explorerLocal?: SlimeExplorerLocal | null
 ): SlimeTickResult {
   if (dt <= 0) {
-    return isSlimeAwake(state) ? 'awake' : 'stunned';
+    if (state.stunRemainingS > 0) return 'stunned';
+    if (state.groggy) return 'groggy';
+    return 'awake';
   }
   if (state.stunRemainingS > 0) {
     state.stunRemainingS -= dt;
     if (state.stunRemainingS <= 0) {
       state.stunRemainingS = 0;
+      if (explorerLocal) {
+        state.groggy = true;
+        state.groggyElapsedS = 0;
+      }
       return 'woke';
     }
     return 'stunned';
+  }
+  if (state.groggy) {
+    state.groggyElapsedS += dt;
+    if (!explorerLocal || !explorerInSlimePatrolZone(config, explorerLocal)) {
+      state.groggy = false;
+      state.groggyElapsedS = 0;
+      return 'cleared';
+    }
+    return 'groggy';
   }
   const half = config.halfLengthM;
   if (half <= 0 || config.speedMps <= 0) {
@@ -129,19 +187,54 @@ export function writePatrolLocalOffset(
 }
 
 /**
- * Body Y-scale: fully squished just after stun, recovers to 1 as the timer
- * runs out. Awake slimes are 1.
+ * Body Y-scale: fully squished for the whole stun, groggy stays squashed
+ * (half-closed eyes), awake is 1. No recover-to-1 during the 4 s timer —
+ * that looked awake while the explorer could still pass.
  */
-export function slimeBodyScaleY(
-  stunRemainingS: number,
-  durationS = SLIME_STUN_DURATION_S
-): number {
-  if (stunRemainingS <= 0 || durationS <= 0) {
-    return 1;
+export function slimeBodyScaleY(state: SlimeRuntime): number {
+  if (state.groggy) return SLIME_GROGGY_SCALE_Y;
+  if (state.stunRemainingS > 0) return SLIME_SQUISH_SCALE_Y;
+  return 1;
+}
+
+/** Caller-owned squash / slump for the existing body mesh. */
+export function writeSlimeBodyScale(
+  state: SlimeRuntime,
+  out: SlimeBodyScale
+): SlimeBodyScale {
+  if (state.groggy) {
+    out.x = SLIME_GROGGY_STRETCH;
+    out.y = SLIME_GROGGY_SCALE_Y;
+    out.z = SLIME_GROGGY_STRETCH;
+    out.tiltX = SLIME_GROGGY_TILT_RAD;
+    return out;
   }
-  let t = stunRemainingS / durationS;
-  if (t > 1) t = 1;
-  return 1 - (1 - SLIME_SQUISH_SCALE_Y) * t;
+  if (state.stunRemainingS > 0) {
+    out.x = SLIME_SQUISH_STRETCH;
+    out.y = SLIME_SQUISH_SCALE_Y;
+    out.z = SLIME_SQUISH_STRETCH;
+    out.tiltX = 0;
+    return out;
+  }
+  out.x = 1;
+  out.y = 1;
+  out.z = 1;
+  out.tiltX = 0;
+  return out;
+}
+
+/** 1 while stunned, fades toward min while groggy, 0 when awake. */
+export function slimeStarScale(state: SlimeRuntime): number {
+  if (state.stunRemainingS > 0) return 1;
+  if (!state.groggy) return 0;
+  const t = state.groggyElapsedS / SLIME_GROGGY_STAR_FADE_S;
+  if (t <= 0) return 1;
+  if (t >= 1) return SLIME_GROGGY_STAR_MIN_SCALE;
+  return 1 - (1 - SLIME_GROGGY_STAR_MIN_SCALE) * t;
+}
+
+export function slimeStarsVisible(state: SlimeRuntime): boolean {
+  return state.stunRemainingS > 0 || state.groggy;
 }
 
 /** Orbit pose for one cartoon star. Writes into caller-owned `out`. */

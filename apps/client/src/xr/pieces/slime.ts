@@ -23,6 +23,13 @@ export const SLIME_FOOTPRINT: PieceFootprint = {
   height: 0.07,
 };
 
+/**
+ * Meshes created per slime: 1 body + 5 orbit stars + 1 hidden poke hit.
+ * Groggy/stun reuse these (scale, tilt, star visibility). Do not add more —
+ * every IWER room sits at 88–94 of the 100 draw-call budget.
+ */
+export const SLIME_MESH_COUNT = 7;
+
 export function createSlimeGeometry(palette: ToyPalette): BufferGeometry {
   const body = sphere(0.045, 0, 0.03, 0, palette.primary, 8, 6);
   body.scale(1, 0.7, 1);
@@ -52,6 +59,8 @@ export function createSlime(kit: GreyboxKit): Object3D {
     body.name = 'slime-body';
     root.userData.body = body;
   }
+  // Stars already exist for stun; groggy keeps this group visible and
+  // scales it down instead of allocating a second effect mesh.
   const stars = new Group();
   stars.name = 'slime-stars';
   stars.visible = false;

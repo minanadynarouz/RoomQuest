@@ -13,6 +13,36 @@ export const SLIME_BODY_WIDTH_M = 0.1;
 /** Peak Y-scale while stunned (non-violent squish). */
 export const SLIME_SQUISH_SCALE_Y = 0.42;
 
+/** X/Z stretch while stunned (paired with {@link SLIME_SQUISH_SCALE_Y}). */
+export const SLIME_SQUISH_STRETCH = 1.14;
+
+/**
+ * Y-scale while groggy: still squashed so the merged eye boxes read as
+ * half-closed lids. Pops to 1 only after the explorer leaves the zone.
+ */
+export const SLIME_GROGGY_SCALE_Y = 0.52;
+
+/** X/Z stretch while groggy. */
+export const SLIME_GROGGY_STRETCH = 1.08;
+
+/** Forward slump (radians) while groggy. */
+export const SLIME_GROGGY_TILT_RAD = 0.28;
+
+/** Injected-dt window over which groggy stars shrink. */
+export const SLIME_GROGGY_STAR_FADE_S = 1.25;
+
+/** Floor for fading groggy stars (never 0 — still the stunned tell). */
+export const SLIME_GROGGY_STAR_MIN_SCALE = 0.28;
+
+/**
+ * Extra metres around the surface top-face so a blocked explorer waiting
+ * on the same table stays inside the groggy occupancy box.
+ */
+export const SLIME_ZONE_PAD_M = 0.28;
+
+/** Vertical occupancy window around the slime home, metres. */
+export const SLIME_ZONE_HEIGHT_M = 0.35;
+
 /** Cartoon stars around a stunned slime. */
 export const SLIME_STAR_COUNT = 5;
 
