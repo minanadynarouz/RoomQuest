@@ -1,12 +1,9 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { validatePlan } from '@roomquest/level-core';
-import {
-  LevelPlan,
-  LevelResponse,
-  type LevelRequest,
-} from '@roomquest/schema';
+import { LevelPlan, LevelResponse, type LevelRequest } from '@roomquest/schema';
 import { RateLimitedException } from '../common/rate-limited.exception';
 import { DirectorService } from '../director/director.service';
+import { DIRECTOR_RUNTIME, type DirectorRuntime } from '../director/models';
 import { PROMPT_VERSION } from '../director/prompts';
 import { makeCacheKey } from './cache-key';
 import { CacheMissLimiter } from './cache-miss-limiter';
@@ -20,11 +17,18 @@ export class LevelsService {
     @Inject(DirectorService) private readonly director: DirectorService,
     @Inject(LevelCacheRepository)
     private readonly cache: LevelCacheRepository,
-    @Inject(CacheMissLimiter) private readonly limiter: CacheMissLimiter
+    @Inject(CacheMissLimiter) private readonly limiter: CacheMissLimiter,
+    @Optional()
+    @Inject(DIRECTOR_RUNTIME)
+    private readonly runtime?: DirectorRuntime
   ) {}
 
-  async create(request: LevelRequest, deviceId: string): Promise<LevelResponse> {
-    const startedMs = Date.now();
+  async create(
+    request: LevelRequest,
+    deviceId: string
+  ): Promise<LevelResponse> {
+    const now = this.runtime?.now ?? (() => Date.now());
+    const startedMs = now();
     const promptVersion = PROMPT_VERSION;
     const cacheKey = makeCacheKey(
       request.graph.roomHash,
@@ -47,7 +51,7 @@ export class LevelsService {
             cacheKey,
             model: cached.model ?? undefined,
             promptVersion,
-            latencyMs: Math.max(0, Date.now() - startedMs),
+            latencyMs: Math.max(0, now() - startedMs),
             repairs: [],
           });
         }
@@ -57,7 +61,7 @@ export class LevelsService {
       }
     }
 
-    const budget = this.limiter.take(deviceId);
+    const budget = this.limiter.take(deviceId, now());
     if (!budget.ok) {
       throw new RateLimitedException(budget.retryAfterS);
     }
@@ -66,7 +70,7 @@ export class LevelsService {
     const body = LevelResponse.parse({
       ...response,
       cacheKey,
-      latencyMs: Math.max(0, Date.now() - startedMs),
+      latencyMs: Math.max(0, now() - startedMs),
     });
 
     await this.cache.persist(
@@ -80,7 +84,8 @@ export class LevelsService {
         source: body.source,
         model: body.model ?? null,
       },
-      startedMs
+      startedMs,
+      now()
     );
 
     return body;

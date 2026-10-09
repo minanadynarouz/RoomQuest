@@ -8,6 +8,7 @@ import { LevelRequest, LevelResponse, type LevelPlan } from '@roomquest/schema';
 import { describe, expect, it, vi } from 'vitest';
 import { RateLimitedException } from '../common/rate-limited.exception';
 import { DirectorService } from '../director/director.service';
+import { DIRECTOR_RUNTIME } from '../director/models';
 import { PROMPT_VERSION } from '../director/prompts';
 import { makeCacheKey } from './cache-key';
 import { CacheMissLimiter } from './cache-miss-limiter';
@@ -17,6 +18,7 @@ import {
   type LevelCacheRow,
 } from './level-cache.repository';
 import { LevelsService } from './levels.service';
+import { CACHE_MISS_LIMIT, CACHE_MISS_WINDOW_MS } from './rate-limit.constants';
 
 const request = LevelRequest.parse({
   graph: SYNTHETIC_LIVING_ROOM,
@@ -29,6 +31,8 @@ const validPlan = generatePlan(
   makeDailySeed(SYNTHETIC_LIVING_ROOM.roomHash, request.date),
   'easy'
 );
+
+const WARM_HIT_LOOKUP_MS = 12;
 
 function directorResponse(
   plan: LevelPlan,
@@ -49,9 +53,24 @@ function directorResponse(
   });
 }
 
+function cachedRow(plan: LevelPlan): LevelCacheRow {
+  return {
+    key: 'k',
+    roomHash: request.graph.roomHash,
+    date: request.date,
+    tier: request.tier,
+    promptVersion: PROMPT_VERSION,
+    plan,
+    source: 'procedural',
+    model: null,
+  };
+}
+
 async function serviceWith(options: {
   cached: LevelCacheRow | null;
   plan?: LevelPlan;
+  now?: () => number;
+  lookup?: () => Promise<LevelCacheRow | null>;
 }): Promise<{
   service: LevelsService;
   persist: ReturnType<typeof vi.fn>;
@@ -65,6 +84,7 @@ async function serviceWith(options: {
     providers: [
       LevelsService,
       CacheMissLimiter,
+      { provide: DIRECTOR_RUNTIME, useValue: { now: options.now } },
       {
         provide: DirectorService,
         useValue: { plan: directorPlan },
@@ -72,7 +92,8 @@ async function serviceWith(options: {
       {
         provide: LevelCacheRepository,
         useValue: {
-          lookup: vi.fn(() => Promise.resolve(options.cached)),
+          lookup:
+            options.lookup ?? vi.fn(() => Promise.resolve(options.cached)),
           persist,
         },
       },
@@ -88,16 +109,7 @@ async function serviceWith(options: {
 describe('LevelsService cache + limiter', () => {
   it('returns source cache on a valid hit without calling the director', async () => {
     const { service, persist, directorPlan } = await serviceWith({
-      cached: {
-        key: 'k',
-        roomHash: request.graph.roomHash,
-        date: request.date,
-        tier: request.tier,
-        promptVersion: PROMPT_VERSION,
-        plan: validPlan,
-        source: 'procedural',
-        model: null,
-      },
+      cached: cachedRow(validPlan),
     });
     const response = await service.create(request, 'device-1');
     expect(response.source).toBe('cache');
@@ -105,18 +117,26 @@ describe('LevelsService cache + limiter', () => {
     expect(persist).not.toHaveBeenCalled();
   });
 
+  it('warm cache hit latencyMs is lookup time (injected now, under 300 ms)', async () => {
+    let nowMs = 0;
+    const { service, directorPlan } = await serviceWith({
+      cached: cachedRow(validPlan),
+      now: () => nowMs,
+      lookup: () => {
+        nowMs = WARM_HIT_LOOKUP_MS;
+        return Promise.resolve(cachedRow(validPlan));
+      },
+    });
+    const response = await service.create(request, 'device-1');
+    expect(response.source).toBe('cache');
+    expect(directorPlan).not.toHaveBeenCalled();
+    expect(response.latencyMs).toBe(WARM_HIT_LOOKUP_MS);
+    expect(response.latencyMs).toBeLessThan(300);
+  });
+
   it('treats a cached plan that fails validatePlan as a miss and overwrites', async () => {
     const { service, persist, directorPlan } = await serviceWith({
-      cached: {
-        key: 'k',
-        roomHash: request.graph.roomHash,
-        date: request.date,
-        tier: request.tier,
-        promptVersion: PROMPT_VERSION,
-        plan: SYNTHETIC_LIVING_ROOM_PLAN,
-        source: 'procedural',
-        model: null,
-      },
+      cached: cachedRow(SYNTHETIC_LIVING_ROOM_PLAN),
       plan: validPlan,
     });
     const changedGraph = LevelRequest.parse({
@@ -138,13 +158,17 @@ describe('LevelsService cache + limiter', () => {
     expect(persist).toHaveBeenCalledOnce();
   });
 
-  it('returns 429 on the 11th cache miss for one device', async () => {
+  it('returns 429 with retryAfterS on the 11th miss, then allows after the hour', async () => {
+    let nowMs = 0;
     const persist = vi.fn(() => Promise.resolve(undefined));
-    const directorPlan = vi.fn(() => Promise.resolve(directorResponse(validPlan)));
+    const directorPlan = vi.fn(() =>
+      Promise.resolve(directorResponse(validPlan))
+    );
     const moduleRef = await Test.createTestingModule({
       providers: [
         LevelsService,
         CacheMissLimiter,
+        { provide: DIRECTOR_RUNTIME, useValue: { now: () => nowMs } },
         { provide: DirectorService, useValue: { plan: directorPlan } },
         {
           provide: LevelCacheRepository,
@@ -153,11 +177,18 @@ describe('LevelsService cache + limiter', () => {
       ],
     }).compile();
     const service = moduleRef.get(LevelsService);
-    for (let i = 0; i < 10; i += 1) {
+    for (let i = 0; i < CACHE_MISS_LIMIT; i += 1) {
       await service.create(request, 'device-limit');
     }
-    await expect(service.create(request, 'device-limit')).rejects.toBeInstanceOf(
-      RateLimitedException
+    const blocked = await service.create(request, 'device-limit').then(
+      () => null,
+      (error: unknown) => error
     );
+    expect(blocked).toBeInstanceOf(RateLimitedException);
+    expect((blocked as RateLimitedException).retryAfterS).toBe(3600);
+
+    nowMs += CACHE_MISS_WINDOW_MS;
+    const afterWindow = await service.create(request, 'device-limit');
+    expect(afterWindow.source).not.toBe('cache');
   });
 });

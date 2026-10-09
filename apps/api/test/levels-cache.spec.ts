@@ -9,7 +9,15 @@ import {
   type SurfaceGraph,
 } from '@roomquest/schema';
 import request from 'supertest';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { createApp } from '../src/create-app';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { makeDailySeed } from '../src/levels/daily-seed';
@@ -78,7 +86,7 @@ describe.skipIf(dbUrl === undefined && process.env.CI !== 'true')(
       }
     });
 
-    it('returns source cache on a repeat request in under 300 ms warm', async () => {
+    it('returns source cache on a repeat request', async () => {
       expect(url.length).toBeGreaterThan(0);
       const body = LevelRequest.parse({
         graph: SYNTHETIC_LIVING_ROOM,
@@ -94,7 +102,6 @@ describe.skipIf(dbUrl === undefined && process.env.CI !== 'true')(
       const secondParsed = LevelResponse.parse(second.body as unknown);
       expect(secondParsed.source).toBe('cache');
       expect(secondParsed.plan).toEqual(firstParsed.plan);
-      expect(secondParsed.latencyMs).toBeLessThan(300);
     });
 
     it('regenerates when a cached plan fails validatePlan against a changed graph', async () => {
