@@ -16,9 +16,16 @@
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
+    "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
+    "@roomquest/fixtures": "workspace:*",
     "@roomquest/schema": "workspace:*",
+    "express": "^5.2.1",
+    "helmet": "^8.1.0",
+    "nestjs-pino": "^4.4.1",
+    "pino": "^9.9.0",
+    "pino-http": "^10.5.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "zod": "^4.0.1"
@@ -27,16 +34,19 @@
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.1",
+    "@swc/core": "^1.16.13",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.5",
     "@types/supertest": "^7.0.0",
     "eslint": "^9.16.0",
+    "pino-pretty": "^13.1.1",
     "supertest": "^7.0.0",
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.20.0",
+    "unplugin-swc": "^2.0.0",
     "vitest": "^4.1.4"
   }
 }
