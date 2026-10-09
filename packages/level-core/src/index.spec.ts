@@ -1,7 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { buildSurfaceGraph } from './surface-pipeline';
 import { placementToPose, SURFACE_INSET_M } from './placement';
-import { generatePlan, repairPlan, validatePlan, explorerPath } from './index';
+import {
+  generatePlan,
+  repairPlan,
+  validatePlan,
+  explorerPath,
+  resolveLeverGates,
+  applyLeverPull,
+} from './index';
 import { findNearestSnapTarget, SNAP_RADIUS_M } from './snap';
 import {
   chooseLargestTable,
@@ -38,5 +45,10 @@ describe('level-core', () => {
     expect(chooseLargestTable).toBeTypeOf('function');
     expect(readVillageAnchorHandle).toBeTypeOf('function');
     expect(writeVillageAnchorHandle).toBeTypeOf('function');
+  });
+
+  it('exports lever-gate link helpers', () => {
+    expect(resolveLeverGates).toBeTypeOf('function');
+    expect(applyLeverPull).toBeTypeOf('function');
   });
 });

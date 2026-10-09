@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SYNTHETIC_LIVING_ROOM_PLAN } from '@roomquest/fixtures';
 import { createGameStore } from '../game/store.js';
 import type { LevelPlan } from '@roomquest/schema';
+import { pullLever } from '../xr/lever/activate.js';
 import {
   resetExplorerTarget,
   setExplorerTarget,
@@ -180,6 +182,23 @@ describe('audio manager', () => {
     expect(SOUND_MANIFEST.gateOpened.synth).toBe('marimbaRise');
     expect(SOUND_MANIFEST.beatCompleted.synth).toBe('marimbaRise');
     expect(SOUND_MANIFEST.won.synth).toBe('chimeSting');
+  });
+
+  it('plays leverPulled and gateOpened when pullLever emits', () => {
+    const audio = installMockAudio();
+    unlockAudio();
+    const store = createGameStore({ clock: { now: () => 1000 } });
+    store.requestLevel();
+    store.startSurveying();
+    store.startBuilding(SYNTHETIC_LIVING_ROOM_PLAN);
+    store.startPlaying();
+    bindAudioStore(store);
+    const before = audio.voices;
+    expect(pullLever(store, SYNTHETIC_LIVING_ROOM_PLAN, 'p4')).toBe(true);
+    expect(audio.voices).toBeGreaterThan(before);
+    expect(
+      store.events.map((event) => event.type).slice(-2)
+    ).toEqual(['leverPulled', 'gateOpened']);
   });
 
   it('plays grab, invalidPlace, and F-07 HUD actions as UI sounds', () => {

@@ -52,6 +52,12 @@ export type GameEvent =
       beatIndex: number;
     }
   | {
+      type: 'leverPulled';
+      placementId: string;
+      timestamp: number;
+      beatIndex: number;
+    }
+  | {
       type: 'gateOpened';
       placementId: string;
       timestamp: number;
@@ -82,13 +88,7 @@ export type GameEvent =
       durationMs: number;
       timestamp: number;
     }
-  | { type: 'won'; timestamp: number; beatIndex: number }
-  | {
-      type: 'leverPulled';
-      placementId: string;
-      timestamp: number;
-      beatIndex: number;
-    };
+  | { type: 'won'; timestamp: number; beatIndex: number };
 
 /**
  * Clock interface for injected time

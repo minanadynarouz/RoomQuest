@@ -6,6 +6,7 @@
  * F-05: debug overlay + window.__rq (dev or ?debug=1); overlay lazy-loads
  * F-06: onboarding, gaze hint, FoV edge arrow (ExplorerTarget for X-05)
  * X-05: ExplorerSystem + registerRqHook('autoSolve')
+ * X-06: GateLeverSystem (poke / ray+pinch lever, gate animation)
  * F-07: win HUD, stars, pause, silent result posting
  * F-08: audio manager + CC0 SFX (unlocked on Enter, lazy with this chunk)
  * X-09: VillageAnchorSystem persist/restore (largest-table fallback)
@@ -56,6 +57,7 @@ import {
 } from './flags.js';
 import { LevelBuilderSystem } from './systems/LevelBuilderSystem.js';
 import { ExplorerSystem } from './systems/ExplorerSystem.js';
+import { GateLeverSystem } from './systems/GateLeverSystem.js';
 import {
   PlacementSystem,
   type PlacementDebugApi,
@@ -277,10 +279,9 @@ function playSyntheticLevel(): boolean {
       source: 'procedural',
     });
     builder.build(SYNTHETIC_LIVING_ROOM_PLAN, SYNTHETIC_LIVING_ROOM);
-    world.getSystem(ExplorerSystem)?.begin(
-      SYNTHETIC_LIVING_ROOM_PLAN,
-      SYNTHETIC_LIVING_ROOM
-    );
+    world
+      .getSystem(ExplorerSystem)
+      ?.begin(SYNTHETIC_LIVING_ROOM_PLAN, SYNTHETIC_LIVING_ROOM);
   }
   if (gameStore.phase === 'building') {
     gameStore.startPlaying();
@@ -329,9 +330,8 @@ async function startPlayableLevel(
 async function loadDebugOverlay(): Promise<void> {
   if (overlayRequested || !clientFlags.debug || !worldInstance) return;
   overlayRequested = true;
-  const { bindDebugOverlay, DebugOverlaySystem } = await import(
-    './debug/DebugOverlaySystem.js'
-  );
+  const { bindDebugOverlay, DebugOverlaySystem } =
+    await import('./debug/DebugOverlaySystem.js');
   bindDebugOverlay({
     store: gameStore,
     getGraph: () => latestGraph,
@@ -448,6 +448,7 @@ export async function launchXR(): Promise<World> {
   worldInstance.registerSystem(PlacementSystem, { priority: -2 });
   // Before GuidanceSystem (1) so gaze/edge-arrow read the current pose.
   worldInstance.registerSystem(ExplorerSystem, { priority: -1 });
+  worldInstance.registerSystem(GateLeverSystem, { priority: 3 });
   // X-09: after the hut exists; event-driven, not on the grab hot path.
   worldInstance.registerSystem(VillageAnchorSystem, { priority: 6 });
   await loadDebugOverlay();
@@ -466,6 +467,11 @@ export async function launchXR(): Promise<World> {
     throw new Error('ExplorerSystem failed to register');
   }
   explorer.configure({ builder, store: gameStore });
+  const gateLever = worldInstance.getSystem(GateLeverSystem);
+  if (!gateLever) {
+    throw new Error('GateLeverSystem failed to register');
+  }
+  gateLever.configure({ builder, store: gameStore });
   setExplorerTarget(explorer);
   bindVisibilityPause(worldInstance);
   registerRqHook('explorer', explorer.debugApi(), {
@@ -485,8 +491,13 @@ export async function launchXR(): Promise<World> {
     flags: clientFlags,
     isDev: import.meta.env.DEV,
   });
+  registerRqHook('gateLever', gateLever.debugApi(), {
+    flags: clientFlags,
+    isDev: import.meta.env.DEV,
+  });
   builder.addEventListener('levelBuilt', () => {
     placement.onLevelRebuilt();
+    gateLever.onLevelRebuilt();
   });
 
   if (fixtureMode) {

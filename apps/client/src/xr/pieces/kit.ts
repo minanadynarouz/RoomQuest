@@ -3,6 +3,7 @@ import {
   Group,
   LineBasicMaterial,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   type BufferGeometry,
   type Object3D,
@@ -56,6 +57,8 @@ export class GreyboxKit {
   readonly gemPool: InstancePool;
   readonly plankPool: InstancePool;
   private readonly geometries = new Map<PieceId, BufferGeometry>();
+  private readonly extraGeometries = new Map<string, BufferGeometry>();
+  private hitMaterial: MeshBasicMaterial | null = null;
 
   constructor(options: GreyboxKitOptions) {
     this.theme = options.theme;
@@ -85,6 +88,32 @@ export class GreyboxKit {
     const geo = factory(this.palette);
     this.geometries.set(piece, geo);
     return geo;
+  }
+
+  /** Extra cached geos (gate leaf, lever hit) disposed with the kit. */
+  cachedGeometry(
+    key: string,
+    factory: (palette: ToyPalette) => BufferGeometry
+  ): BufferGeometry {
+    const cached = this.extraGeometries.get(key);
+    if (cached) return cached;
+    const geo = factory(this.palette);
+    this.extraGeometries.set(key, geo);
+    return geo;
+  }
+
+  /** Shared near-invisible collider material. Visible so pointers can hit it. */
+  interactHitMaterial(): MeshBasicMaterial {
+    if (!this.hitMaterial) {
+      this.hitMaterial = new MeshBasicMaterial({
+        color: 0x88ffaa,
+        transparent: true,
+        opacity: 0.04,
+        depthWrite: false,
+        toneMapped: false,
+      });
+    }
+    return this.hitMaterial;
   }
 
   createMeshPiece(piece: PieceId, footprint: PieceFootprint): Object3D {
@@ -134,6 +163,12 @@ export class GreyboxKit {
       geo.dispose();
     }
     this.geometries.clear();
+    for (const geo of this.extraGeometries.values()) {
+      geo.dispose();
+    }
+    this.extraGeometries.clear();
+    this.hitMaterial?.dispose();
+    this.hitMaterial = null;
     this.material.dispose();
     this.debugLineMaterial.dispose();
   }

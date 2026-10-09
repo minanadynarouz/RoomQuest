@@ -10,6 +10,7 @@ export default defineConfig({
         'src/validate/**/*.ts',
         'src/repair/**/*.ts',
         'src/generate/**/*.ts',
+        'src/interact/**/*.ts',
       ],
       exclude: [
         'src/validate/**/*.spec.ts',
@@ -17,6 +18,7 @@ export default defineConfig({
         'src/repair/**/*.spec.ts',
         'src/generate/**/*.spec.ts',
         'src/generate/test-graphs.ts',
+        'src/interact/**/*.spec.ts',
       ],
       thresholds: {
         lines: 90,

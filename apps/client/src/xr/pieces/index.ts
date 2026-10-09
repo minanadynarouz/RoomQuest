@@ -25,7 +25,12 @@ export {
   createMovingPlatformGeometry,
   MOVING_PLATFORM_FOOTPRINT,
 } from './moving-platform.js';
-export { createGate, createGateGeometry, GATE_FOOTPRINT } from './gate.js';
+export {
+  createGate,
+  createGateGeometry,
+  createGateLeafGeometry,
+  GATE_FOOTPRINT,
+} from './gate.js';
 export { createLever, createLeverGeometry, LEVER_FOOTPRINT } from './lever.js';
 export { createGem, createGemGeometry, GEM_FOOTPRINT } from './gem.js';
 export { createSlime, createSlimeGeometry, SLIME_FOOTPRINT } from './slime.js';
