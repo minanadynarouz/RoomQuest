@@ -148,6 +148,8 @@ export async function launchXR(): Promise<World> {
   }
 
   if (fixtureMode) {
+    const landing = document.getElementById('landing-page');
+    if (landing) landing.style.display = 'none';
     addFixtureLights(worldInstance);
     gameStore.requestLevel();
     gameStore.startSurveying();
