@@ -3,6 +3,7 @@
  * Handles capability check, XR chunk prefetch, and launching the game
  */
 
+import { unlockAudio } from '../audio/unlock.js';
 import {
   emulatorRoomFromFlags,
   readClientFlags,
@@ -113,6 +114,9 @@ export async function initLanding(): Promise<void> {
   }
   
   ui.enterButton.addEventListener('click', () => {
+    // Resume AudioContext inside the user gesture (F-08). Must stay sync
+    // in this click handler; do not wait on the XR import first.
+    unlockAudio();
     if (capabilityResult.state === 'supported' && xrChunkReady) {
       void launchXR();
     }

@@ -12,6 +12,7 @@ import {
   type GameStore,
   type PostLevelResultInput,
 } from '../game/index.js';
+import { playUiSound } from '../audio/index.js';
 import type { HudActions } from '../ui/hud-actions.js';
 import { isXrHiddenOrBlurred } from './visibility-pause.js';
 
@@ -98,12 +99,14 @@ export function createSessionController(deps: SessionDeps): SessionController {
     if (store.phase !== 'playing') return;
     store.pause();
     deps.getExplorer()?.pause();
+    playUiSound('pause');
   }
 
   function resume(): void {
     if (store.phase !== 'paused') return;
     store.resume();
     deps.getExplorer()?.resume();
+    playUiSound('resume');
   }
 
   function replay(): void {
@@ -112,6 +115,7 @@ export function createSessionController(deps: SessionDeps): SessionController {
     const graph = deps.getGraph();
     store.replay();
     posted = false;
+    playUiSound('replay');
     if (graph) {
       deps.getBuilder()?.build(plan, graph);
       const explorer = deps.getExplorer();
@@ -130,6 +134,7 @@ export function createSessionController(deps: SessionDeps): SessionController {
     store.exit();
     deps.getWorld()?.exitXR();
     deps.showLanding();
+    playUiSound('exit');
   }
 
   function forceWin(): void {

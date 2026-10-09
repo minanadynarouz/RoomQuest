@@ -1,5 +1,6 @@
 /**
- * F-06: onboarding sequencer, head-gaze hint, FoV edge arrow + chirp.
+ * F-06: onboarding sequencer, head-gaze hint, FoV edge arrow.
+ * Explorer-out-of-view chirp is F-08 (store event → spatial SFX).
  *
  * Prefers IWSDK GazeSystem's pointer (`input.xr.gazePointer`) when it can
  * target; otherwise a viewer-pose ray from the head / camera. Explorer
@@ -24,7 +25,6 @@ import {
   angleFromViewDeg,
   type EdgeArrowPose,
 } from './guidance/angle-from-view.js';
-import { playExplorerChirp } from './guidance/chirp.js';
 import {
   createDwellState,
   resetDwell,
@@ -47,7 +47,6 @@ import { selectGazeHint } from './visibility.js';
 
 const ARROW_DISTANCE_M = 0.7;
 const ARROW_RADIUS_M = 0.24;
-const CHIRP_COOLDOWN_MS = 4000;
 const MAX_DT_MS = 100;
 
 interface GazePointerLike {
@@ -100,7 +99,6 @@ export class GuidanceSystem extends createSystem({}) {
   private arrow: Mesh | null = null;
   private startedOnboarding = false;
   private wasOutOfView = false;
-  private chirpCoolMs = 0;
   private gazeAvailable = false;
   private storage: OnboardingStorage | null = null;
 
@@ -127,10 +125,6 @@ export class GuidanceSystem extends createSystem({}) {
   update(delta: number): void {
     const store = boundStore;
     const dtMs = Math.min((delta > 0 ? delta : 0) * 1000, MAX_DT_MS);
-    if (this.chirpCoolMs > 0) {
-      this.chirpCoolMs -= dtMs;
-      if (this.chirpCoolMs < 0) this.chirpCoolMs = 0;
-    }
 
     if (store?.phase !== 'playing') {
       if (store?.phase !== 'paused') {
@@ -183,11 +177,8 @@ export class GuidanceSystem extends createSystem({}) {
     const hintVisible = tickDwell(this.dwell, dtMs, looking);
 
     if (outOfView && !this.wasOutOfView) {
+      // F-08 audio manager plays the spatial chirp from this store event.
       store.explorerOutOfView();
-      if (this.chirpCoolMs <= 0) {
-        playExplorerChirp();
-        this.chirpCoolMs = CHIRP_COOLDOWN_MS;
-      }
     }
     this.wasOutOfView = outOfView;
 

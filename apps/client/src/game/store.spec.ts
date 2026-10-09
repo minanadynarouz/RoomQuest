@@ -620,6 +620,40 @@ describe('createGameStore', () => {
       expect(store.events[0]?.type).toBe('explorerOutOfView');
     });
 
+    it('emits leverPulled so F-08 can play when X-06 wires the lever', () => {
+      const store = createGameStore({ clock: mockClock });
+      store.requestLevel();
+      store.startSurveying();
+      store.startBuilding(createMockPlan());
+      store.startPlaying();
+
+      store.leverPulled('lever1');
+
+      expect(store.events[0]).toMatchObject({
+        type: 'leverPulled',
+        placementId: 'lever1',
+      });
+    });
+
+    it('notifies subscribeEvents listeners and supports unsubscribe', () => {
+      const store = createGameStore({ clock: mockClock });
+      store.requestLevel();
+      store.startSurveying();
+      store.startBuilding(createMockPlan());
+      store.startPlaying();
+
+      const seen: string[] = [];
+      const stop = store.subscribeEvents((event) => {
+        seen.push(event.type);
+      });
+      store.pieceBuilt('p1');
+      store.gateOpened('g1');
+      stop();
+      store.slimeStunned('s1');
+
+      expect(seen).toEqual(['pieceBuilt', 'gateOpened']);
+    });
+
     it('emits won event on win', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();

@@ -15,6 +15,7 @@ import {
   type PlacementHand,
 } from '../placement/controller.js';
 import type { LevelBuilderSystem } from './LevelBuilderSystem.js';
+import { playUiSound } from '../../audio/index.js';
 import type { createGameStore } from '../../game/index.js';
 import type { MountedPiece, SnapTarget } from '../level/types.js';
 
@@ -95,6 +96,12 @@ export class PlacementSystem extends createSystem(
       },
       onDisableGrab: (id) => {
         this.disableGrab(id);
+      },
+      onGrab: () => {
+        playUiSound('grab');
+      },
+      onInvalidPlace: () => {
+        playUiSound('invalidPlace');
       },
     });
   }

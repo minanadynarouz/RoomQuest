@@ -21,9 +21,17 @@ This project uses the following third-party assets and libraries:
 
 ## Audio Assets
 
-Audio assets (to be added) will use CC0 (Creative Commons Zero) licensed sounds only.
-All sources will be listed here with proper attribution.
+F-08 gameplay SFX are **procedural WebAudio placeholders** (filtered noise,
+decaying sines/triangles, low-passed sine, formant blips). Direction: warm
+wooden toy-box, short, dry, quiet under passthrough. No music bed during play.
+
+They are defined only in `apps/client/src/audio/manifest.ts`. To swap in a
+CC0 file later, set that row's `file` to a name under `public/audio/` and
+list the file here.
+
+`audio/chime.mp3` is the IWSDK sample-robot one-shot from the starter scene
+(`scenes/main.iwsdk.scene.json`), not an F-08 gameplay SFX.
 
 ---
 
-Last updated: September 28, 2026
+Last updated: October 9, 2026

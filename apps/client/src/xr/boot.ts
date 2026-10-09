@@ -6,6 +6,8 @@
  * F-05: debug overlay + window.__rq (dev or ?debug=1); overlay lazy-loads
  * F-06: onboarding, gaze hint, FoV edge arrow (ExplorerTarget for X-05)
  * X-05: ExplorerSystem + registerRqHook('autoSolve')
+ * F-07: win HUD, stars, pause, silent result posting
+ * F-08: audio manager + CC0 SFX (unlocked on Enter, lazy with this chunk)
  */
 
 import {
@@ -20,6 +22,11 @@ import {
   SYNTHETIC_LIVING_ROOM,
   SYNTHETIC_LIVING_ROOM_PLAN,
 } from '@roomquest/fixtures';
+import {
+  bindAudioStore,
+  preloadSounds,
+  unlockAudio,
+} from '../audio/index.js';
 import {
   applyDirectorResult,
   createDirectorClientFromEnv,
@@ -65,6 +72,7 @@ export type { ExplorerTarget } from '../ui/explorer-target.js';
 
 let worldInstance: World | null = null;
 const gameStore = createGameStore();
+bindAudioStore(gameStore);
 let latestGraph: SurfaceGraph | null = null;
 let latestPlan: LevelPlan | null = null;
 let latestSnapTargets: readonly SnapTarget[] = [];
@@ -319,6 +327,9 @@ function addFixtureLights(world: World): void {
  * Grab config always uses `features.grabbing: { useHandPinchForGrab: true }`.
  */
 export async function launchXR(): Promise<World> {
+  unlockAudio();
+  bindAudioStore(gameStore);
+  void preloadSounds();
   clientFlags = readClientFlags(
     typeof window === 'undefined' ? '' : window.location.search
   );
