@@ -61,6 +61,8 @@ interface RqWindow {
       stun: (id: string) => boolean;
       boundCount?: () => number;
       isAwake?: (id: string) => boolean;
+      isGroggy?: (id: string) => boolean;
+      canPass?: (id: string) => boolean;
     };
   };
 }
@@ -459,8 +461,7 @@ async function pokeSlime(
   try {
     await page.waitForFunction(
       (slimeId) => {
-        const events =
-          (window as unknown as RqWindow).__rq?.store.events ?? [];
+        const events = (window as unknown as RqWindow).__rq?.store.events ?? [];
         return events.some(
           (e) => e.type === 'slimeStunned' && e.placementId === slimeId
         );
@@ -646,6 +647,17 @@ async function captureDesktopScreenshots(
     );
   }
   console.log('[X-08 e2e] desktop autoSolve', solved);
+
+  await page.waitForFunction(
+    (slimeId) => {
+      const rq = (window as unknown as RqWindow).__rq;
+      return rq?.slime?.isGroggy?.(slimeId) === true;
+    },
+    SLIME_ID,
+    { timeout: 20_000 }
+  );
+  await shot(page, 'groggy-slime.png');
+  console.log('[X-08 e2e] screenshot groggy-slime.png');
 
   await waitForExplorerPastSlime(page);
   await shot(page, 'passed.png');

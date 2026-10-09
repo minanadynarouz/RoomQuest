@@ -10,18 +10,25 @@ import {
   SLIME_STAR_COUNT,
   canExplorerPassSlime,
   createSlimeRuntime,
-  slimeBodyScaleY,
+  isSlimeAwake,
+  isSlimeGroggy,
   slimePatrolConfig,
+  slimeStarScale,
+  slimeStarsVisible,
   stunSlime,
   tickSlime,
   writePatrolLocalOffset,
+  writeSlimeBodyScale,
   writeStarPose,
+  type SlimeBodyScale,
+  type SlimeExplorerLocal,
   type SlimePatrolConfig,
   type SlimeRuntime,
   type SlimeStarPose,
 } from '@roomquest/level-core';
 import type { SurfaceGraph } from '@roomquest/schema';
 import type { GameStore } from '../../game/index.js';
+import { getExplorerTarget } from '../../ui/explorer-target.js';
 import { emitSlimeStunned, isSlimeStunStillActive } from '../slime/stun.js';
 import type { LevelBuilderSystem } from './LevelBuilderSystem.js';
 
@@ -39,6 +46,7 @@ export interface SlimeDebugApi {
   stun: (placementId: string) => boolean;
   boundCount: () => number;
   isAwake: (placementId: string) => boolean;
+  isGroggy?: (placementId: string) => boolean;
   canPass: (placementId: string) => boolean;
 }
 
@@ -61,6 +69,14 @@ export class SlimeSystem extends createSystem(
   private readonly pointerDown = new Map<Entity, () => void>();
   private readonly tmpOffset = { x: 0, z: 0 };
   private readonly tmpStar: SlimeStarPose = { x: 0, y: 0, z: 0, yaw: 0 };
+  private readonly tmpExplorer = { x: 0, y: 0, z: 0 };
+  private readonly tmpLocal: SlimeExplorerLocal = { x: 0, y: 0, z: 0 };
+  private readonly tmpScale: SlimeBodyScale = {
+    x: 1,
+    y: 1,
+    z: 1,
+    tiltX: 0,
+  };
 
   configure(options: { builder: LevelBuilderSystem; store: GameStore }): void {
     this.builder = options.builder;
@@ -93,7 +109,11 @@ export class SlimeSystem extends createSystem(
       boundCount: () => this.bound.size,
       isAwake: (placementId) => {
         const row = this.bound.get(placementId);
-        return row ? row.runtime.stunRemainingS <= 0 : true;
+        return row ? isSlimeAwake(row.runtime) : true;
+      },
+      isGroggy: (placementId) => {
+        const row = this.bound.get(placementId);
+        return row ? isSlimeGroggy(row.runtime) : false;
       },
       canPass: (placementId) => {
         const row = this.bound.get(placementId);
@@ -131,8 +151,12 @@ export class SlimeSystem extends createSystem(
       );
       this.bindSlime(entity, piece.object, piece.placement.id, config);
       const row = this.bound.get(piece.placement.id);
-      if (row && isSlimeStunStillActive(events, piece.placement.id)) {
+      if (!row) continue;
+      if (isSlimeStunStillActive(events, piece.placement.id)) {
         stunSlime(row.runtime);
+      } else if (latestSlimeEventIsWoke(events, piece.placement.id)) {
+        row.runtime.groggy = true;
+        row.runtime.groggyElapsedS = 0;
       }
     }
   }
@@ -225,13 +249,45 @@ export class SlimeSystem extends createSystem(
   private step(dt: number, timeS: number): void {
     const store = this.store;
     if (!store) return;
+    const occupancy = this.writeExplorerLocal();
     for (const row of this.bound.values()) {
-      const result = tickSlime(row.runtime, dt, row.config);
+      this.writeRowLocal(row, occupancy);
+      const result = tickSlime(
+        row.runtime,
+        dt,
+        row.config,
+        occupancy ? this.tmpLocal : undefined
+      );
       if (result === 'woke') {
         store.slimeWoke(row.runtime.placementId);
       }
       this.syncVisual(row, timeS);
     }
+  }
+
+  /**
+   * Fills {@link tmpExplorer} when an explorer target exists. Per-slime
+   * local conversion happens in {@link writeRowLocal} so each slime's home
+   * pose is used without allocating.
+   */
+  private writeExplorerLocal(): boolean {
+    const target = getExplorerTarget();
+    if (!target) return false;
+    target.getWorldPosition(this.tmpExplorer);
+    return true;
+  }
+
+  private writeRowLocal(row: BoundSlime, hasExplorer: boolean): void {
+    if (!hasExplorer) return;
+    const yaw = row.home.yaw;
+    const cos = Math.cos(yaw);
+    const sin = Math.sin(yaw);
+    const dx = this.tmpExplorer.x - row.home.x;
+    const dy = this.tmpExplorer.y - row.home.y;
+    const dz = this.tmpExplorer.z - row.home.z;
+    this.tmpLocal.x = dx * cos + dz * sin;
+    this.tmpLocal.z = -dx * sin + dz * cos;
+    this.tmpLocal.y = dy;
   }
 
   private syncVisual(row: BoundSlime, timeS: number): void {
@@ -247,15 +303,18 @@ export class SlimeSystem extends createSystem(
       row.home.z + localX * sin + localZ * cos
     );
 
-    const stunned = row.runtime.stunRemainingS > 0;
-    const scaleY = slimeBodyScaleY(row.runtime.stunRemainingS);
+    writeSlimeBodyScale(row.runtime, this.tmpScale);
     if (row.body) {
-      row.body.scale.set(1, scaleY, 1);
+      row.body.scale.set(this.tmpScale.x, this.tmpScale.y, this.tmpScale.z);
+      row.body.rotation.x = this.tmpScale.tiltX;
     }
     const stars = row.stars;
     if (!stars) return;
-    stars.visible = stunned;
-    if (!stunned) return;
+    const showStars = slimeStarsVisible(row.runtime);
+    stars.visible = showStars;
+    const starScale = showStars ? slimeStarScale(row.runtime) : 1;
+    stars.scale.set(starScale, starScale, starScale);
+    if (!showStars) return;
     const children = stars.children;
     for (let i = 0; i < SLIME_STAR_COUNT; i += 1) {
       const star = children[i];
@@ -265,6 +324,18 @@ export class SlimeSystem extends createSystem(
       star.rotation.set(0, this.tmpStar.yaw, 0.4);
     }
   }
+}
+
+function latestSlimeEventIsWoke(
+  events: readonly { type: string; placementId?: string }[],
+  placementId: string
+): boolean {
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const event = events[i];
+    if (event?.placementId !== placementId) continue;
+    return event.type === 'slimeWoke';
+  }
+  return false;
 }
 
 function object3DFromUserData(value: unknown): Object3D | null {

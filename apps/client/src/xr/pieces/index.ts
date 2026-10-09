@@ -39,6 +39,7 @@ export {
   createSlimeGeometry,
   createSlimeStarGeometry,
   SLIME_FOOTPRINT,
+  SLIME_MESH_COUNT,
 } from './slime.js';
 export {
   createPortal,
