@@ -88,7 +88,9 @@ export function mountGreyboxLevel(
   let trayIndex = 0;
 
   for (const placement of plan.placements) {
-    const object = createPiece(placement.piece, kit);
+    const object = createPiece(placement.piece, kit, {
+      instanced: !placement.playerBuilt,
+    });
     object.userData.placementId = placement.id;
     object.userData.playerBuilt = placement.playerBuilt;
     object.name = placement.id;
@@ -100,17 +102,34 @@ export function mountGreyboxLevel(
         placementId: placement.id,
         piece: placement.piece,
         pose,
+        filled: false,
         to: placement.to,
       });
       tray.add(object);
       layoutTrayItem(object, trayIndex, trayPlacements.length);
       trayIndex += 1;
-      pieces.push({ placement, object, pose, inTray: true });
+      pieces.push({
+        placement,
+        object,
+        pose,
+        inTray: true,
+        traySlot: {
+          x: object.position.x,
+          y: object.position.y,
+          z: object.position.z,
+        },
+      });
     } else {
       root.add(object);
       object.position.set(pose.position[0], pose.position[1], pose.position[2]);
       object.rotation.set(0, pose.yaw, 0);
-      pieces.push({ placement, object, pose, inTray: false });
+      pieces.push({
+        placement,
+        object,
+        pose,
+        inTray: false,
+        traySlot: { x: 0, y: 0, z: 0 },
+      });
     }
   }
 

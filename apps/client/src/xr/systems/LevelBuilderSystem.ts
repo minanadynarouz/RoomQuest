@@ -3,6 +3,7 @@ import {
   Entity,
   Group,
   LineBasicMaterial,
+  OneHandGrabbable,
   Quaternion,
   Vector3,
 } from '@iwsdk/core';
@@ -17,6 +18,7 @@ import type { LevelBuiltDetail, SnapTarget } from '../level/types.js';
 const TRAY_FORWARD_M = 0.4;
 const TRAY_DROP_M = 0.32;
 const TRAY_MAX_DISTANCE_M = 0.6;
+const EMPTY_SNAP_TARGETS: readonly SnapTarget[] = [];
 
 /**
  * Consumes a LevelPlan + SurfaceGraph and creates one entity per placement
@@ -43,6 +45,7 @@ export class LevelBuilderSystem extends createSystem({}, {}) {
   private levelRootEntity: Entity | null = null;
   private trayEntity: Entity | null = null;
   private placementEntities: Entity[] = [];
+  private readonly entitiesByPlacement = new Map<string, Entity>();
   private debugGraph: SurfaceGraph | null = null;
   private debugRoot: Group | null = null;
 
@@ -86,6 +89,13 @@ export class LevelBuilderSystem extends createSystem({}, {}) {
       piece.object.position.set(saved.x, saved.y, saved.z);
       piece.object.rotation.set(0, saved.yaw, 0);
       this.placementEntities.push(entity);
+      this.entitiesByPlacement.set(piece.placement.id, entity);
+      if (piece.inTray) {
+        entity.addComponent(OneHandGrabbable, {
+          rotate: true,
+          translate: true,
+        });
+      }
     }
 
     if (this.debugGraph) {
@@ -108,7 +118,7 @@ export class LevelBuilderSystem extends createSystem({}, {}) {
   }
 
   getSnapTargets(): readonly SnapTarget[] {
-    return this.mounted?.snapTargets ?? [];
+    return this.mounted?.snapTargets ?? EMPTY_SNAP_TARGETS;
   }
 
   getTray(): Group | null {
@@ -121,6 +131,10 @@ export class LevelBuilderSystem extends createSystem({}, {}) {
 
   getMounted(): MountedLevel | null {
     return this.mounted;
+  }
+
+  getPieceEntity(placementId: string): Entity | null {
+    return this.entitiesByPlacement.get(placementId) ?? null;
   }
 
   /**
@@ -206,6 +220,7 @@ export class LevelBuilderSystem extends createSystem({}, {}) {
       entity.dispose({ disposeResources: false });
     }
     this.placementEntities.length = 0;
+    this.entitiesByPlacement.clear();
 
     if (this.trayEntity) {
       this.trayEntity.dispose({ disposeResources: false });

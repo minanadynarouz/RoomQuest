@@ -2,6 +2,7 @@
  * XR session initialization and launch
  * X-03: LevelBuilderSystem, greybox kit, fixture / debug URL flags
  * F-04: spatial HUD panels (lazy-loaded with this XR module)
+ * X-04: PlacementSystem pinch-place with snap
  */
 
 import {
@@ -21,6 +22,10 @@ import { bindHudStore, HudSystem } from '../ui/HudSystem.js';
 import type { HudPanelId } from '../ui/visibility.js';
 import { readClientFlags, isSyntheticLivingRoomFixture } from './flags.js';
 import { LevelBuilderSystem } from './systems/LevelBuilderSystem.js';
+import {
+  PlacementSystem,
+  type PlacementDebugApi,
+} from './systems/PlacementSystem.js';
 import { SurfaceGraphSystem } from './systems/SurfaceGraphSystem.js';
 import { countDrawCalls } from './level/draw-calls.js';
 import type { LevelPlan, SurfaceGraph } from '@roomquest/schema';
@@ -41,6 +46,7 @@ export interface RqDebugHooks {
   snapTargets: readonly SnapTarget[];
   drawCalls: number;
   hud?: RqHudDebug;
+  placement: PlacementDebugApi | null;
 }
 
 declare global {
@@ -53,7 +59,8 @@ function exposeHooks(
   graph: SurfaceGraph | null,
   plan: LevelPlan | null,
   snapTargets: readonly SnapTarget[] = [],
-  drawCalls = 0
+  drawCalls = 0,
+  placement: PlacementDebugApi | null = null
 ): void {
   if (typeof window === 'undefined') return;
   window.__rq = {
@@ -63,6 +70,7 @@ function exposeHooks(
     snapTargets,
     drawCalls,
     hud: window.__rq?.hud,
+    placement,
   };
 }
 
@@ -155,11 +163,21 @@ export async function launchXR(): Promise<World> {
   worldInstance.registerSystem(LevelBuilderSystem, { priority: 5 });
   bindHudStore(gameStore);
   worldInstance.registerSystem(HudSystem, { priority: 0 });
+  // After GrabSystem (-3) so the held world pose is current for the ghost.
+  worldInstance.registerSystem(PlacementSystem, { priority: -2 });
 
   const builder = worldInstance.getSystem(LevelBuilderSystem);
   if (!builder) {
     throw new Error('LevelBuilderSystem failed to register');
   }
+  const placement = worldInstance.getSystem(PlacementSystem);
+  if (!placement) {
+    throw new Error('PlacementSystem failed to register');
+  }
+  placement.configure({ builder, store: gameStore });
+  builder.addEventListener('levelBuilt', () => {
+    placement.onLevelRebuilt();
+  });
 
   if (fixtureMode) {
     const landing = document.getElementById('landing-page');
@@ -177,18 +195,20 @@ export async function launchXR(): Promise<World> {
       SYNTHETIC_LIVING_ROOM,
       SYNTHETIC_LIVING_ROOM_PLAN,
       builder.getSnapTargets(),
-      countDrawCalls(worldInstance.scene)
+      countDrawCalls(worldInstance.scene),
+      placement.debugApi()
     );
-    console.log('[X-03] Fixture level built', {
+    console.log('[X-04] Fixture level built', {
       pieces: SYNTHETIC_LIVING_ROOM_PLAN.placements.length,
       snapTargets: builder.getSnapTargets().length,
       drawCalls: window.__rq?.drawCalls,
       debug: flags.debug,
+      grabbing: grabbing.useHandPinchForGrab,
     });
   } else {
     gameStore.requestLevel();
     gameStore.startSurveying();
-    exposeHooks(null, null);
+    exposeHooks(null, null, [], 0, placement.debugApi());
     worldInstance.registerSystem(SurfaceGraphSystem, { priority: 10 });
     const graphSystem = worldInstance.getSystem(SurfaceGraphSystem);
     if (graphSystem) {
@@ -197,7 +217,13 @@ export async function launchXR(): Promise<World> {
         if (flags.debug) {
           builder.setDebugGraph(graph);
         }
-        exposeHooks(graph, gameStore.plan, builder.getSnapTargets());
+        exposeHooks(
+          graph,
+          gameStore.plan,
+          builder.getSnapTargets(),
+          0,
+          placement.debugApi()
+        );
       });
       graphSystem.addEventListener('noSurfaces', () => {
         gameStore.noSurfaces();
