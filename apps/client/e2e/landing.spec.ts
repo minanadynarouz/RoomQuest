@@ -383,7 +383,7 @@ test.describe('F-05 debug overlay', () => {
               fallbackReason: string | null;
               validationIssues: number;
             };
-            autoSolve?: () => void;
+            autoSolve?: () => Promise<void>;
             plan?: unknown;
             store?: unknown;
           };

@@ -2,7 +2,8 @@
  * XR module exports
  */
 
-export { launchXR, getWorld, getGameStore } from './boot.js';
+export { launchXR, getWorld, getGameStore, registerRqHook } from './boot.js';
+export type { RqHooks } from './debug/rq-hooks.js';
 export { LevelBuilderSystem } from './systems/LevelBuilderSystem.js';
 export { PlacementSystem } from './systems/PlacementSystem.js';
 export { SurfaceGraphSystem } from './systems/SurfaceGraphSystem.js';

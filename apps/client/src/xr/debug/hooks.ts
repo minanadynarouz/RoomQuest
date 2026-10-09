@@ -1,56 +1,25 @@
 /**
- * `window.__rq` debug hooks (F-05).
- * Installed only in Vite dev or when `?debug=1` is set.
- * `autoSolve` is a typed slot for F-09; this ticket does not fill it in.
+ * Overlay-only perf snapshot helpers for the F-05 debug panel.
+ * `window.__rq` itself is owned by `rq-hooks.ts`.
  */
 
-import type { GameStore } from '../../game/index.js';
-import type { LevelPlan, SurfaceGraph } from '@roomquest/schema';
-import type { HudPanelId } from '../../ui/visibility.js';
-import type { SnapTarget } from '../level/types.js';
-import type { PlacementDebugApi } from '../systems/PlacementSystem.js';
-import {
-  shouldExposeDebugHooks,
-  type ClientFlags,
-} from '../flags.js';
 import type { RqPerfStats } from './stats.js';
 import { EMPTY_PERF_STATS } from './stats.js';
 
 export type { RqPerfStats } from './stats.js';
+export type {
+  RqHooks as RqDebugHooks,
+  RqHudDebug,
+  RqHookTarget,
+  RqOverlayDebug,
+} from './rq-hooks.js';
+export {
+  installRqHooks,
+  registerRqHook,
+  resetRqHooks,
+  rqHooksEnabled,
+} from './rq-hooks.js';
 export { shouldExposeDebugHooks } from '../flags.js';
-
-export interface RqHudDebug {
-  ready: boolean;
-  visible: readonly HudPanelId[];
-}
-
-export interface RqOverlayDebug {
-  ready: boolean;
-}
-
-export interface RqDebugHooks {
-  store: GameStore;
-  graph: SurfaceGraph | null;
-  plan: LevelPlan | null;
-  snapTargets: readonly SnapTarget[];
-  drawCalls: number;
-  hud?: RqHudDebug;
-  overlay?: RqOverlayDebug;
-  placement: PlacementDebugApi | null;
-  stats: () => RqPerfStats;
-  /** Filled in by F-09 / X-05 via registerRqHook. */
-  autoSolve?: () => Promise<void>;
-}
-
-export interface RqHookTarget {
-  __rq?: RqDebugHooks;
-}
-
-declare global {
-  interface Window {
-    __rq?: RqDebugHooks;
-  }
-}
 
 const latestStats: RqPerfStats = { ...EMPTY_PERF_STATS };
 let hasOverlaySample = false;
@@ -105,33 +74,4 @@ export function createStatsGetter(
     if (hasOverlaySample) return latestStats;
     return fallback ? fallback() : latestStats;
   };
-}
-
-/**
- * Install or strip `target.__rq` based on the shared flag + dev gate.
- * Returns whether hooks are live.
- */
-export function applyRqHooks(
-  flags: Pick<ClientFlags, 'debug'>,
-  isDev: boolean,
-  target: RqHookTarget,
-  factory: () => RqDebugHooks
-): boolean {
-  const enabled = shouldExposeDebugHooks(flags, isDev);
-  if (!enabled) {
-    if (target.__rq) delete target.__rq;
-    return false;
-  }
-  const next = factory();
-  const previous = target.__rq;
-  target.__rq = {
-    ...next,
-    hud: next.hud ?? previous?.hud,
-    overlay:
-      next.overlay ??
-      (overlayReady ? { ready: true } : previous?.overlay),
-    placement: next.placement ?? previous?.placement ?? null,
-    autoSolve: next.autoSolve ?? previous?.autoSolve,
-  };
-  return true;
 }

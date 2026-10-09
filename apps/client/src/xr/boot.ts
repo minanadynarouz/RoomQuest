@@ -20,12 +20,8 @@ import {
 } from '@roomquest/fixtures';
 import { createGameStore } from '../game/index.js';
 import { bindHudStore, HudSystem } from '../ui/HudSystem.js';
-import {
-  applyRqHooks,
-  createStatsGetter,
-  isOverlayReady,
-  type RqDebugHooks,
-} from './debug/hooks.js';
+import { createStatsGetter, isOverlayReady } from './debug/hooks.js';
+import { installRqHooks } from './debug/rq-hooks.js';
 import { collectPerfStats } from './debug/stats.js';
 import {
   isSyntheticLivingRoomFixture,
@@ -42,7 +38,8 @@ import { countDrawCalls } from './level/draw-calls.js';
 import type { LevelPlan, SurfaceGraph } from '@roomquest/schema';
 import type { SnapTarget } from './level/types.js';
 
-export type { RqDebugHooks, RqHudDebug } from './debug/hooks.js';
+export type { RqHooks, RqHudDebug } from './debug/rq-hooks.js';
+export { registerRqHook } from './debug/rq-hooks.js';
 
 let worldInstance: World | null = null;
 const gameStore = createGameStore();
@@ -81,11 +78,8 @@ function exposeHooks(
   latestSceneDrawCalls = drawCalls;
   latestPlacement = placement;
   if (typeof window === 'undefined') return;
-  applyRqHooks(
-    clientFlags,
-    import.meta.env.DEV,
-    window,
-    (): RqDebugHooks => ({
+  installRqHooks(
+    {
       store: gameStore,
       graph: latestGraph,
       plan: latestPlan,
@@ -95,8 +89,8 @@ function exposeHooks(
       overlay: isOverlayReady() ? { ready: true } : window.__rq?.overlay,
       placement: latestPlacement,
       stats: statsGetter,
-      autoSolve: window.__rq?.autoSolve,
-    })
+    },
+    { flags: clientFlags, isDev: import.meta.env.DEV }
   );
 }
 
