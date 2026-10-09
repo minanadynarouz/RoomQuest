@@ -23,7 +23,7 @@ export class LevelsController {
     headers: LevelHeaders,
     @Body(new ZodValidationPipe(LevelRequest))
     body: LevelRequest
-  ): LevelResponse {
+  ): Promise<LevelResponse> {
     return this.levels.create(body, headers['x-device-id']);
   }
 }
