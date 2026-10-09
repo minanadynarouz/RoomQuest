@@ -2,24 +2,27 @@
  * Fire-and-forget session result poster (F-07).
  *
  * POST /api/v1/levels/:levelKey/result with the F-03 director headers.
+ * Uses `@roomquest/schema` (`procLevelKey`, `ResultLevelKey`, `ResultRequest`).
  * Network errors, 202 {stored:false}, 400, 404, and 429 never throw and
  * never affect callers. Invalid bodies are skipped (no fetch).
  *
  * Posts even in `?director=off` — failures stay silent.
  */
 
-import type { PlanSource, Tier } from '@roomquest/schema';
+import {
+  RESULT_TIME_MS_MAX,
+  ResultLevelKey,
+  ResultRequest,
+  isProcLevelKey,
+  procLevelKey,
+  type PlanSource,
+  type Tier,
+} from '@roomquest/schema';
 import {
   DEFAULT_CLIENT_VERSION,
   DEFAULT_TIER,
   LEVELS_PATH,
 } from '../director/types.js';
-import { procLevelKey } from './proc-key.js';
-import {
-  RESULT_TIME_MS_MAX,
-  ResultLevelKey,
-  ResultRequestBody,
-} from './schema.js';
 
 export const RESULT_PATH_SUFFIX = '/result';
 
@@ -110,13 +113,17 @@ export function createResultPoster(options: ResultPosterOptions): ResultPoster {
     const keyParsed = ResultLevelKey.safeParse(input.levelKey);
     if (!keyParsed.success) return;
 
-    const bodyParsed = ResultRequestBody.safeParse({
+    const planSource: PlanSource = isProcLevelKey(keyParsed.data)
+      ? 'procedural'
+      : input.planSource;
+
+    const bodyParsed = ResultRequest.safeParse({
       deviceId: input.deviceId || deviceId,
       stars: input.stars,
       gems: input.gems,
       timeMs: clampTimeMs(input.timeMs),
       completed: input.completed,
-      planSource: input.planSource,
+      planSource,
     });
     if (!bodyParsed.success) return;
 

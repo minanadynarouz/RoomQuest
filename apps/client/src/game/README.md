@@ -197,10 +197,11 @@ headers `X-Device-Id` / `X-Client-Version`. Failures (network, 202
 
 - Server levels: `levelKey` is the `LevelResponse.cacheKey`.
 - Client procedural fallback (including `?director=off`): `levelKey` is
-  `proc:<seed>:<tier>` with `planSource: "procedural"`.
+  `proc:<seed>:<tier>` from `@roomquest/schema` `procLevelKey`, and the
+  poster always sends `planSource: "procedural"` for a `proc:` key.
 
-Adapters live in `game/results/` until B-09 (`@roomquest/schema`
-`procLevelKey` / `ResultRequest`) merges. Posts still fire in director=off.
+`ResultLevelKey` and `ResultRequest` come from `@roomquest/schema` (B-09).
+Posts still fire in director=off.
 
 `createDirectorClient` takes injected `fetch`, `generate`, `validate`,
 `repair`, and device id. `createDirectorClientFromEnv` reads flags from a
