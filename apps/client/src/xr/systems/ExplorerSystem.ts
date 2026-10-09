@@ -22,6 +22,7 @@ export interface ExplorerDebugApi {
   reason: () => string | undefined;
   pose: () => ExplorerPose;
   getWorldPosition: (out: ExplorerVec3) => ExplorerVec3;
+  activePlacementId: () => string | undefined;
 }
 
 /**
@@ -95,12 +96,25 @@ export class ExplorerSystem
     return this.walker.getWorldPosition(out);
   }
 
+  currentState(): ExplorerStateName {
+    return this.walker.state;
+  }
+
+  currentPlacementId(): string | undefined {
+    return this.walker.activePlacementId;
+  }
+
+  copyPose(out: ExplorerPose): void {
+    this.walker.writePose(out);
+  }
+
   debugApi(): ExplorerDebugApi {
     return {
       state: () => this.walker.state,
       reason: () => this.walker.reason,
       pose: () => this.walker.pose,
       getWorldPosition: (out) => this.getWorldPosition(out),
+      activePlacementId: () => this.walker.activePlacementId,
     };
   }
 

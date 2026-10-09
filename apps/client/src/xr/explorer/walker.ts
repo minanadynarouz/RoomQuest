@@ -36,6 +36,8 @@ export class ExplorerWalker {
   private readonly openGates = new Set<string>();
   private readonly stunned = new Set<string>();
   private readonly gems = new Set<string>();
+  private readonly aligned = new Set<string>();
+  private readonly portalsUsed = new Set<string>();
   private reachedShrine = false;
   private teleportAge = 0;
   private lastOutOfView = false;
@@ -63,6 +65,8 @@ export class ExplorerWalker {
     this.openGates.clear();
     this.stunned.clear();
     this.gems.clear();
+    this.aligned.clear();
+    this.portalsUsed.clear();
     this.reachedShrine = false;
     this.teleportAge = 0;
     this.lastOutOfView = false;
@@ -96,6 +100,12 @@ export class ExplorerWalker {
 
   get reason(): PathBlocker | undefined {
     return this.blockedReason;
+  }
+
+  /** Placement owning the current hop (platform / portal / gap), if any. */
+  get activePlacementId(): string | undefined {
+    const segment = this.path.segments[this.segmentIndex];
+    return segment?.placementId;
   }
 
   get pose(): ExplorerPose {
@@ -173,6 +183,10 @@ export class ExplorerWalker {
         this.stunned.add(event.placementId);
       } else if (event.type === 'gemCollected') {
         this.gems.add(event.placementId);
+      } else if (event.type === 'platformAligned') {
+        this.aligned.add(event.placementId);
+      } else if (event.type === 'pieceMoved' && !event.aligned) {
+        this.aligned.delete(event.placementId);
       }
     }
   }
@@ -202,6 +216,9 @@ export class ExplorerWalker {
     this.stateName = motionFor(segment.kind);
 
     if (segment.kind === 'portal') {
+      if (this.teleportAge === 0 && segment.placementId) {
+        this.emitPortalUsed(segment.placementId);
+      }
       this.teleportAge += dt;
       if (this.teleportAge >= TELEPORT_S) {
         this.arrive(segment.toIndex);
@@ -293,7 +310,16 @@ export class ExplorerWalker {
     if (blocker === 'closedGate') {
       return placementId ? this.openGates.has(placementId) : false;
     }
+    if (blocker === 'unalignedPlatform') {
+      return placementId ? this.aligned.has(placementId) : false;
+    }
     return placementId ? this.stunned.has(placementId) : false;
+  }
+
+  private emitPortalUsed(placementId: string): void {
+    if (this.portalsUsed.has(placementId)) return;
+    this.portalsUsed.add(placementId);
+    this.store?.portalUsed(placementId);
   }
 
   private maybeAdvanceBeats(): void {
@@ -334,8 +360,12 @@ export class ExplorerWalker {
       case 'plank_bridge':
       case 'ramp':
       case 'portal':
-      case 'moving_platform':
         return !placement.playerBuilt || this.built.has(placement.id);
+      case 'moving_platform':
+        return (
+          (!placement.playerBuilt || this.built.has(placement.id)) &&
+          this.aligned.has(placement.id)
+        );
       case 'gate':
         return this.openGates.has(placement.id);
       case 'lever':

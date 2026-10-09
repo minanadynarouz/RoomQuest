@@ -69,7 +69,7 @@ export type GameEvent =
       timestamp: number;
       beatIndex: number;
     }
-  | {
+    | {
       type: 'gemCollected';
       placementId: string;
       timestamp: number;
@@ -77,7 +77,7 @@ export type GameEvent =
     }
   | {
       type: 'explorerBlocked';
-      reason: 'unbuiltGap' | 'closedGate' | 'awakeSlime';
+      reason: ExplorerBlockReason;
       timestamp: number;
       beatIndex: number;
     }
@@ -88,7 +88,33 @@ export type GameEvent =
       durationMs: number;
       timestamp: number;
     }
-  | { type: 'won'; timestamp: number; beatIndex: number };
+  | { type: 'won'; timestamp: number; beatIndex: number }
+  | {
+      type: 'pieceMoved';
+      placementId: string;
+      aligned: boolean;
+      timestamp: number;
+      beatIndex: number;
+    }
+  | {
+      type: 'platformAligned';
+      placementId: string;
+      timestamp: number;
+      beatIndex: number;
+    }
+  | {
+      type: 'portalUsed';
+      placementId: string;
+      timestamp: number;
+      beatIndex: number;
+    };
+
+/** Reasons the explorer waits. X-07 adds `unalignedPlatform`. */
+export type ExplorerBlockReason =
+  | 'unbuiltGap'
+  | 'closedGate'
+  | 'awakeSlime'
+  | 'unalignedPlatform';
 
 /**
  * Clock interface for injected time
@@ -131,7 +157,7 @@ export interface StuckPlayerSignal {
   beatIndex: number;
   timeOnBeatMs: number;
   recentBlocks: {
-    reason: 'unbuiltGap' | 'closedGate' | 'awakeSlime';
+    reason: ExplorerBlockReason;
     timestamp: number;
   }[];
 }

@@ -22,6 +22,7 @@ export const EMULATOR_ROOMS = [
 export type EmulatorRoom = (typeof EMULATOR_ROOMS)[number];
 
 export const FIXTURE_SYNTHETIC_LIVING_ROOM = 'synthetic_living_room';
+export const FIXTURE_SYNTHETIC_PLATFORM_PORTAL = 'synthetic_platform_portal';
 
 export interface ClientFlags {
   debug: boolean;
@@ -69,8 +70,21 @@ export function isSyntheticLivingRoomFixture(
   return flags.fixture === FIXTURE_SYNTHETIC_LIVING_ROOM;
 }
 
+export function isSyntheticPlatformPortalFixture(
+  flags: Pick<ClientFlags, 'fixture'>
+): boolean {
+  return flags.fixture === FIXTURE_SYNTHETIC_PLATFORM_PORTAL;
+}
+
+export function isSyntheticFixture(flags: Pick<ClientFlags, 'fixture'>): boolean {
+  return (
+    isSyntheticLivingRoomFixture(flags) ||
+    isSyntheticPlatformPortalFixture(flags)
+  );
+}
+
 export function isFixtureXrSession(flags: ClientFlags): boolean {
-  return isSyntheticLivingRoomFixture(flags) && flags.xr;
+  return isSyntheticFixture(flags) && flags.xr;
 }
 
 /**

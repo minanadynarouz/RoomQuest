@@ -52,3 +52,16 @@ describe('level-core', () => {
     expect(applyLeverPull).toBeTypeOf('function');
   });
 });
+
+describe('level-core platform exports (X-07)', () => {
+  it('exports rail clamp, alignment, and portal flash', async () => {
+    const mod = await import('./index');
+    expect(mod.clampToRail).toBeTypeOf('function');
+    expect(mod.isPlatformAligned).toBeTypeOf('function');
+    expect(mod.buildPlatformRail).toBeTypeOf('function');
+    expect(mod.portalFlashScale).toBeTypeOf('function');
+    expect(mod.findPortalPair).toBeTypeOf('function');
+    expect(mod.MAX_RAIL_LENGTH_M).toBe(1);
+    expect(mod.PLATFORM_ALIGN_EPS_M).toBe(0.03);
+  });
+});

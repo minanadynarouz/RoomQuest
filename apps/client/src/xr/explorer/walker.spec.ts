@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   SYNTHETIC_LIVING_ROOM,
   SYNTHETIC_LIVING_ROOM_PLAN,
+  SYNTHETIC_PLATFORM_PORTAL_PLAN,
 } from '@roomquest/fixtures';
 import { explorerPath } from '@roomquest/level-core';
 import type { LevelPlan } from '@roomquest/schema';
@@ -174,5 +175,34 @@ describe('ExplorerWalker blockers', () => {
       y: walker.pose.y,
       z: walker.pose.z,
     });
+  });
+
+  it('stops at an unaligned platform and rides after platformAligned', () => {
+    const { store, walker, tick } = playing(SYNTHETIC_PLATFORM_PORTAL_PLAN);
+    tick(80);
+    expect(walker.state).toBe('blocked');
+    expect(walker.reason).toBe('unalignedPlatform');
+    expect(
+      store.events.some(
+        (e) => e.type === 'explorerBlocked' && e.reason === 'unalignedPlatform'
+      )
+    ).toBe(true);
+
+    store.platformAligned('p2');
+    tick(8);
+    expect(walker.reason).not.toBe('unalignedPlatform');
+    expect(walker.state).toBe('riding');
+  });
+
+  it('teleports through the portal pair and emits portalUsed', () => {
+    const { store, walker, tick } = playing(SYNTHETIC_PLATFORM_PORTAL_PLAN);
+    store.platformAligned('p2');
+    tick(120);
+    expect(
+      store.events.some((e) => e.type === 'portalUsed' && e.placementId === 'p3')
+    ).toBe(true);
+    expect(['teleporting', 'walking', 'celebrating', 'idle']).toContain(
+      walker.state
+    );
   });
 });

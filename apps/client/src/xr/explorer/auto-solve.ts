@@ -2,11 +2,13 @@ import type { LevelPlan } from '@roomquest/schema';
 import type { GameStore } from '../../game/index.js';
 import { pullLever } from '../lever/activate.js';
 import type { PlacementDebugApi } from '../systems/PlacementSystem.js';
+import type { PlatformDebugApi } from '../systems/PlatformRailSystem.js';
 
 export interface AutoSolveOptions {
   store: GameStore;
   plan: LevelPlan;
   placement?: PlacementDebugApi | null;
+  platform?: PlatformDebugApi | null;
 }
 
 /**
@@ -14,11 +16,11 @@ export interface AutoSolveOptions {
  * the explorer can finish the fixture unattended.
  */
 export function autoSolve(options: AutoSolveOptions): void {
-  const { store, plan, placement } = options;
+  const { store, plan, placement, platform } = options;
   const events = store.events;
 
   const hasEvent = (
-    type: 'pieceBuilt' | 'leverPulled' | 'slimeStunned',
+    type: 'pieceBuilt' | 'leverPulled' | 'slimeStunned' | 'platformAligned',
     placementId: string
   ): boolean =>
     events.some(
@@ -43,6 +45,16 @@ export function autoSolve(options: AutoSolveOptions): void {
       !hasEvent('slimeStunned', placementRow.id)
     ) {
       store.slimeStunned(placementRow.id);
+    }
+    if (
+      placementRow.piece === 'moving_platform' &&
+      !hasEvent('platformAligned', placementRow.id)
+    ) {
+      const aligned = platform?.align(placementRow.id) ?? false;
+      if (!aligned) {
+        store.pieceMoved(placementRow.id, true);
+        store.platformAligned(placementRow.id);
+      }
     }
   }
 }

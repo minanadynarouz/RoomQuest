@@ -10,6 +10,7 @@
  * F-07: win HUD, stars, pause, silent result posting
  * F-08: audio manager + CC0 SFX (unlocked on Enter, lazy with this chunk)
  * X-09: VillageAnchorSystem persist/restore (largest-table fallback)
+ * X-07: PlatformRailSystem + PortalSystem (rail clamp, portal pair)
  */
 
 import {
@@ -23,6 +24,7 @@ import projectOptions from 'virtual:iwsdk-project';
 import {
   SYNTHETIC_LIVING_ROOM,
   SYNTHETIC_LIVING_ROOM_PLAN,
+  SYNTHETIC_PLATFORM_PORTAL_PLAN,
 } from '@roomquest/fixtures';
 import {
   bindAudioStore,
@@ -51,13 +53,20 @@ import { collectPerfStats } from './debug/stats.js';
 import { autoSolve } from './explorer/auto-solve.js';
 import {
   isFixtureXrSession,
+  isSyntheticFixture,
   isSyntheticLivingRoomFixture,
+  isSyntheticPlatformPortalFixture,
   readClientFlags,
   type ClientFlags,
 } from './flags.js';
 import { LevelBuilderSystem } from './systems/LevelBuilderSystem.js';
 import { ExplorerSystem } from './systems/ExplorerSystem.js';
 import { GateLeverSystem } from './systems/GateLeverSystem.js';
+import {
+  PlatformRailSystem,
+  type PlatformDebugApi,
+} from './systems/PlatformRailSystem.js';
+import { PortalSystem } from './systems/PortalSystem.js';
 import {
   PlacementSystem,
   type PlacementDebugApi,
@@ -82,6 +91,7 @@ let latestPlan: LevelPlan | null = null;
 let latestSnapTargets: readonly SnapTarget[] = [];
 let latestSceneDrawCalls = 0;
 let latestPlacement: PlacementDebugApi | null = null;
+let latestPlatform: PlatformDebugApi | null = null;
 let clientFlags: ClientFlags = readClientFlags('');
 let overlayRequested = false;
 let autoSolveHookRegistered = false;
@@ -172,6 +182,7 @@ function registerAutoSolveHook(): void {
         store: gameStore,
         plan: latestPlan,
         placement: latestPlacement,
+        platform: latestPlatform,
       });
       return Promise.resolve();
     },
@@ -184,13 +195,15 @@ function exposeHooks(
   plan: LevelPlan | null = latestPlan,
   snapTargets: readonly SnapTarget[] = latestSnapTargets,
   drawCalls = latestSceneDrawCalls,
-  placement: PlacementDebugApi | null = latestPlacement
+  placement: PlacementDebugApi | null = latestPlacement,
+  platform: PlatformDebugApi | null = latestPlatform
 ): void {
   latestGraph = graph;
   latestPlan = plan;
   latestSnapTargets = snapTargets;
   latestSceneDrawCalls = drawCalls;
   latestPlacement = placement;
+  latestPlatform = platform;
   if (typeof window === 'undefined') return;
   registerAutoSolveHook();
   installRqHooks(
@@ -203,6 +216,7 @@ function exposeHooks(
       hud: window.__rq?.hud,
       overlay: isOverlayReady() ? { ready: true } : window.__rq?.overlay,
       placement: latestPlacement,
+      platform: latestPlatform,
       stats: statsGetter,
       playSynthetic: playSyntheticLevel,
     },
@@ -265,6 +279,25 @@ function canBuildFromDirector(phase: string): boolean {
   return phase === 'surveying' || phase === 'requesting';
 }
 
+function resolveSyntheticFixture(flags: ClientFlags): {
+  graph: typeof SYNTHETIC_LIVING_ROOM;
+  plan: typeof SYNTHETIC_LIVING_ROOM_PLAN;
+} | null {
+  if (isSyntheticPlatformPortalFixture(flags)) {
+    return {
+      graph: SYNTHETIC_LIVING_ROOM,
+      plan: SYNTHETIC_PLATFORM_PORTAL_PLAN,
+    };
+  }
+  if (isSyntheticLivingRoomFixture(flags)) {
+    return {
+      graph: SYNTHETIC_LIVING_ROOM,
+      plan: SYNTHETIC_LIVING_ROOM_PLAN,
+    };
+  }
+  return null;
+}
+
 function playSyntheticLevel(): boolean {
   const world = worldInstance;
   const builder = world?.getSystem(LevelBuilderSystem);
@@ -282,6 +315,7 @@ function playSyntheticLevel(): boolean {
     world
       .getSystem(ExplorerSystem)
       ?.begin(SYNTHETIC_LIVING_ROOM_PLAN, SYNTHETIC_LIVING_ROOM);
+    world.getSystem(PlatformRailSystem)?.bindGraph(SYNTHETIC_LIVING_ROOM);
   }
   if (gameStore.phase === 'building') {
     gameStore.startPlaying();
@@ -317,6 +351,7 @@ async function startPlayableLevel(
   applyDirectorResult(gameStore, result);
   builder.build(result.plan, graph);
   worldInstance?.getSystem(ExplorerSystem)?.begin(result.plan, graph);
+  worldInstance?.getSystem(PlatformRailSystem)?.bindGraph(graph);
   gameStore.startPlaying();
   exposeHooks(
     graph,
@@ -367,7 +402,8 @@ export async function launchXR(): Promise<World> {
     typeof window === 'undefined' ? '' : window.location.search
   );
   const flags = clientFlags;
-  const fixtureMode = isSyntheticLivingRoomFixture(flags);
+  const fixture = resolveSyntheticFixture(flags);
+  const fixtureMode = isSyntheticFixture(flags);
   const fixtureXr = isFixtureXrSession(flags);
   ensureSessionController();
   registerSessionHooks();
@@ -448,7 +484,10 @@ export async function launchXR(): Promise<World> {
   worldInstance.registerSystem(PlacementSystem, { priority: -2 });
   // Before GuidanceSystem (1) so gaze/edge-arrow read the current pose.
   worldInstance.registerSystem(ExplorerSystem, { priority: -1 });
+  // After GrabSystem so the rail clamp sees the grabbed pose (X-07).
+  worldInstance.registerSystem(PlatformRailSystem, { priority: 2 });
   worldInstance.registerSystem(GateLeverSystem, { priority: 3 });
+  worldInstance.registerSystem(PortalSystem, { priority: 4 });
   // X-09: after the hut exists; event-driven, not on the grab hot path.
   worldInstance.registerSystem(VillageAnchorSystem, { priority: 6 });
   await loadDebugOverlay();
@@ -495,35 +534,56 @@ export async function launchXR(): Promise<World> {
     flags: clientFlags,
     isDev: import.meta.env.DEV,
   });
+  const platformRails = worldInstance.getSystem(PlatformRailSystem);
+  if (!platformRails) {
+    throw new Error('PlatformRailSystem failed to register');
+  }
+  platformRails.configure({ builder, store: gameStore, explorer });
+  latestPlatform = platformRails.debugApi();
+  registerRqHook('platform', latestPlatform, {
+    flags: clientFlags,
+    isDev: import.meta.env.DEV,
+  });
+  const portals = worldInstance.getSystem(PortalSystem);
+  if (!portals) {
+    throw new Error('PortalSystem failed to register');
+  }
+  portals.configure({ builder, store: gameStore });
   builder.addEventListener('levelBuilt', () => {
     placement.onLevelRebuilt();
     gateLever.onLevelRebuilt();
   });
 
   if (fixtureMode) {
+    const fixtureLevel = fixture ?? {
+      graph: SYNTHETIC_LIVING_ROOM,
+      plan: SYNTHETIC_LIVING_ROOM_PLAN,
+    };
     const landing = document.getElementById('landing-page');
     if (landing) landing.style.display = 'none';
     addFixtureLights(worldInstance);
     gameStore.requestLevel();
     gameStore.startSurveying();
-    gameStore.startBuilding(SYNTHETIC_LIVING_ROOM_PLAN, {
+    gameStore.startBuilding(fixtureLevel.plan, {
       source: 'procedural',
     });
-    builder.build(SYNTHETIC_LIVING_ROOM_PLAN, SYNTHETIC_LIVING_ROOM);
-    explorer.begin(SYNTHETIC_LIVING_ROOM_PLAN, SYNTHETIC_LIVING_ROOM);
+    builder.build(fixtureLevel.plan, fixtureLevel.graph);
+    explorer.begin(fixtureLevel.plan, fixtureLevel.graph);
+    platformRails.bindGraph(fixtureLevel.graph);
     if (flags.debug) {
-      builder.setDebugGraph(SYNTHETIC_LIVING_ROOM);
+      builder.setDebugGraph(fixtureLevel.graph);
     }
     gameStore.startPlaying();
     exposeHooks(
-      SYNTHETIC_LIVING_ROOM,
-      SYNTHETIC_LIVING_ROOM_PLAN,
+      fixtureLevel.graph,
+      fixtureLevel.plan,
       builder.getSnapTargets(),
       countDrawCalls(worldInstance.scene),
-      placement.debugApi()
+      placement.debugApi(),
+      platformRails.debugApi()
     );
-    console.log('[X-05] Fixture level built', {
-      pieces: SYNTHETIC_LIVING_ROOM_PLAN.placements.length,
+    console.log('[X-07] Fixture level built', {
+      pieces: fixtureLevel.plan.placements.length,
       snapTargets: builder.getSnapTargets().length,
       drawCalls: window.__rq?.drawCalls,
       debug: flags.debug,
@@ -548,6 +608,7 @@ export async function launchXR(): Promise<World> {
         if (gameStore.plan) {
           explorer.begin(gameStore.plan, graph);
         }
+        platformRails.bindGraph(graph);
         exposeHooks(
           graph,
           gameStore.plan,

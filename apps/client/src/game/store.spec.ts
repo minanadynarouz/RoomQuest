@@ -691,6 +691,48 @@ describe('createGameStore', () => {
       expect(store.events).toEqual([]);
       expect(store.state.gemsCollected).toBe(0);
     });
+
+    it('emits pieceMoved, platformAligned, and portalUsed', () => {
+      const store = createGameStore({ clock: mockClock });
+      store.requestLevel();
+      store.startSurveying();
+      store.startBuilding(createMockPlan());
+      store.startPlaying();
+
+      mockTime = 1500;
+      store.pieceMoved('p-platform', false);
+      store.platformAligned('p-platform');
+      store.portalUsed('p-portal');
+      store.explorerBlocked('unalignedPlatform');
+
+      expect(store.events).toEqual([
+        {
+          type: 'pieceMoved',
+          placementId: 'p-platform',
+          aligned: false,
+          timestamp: 1500,
+          beatIndex: 0,
+        },
+        {
+          type: 'platformAligned',
+          placementId: 'p-platform',
+          timestamp: 1500,
+          beatIndex: 0,
+        },
+        {
+          type: 'portalUsed',
+          placementId: 'p-portal',
+          timestamp: 1500,
+          beatIndex: 0,
+        },
+        {
+          type: 'explorerBlocked',
+          reason: 'unalignedPlatform',
+          timestamp: 1500,
+          beatIndex: 0,
+        },
+      ]);
+    });
   });
 
   describe('beat tracking', () => {

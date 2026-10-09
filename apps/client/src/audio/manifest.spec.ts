@@ -16,6 +16,9 @@ const STORE_EVENTS: GameEvent['type'][] = [
   'beatCompleted',
   'won',
   'leverPulled',
+  'pieceMoved',
+  'platformAligned',
+  'portalUsed',
 ];
 
 describe('SOUND_MANIFEST', () => {
