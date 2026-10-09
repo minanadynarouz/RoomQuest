@@ -50,7 +50,7 @@ async function main(): Promise<void> {
       '--enable-unsafe-swiftshader',
     ],
   });
-  const page = await browser.newPage();
+  const page = await browser.newPage({ ignoreHTTPSErrors: true });
   const url = `${BASE_URL}/?fixture=synthetic_living_room`;
   await page.goto(url, { waitUntil: 'networkidle', timeout: 60_000 });
   await page.waitForFunction(
