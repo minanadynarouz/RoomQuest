@@ -3,17 +3,17 @@
  * Callers pass search string, storage, and fetch from the browser layer.
  */
 
-import { validatePlan } from '@roomquest/level-core';
+import { generatePlan, validatePlan } from '@roomquest/level-core';
 import { getOrCreateDeviceId } from './device-id.js';
 import { createDirectorClient } from './client.js';
 import { parseDirectorFlags } from './flags.js';
-import { stubGenerate } from './fallback.js';
 import {
   DEFAULT_CLIENT_VERSION,
   type DirectorClient,
   type FetchLike,
   type GenerateFn,
   type KvStore,
+  type RepairFn,
   type ValidateFn,
 } from './types.js';
 
@@ -25,12 +25,15 @@ export interface DirectorEnv {
   clientVersion?: string;
   generate?: GenerateFn;
   validate?: ValidateFn;
+  repair?: RepairFn;
   budgetMs?: number;
   randomUUID?: () => string;
 }
 
 /**
  * Build a director client from URL flags + persisted device id.
+ * Seed comes from `?seed=` or the daily `roomHash-YYYY-MM-DD` rule
+ * (`?date=` or today). Tier defaults to `normal` (no `?tier=` flag).
  */
 export function createDirectorClientFromEnv(env: DirectorEnv): DirectorClient {
   const flags = parseDirectorFlags(env.search);
@@ -41,8 +44,9 @@ export function createDirectorClientFromEnv(env: DirectorEnv): DirectorClient {
     apiBaseUrl: env.apiBaseUrl,
     deviceId,
     clientVersion: env.clientVersion ?? DEFAULT_CLIENT_VERSION,
-    generate: env.generate ?? stubGenerate,
+    generate: env.generate ?? generatePlan,
     validate: env.validate ?? validatePlan,
+    repair: env.repair,
     directorMode: flags.director,
     date: flags.date,
     seed: flags.seed,

@@ -4,13 +4,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { generatePlan } from '@roomquest/level-core';
 import type { LevelPlan, LevelResponse, SurfaceGraph } from '@roomquest/schema';
 import { createDirectorClient } from './client.js';
 import { createDirectorClientFromEnv } from './factory.js';
 import { applyDirectorResult } from './apply.js';
-import { stubGenerate } from './fallback.js';
 import { createGameStore } from '../store.js';
-import type { FetchLike, GenerateFn, KvStore } from './types.js';
+import type { FetchLike, GenerateFn, KvStore, RepairFn } from './types.js';
 
 /** Synthetic living-room graph — `validatePlan` accepts the fixture plan on this. */
 const GRAPH: SurfaceGraph = {
@@ -213,7 +213,25 @@ function b02FixturePlan(): LevelPlan {
 }
 
 function localPlan(seed = 'f1a2b3c4d5e6-2026-10-09'): LevelPlan {
-  return stubGenerate(GRAPH, seed, 'normal');
+  return generatePlan(GRAPH, seed, 'normal');
+}
+
+function slimeOnFloor(plan: LevelPlan): LevelPlan {
+  return {
+    ...plan,
+    placements: [
+      ...plan.placements,
+      {
+        id: 'p-slime',
+        piece: 'slime',
+        surface: 's5',
+        u: 0.5,
+        v: 0.5,
+        playerBuilt: false,
+        links: [],
+      },
+    ],
+  };
 }
 
 function apiPlan(): LevelPlan {
@@ -270,9 +288,6 @@ describe('createDirectorClient', () => {
     vi.restoreAllMocks();
   });
 
-  const generate: GenerateFn = (graph, seed, tier) =>
-    stubGenerate(graph, seed, tier);
-
   function client(
     fetchFn: FetchLike,
     extra?: Partial<Parameters<typeof createDirectorClient>[0]>
@@ -282,7 +297,6 @@ describe('createDirectorClient', () => {
       apiBaseUrl: 'http://localhost:3000',
       deviceId: '11111111-2222-4333-8444-555555555555',
       clientVersion: '0.1.0',
-      generate,
       date: '2026-10-09',
       ...extra,
     });
@@ -342,6 +356,48 @@ describe('createDirectorClient', () => {
       result.issues?.some((issue) => issue.code === 'UNKNOWN_SURFACE')
     ).toBe(true);
     expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('repairs a schema-valid API plan before falling back to generatePlan', async () => {
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve(
+        jsonResponse(apiResponse({ plan: slimeOnFloor(apiPlan()) }))
+      )
+    );
+
+    const result = await client(fetchFn).requestPlan(GRAPH);
+
+    expect(result.source).toBe('llm_repaired');
+    expect(result.fallbackReason).toBe('repaired');
+    expect(result.usedFallback).toBe(true);
+    expect(result.plan.placements.some((p) => p.id === 'p-slime')).toBe(false);
+    expect(result.repairs.some((line) => line.includes('slime'))).toBe(true);
+    expect(result.plan.start).toBe('s1');
+    expect(result.cacheKey).toBe('abcd1234abcd1234');
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('falls back to generatePlan when repair cannot validate', async () => {
+    const repair: RepairFn = (plan) => ({
+      plan,
+      repairs: ['gave up'],
+      result: {
+        ok: false,
+        issues: [{ code: 'GOAL_UNREACHABLE', message: 'no path' }],
+      },
+    });
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve(
+        jsonResponse(apiResponse({ plan: slimeOnFloor(apiPlan()) }))
+      )
+    );
+
+    const result = await client(fetchFn, { repair }).requestPlan(GRAPH);
+
+    expect(result.usedFallback).toBe(true);
+    expect(result.source).toBe('procedural');
+    expect(result.fallbackReason).toBe('graph-mismatch');
+    expect(result.plan.placements.some((p) => p.surface === 's1')).toBe(true);
   });
 
   it('falls back when LevelResponse does not parse', async () => {
@@ -457,9 +513,9 @@ describe('createDirectorClient', () => {
       await new Promise((r) => setTimeout(r, 30));
       return jsonResponse(apiResponse());
     };
-    const racingGenerate: GenerateFn = (graph, seed, tier) => {
+    const racingGenerate: GenerateFn = (graph, seed, tier, options) => {
       generateCalls += 1;
-      return stubGenerate(graph, seed, tier);
+      return generatePlan(graph, seed, tier, options);
     };
 
     const result = await client(slowFetch, {
@@ -543,6 +599,24 @@ describe('createDirectorClient', () => {
       expect(result.latencyMs).toBeLessThan(8000);
     }
   });
+
+  it('is deterministic for the same graph, seed and tier', async () => {
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.reject(new Error('offline'))
+    );
+    const extra = {
+      directorMode: 'off' as const,
+      seed: 'det-seed',
+      tier: 'easy' as const,
+    };
+
+    const a = await client(fetchFn, extra).requestPlan(GRAPH);
+    const b = await client(fetchFn, extra).requestPlan(GRAPH);
+
+    expect(a.plan).toEqual(b.plan);
+    expect(a.plan).toEqual(generatePlan(GRAPH, 'det-seed', 'easy'));
+    expect(a.source).toBe('procedural');
+  });
 });
 
 describe('createDirectorClientFromEnv', () => {
@@ -599,7 +673,7 @@ describe('applyDirectorResult', () => {
     expect(store.directorLatencyMs).toBe(412);
     expect(store.repairs).toEqual(['clamped-uv']);
     expect(store.cacheKey).toBe('cache-1');
-    expect(store.plan?.title).toBe('Roomquest');
+    expect(store.plan?.seed).toBe('f1a2b3c4d5e6-2026-10-09');
     expect(store.state.error).toBeNull();
   });
 
@@ -609,7 +683,7 @@ describe('applyDirectorResult', () => {
     store.startSurveying();
 
     applyDirectorResult(store, {
-      plan: stubGenerate(SCANNED_GRAPH, 'seed', 'normal'),
+      plan: generatePlan(SCANNED_GRAPH, 'seed', 'normal'),
       source: 'procedural',
       cacheKey: 'procedural:seed',
       promptVersion: 'local',

@@ -3,12 +3,16 @@
  *
  * Starts POST /api/v1/levels and the local generator together. Accepts the
  * API plan only if it arrives within the budget, parses as LevelResponse,
- * and passes local re-validation against the scanned graph. Otherwise uses
- * the local procedural plan. The player never sees an API error.
+ * and passes local re-validation against the scanned graph. An invalid
+ * server plan is offered to `repairPlan` first; only if repair fails does
+ * the client keep the racing `generatePlan` result. The player never sees
+ * an API error.
  */
 
 import {
   clampParTimeMs,
+  generatePlan,
+  repairPlan,
   validatePlan,
   type Issue,
 } from '@roomquest/level-core';
@@ -17,12 +21,13 @@ import {
   LevelResponse,
   type ErrorCode,
   type LevelPlan,
+  type PlanSource,
   type SurfaceGraph,
 } from '@roomquest/schema';
-import { lastResortPlan, stubGenerate } from './fallback.js';
 import { fallbackReasonFromIssues, issueCodesOf } from './issues.js';
 import {
   DEFAULT_CLIENT_VERSION,
+  DEFAULT_TIER,
   DIRECTOR_BUDGET_MS,
   LEVELS_PATH,
   type DirectorClient,
@@ -129,20 +134,29 @@ async function postLevels(
   }
 }
 
-function proceduralResult(
-  plan: ReturnType<typeof lastResortPlan>,
+function localResult(
+  plan: LevelPlan,
   seed: string,
   latencyMs: number,
+  source: PlanSource,
   reason: FallbackReason,
-  extras?: { apiErrorCode?: ErrorCode; issues?: Issue[] }
+  extras?: {
+    apiErrorCode?: ErrorCode;
+    issues?: Issue[];
+    repairs?: string[];
+    cacheKey?: string;
+    model?: string;
+    promptVersion?: string;
+  }
 ): DirectorResult {
   return {
     plan: clampPlanPar(plan),
-    source: 'procedural',
-    cacheKey: `procedural:${seed}`,
-    promptVersion: 'local',
+    source,
+    cacheKey: extras?.cacheKey ?? `procedural:${seed}`,
+    model: extras?.model,
+    promptVersion: extras?.promptVersion ?? 'local',
     latencyMs,
-    repairs: [],
+    repairs: extras?.repairs ?? [],
     usedFallback: true,
     fallbackReason: reason,
     apiErrorCode: extras?.apiErrorCode,
@@ -174,10 +188,11 @@ export function createDirectorClient(
   const apiBaseUrl = stripTrailingSlash(options.apiBaseUrl);
   const deviceId = options.deviceId;
   const clientVersion = options.clientVersion ?? DEFAULT_CLIENT_VERSION;
-  const generate = options.generate ?? stubGenerate;
+  const generate = options.generate ?? generatePlan;
   const validate = options.validate ?? validatePlan;
+  const repair = options.repair ?? repairPlan;
   const defaultMode: DirectorMode = options.directorMode ?? 'live';
-  const defaultTier = options.tier ?? 'normal';
+  const defaultTier = options.tier ?? DEFAULT_TIER;
   const budgetMs = options.budgetMs ?? DIRECTOR_BUDGET_MS;
   const nowMs = options.nowMs ?? (() => Date.now());
 
@@ -191,9 +206,11 @@ export function createDirectorClient(
     const seed = overrides.seed ?? options.seed ?? `${graph.roomHash}-${date}`;
     const tier = overrides.tier ?? defaultTier;
     const recentThemes = overrides.recentThemes ?? options.recentThemes;
+    const generateOptions =
+      recentThemes && recentThemes.length > 0 ? { recentThemes } : undefined;
 
     const genPromise = Promise.resolve().then(() =>
-      generate(graph, seed, tier)
+      generate(graph, seed, tier, generateOptions)
     );
 
     async function useGenerator(
@@ -205,16 +222,17 @@ export function createDirectorClient(
         plan = await genPromise;
       } catch (err) {
         console.warn(
-          '[director] generator failed, using last-resort plan',
+          '[director] generator failed, using generatePlan last resort',
           err
         );
-        plan = lastResortPlan(graph, seed);
+        plan = generatePlan(graph, seed, tier, generateOptions);
       }
 
-      const result = proceduralResult(
+      const result = localResult(
         plan,
         seed,
         nowMs() - started,
+        'procedural',
         reason,
         extras
       );
@@ -261,10 +279,34 @@ export function createDirectorClient(
     }
 
     // B-02 mock plans use fixture surface ids, not the scanned graph.
-    // `validatePlan` reports UNKNOWN_SURFACE; that is expected until B-05
-    // and maps to `graph-mismatch` (info, not an error).
+    // `validatePlan` reports UNKNOWN_SURFACE; try `repairPlan` first, then
+    // `generatePlan`. Fixture-id mismatch stays `graph-mismatch` (info).
     const local = await validate(parsed.data.plan, graph);
     if (!local.ok) {
+      const repaired = await repair(parsed.data.plan, graph);
+      if (repaired.result.ok) {
+        const latencyMs = nowMs() - started;
+        if (latencyMs > budgetMs) {
+          return useGenerator('timeout', { issues: local.issues });
+        }
+        void genPromise.catch(() => undefined);
+        const result = localResult(
+          repaired.plan,
+          seed,
+          latencyMs,
+          'llm_repaired',
+          'repaired',
+          {
+            issues: local.issues,
+            repairs: repaired.repairs,
+            cacheKey: parsed.data.cacheKey,
+            model: parsed.data.model,
+            promptVersion: parsed.data.promptVersion,
+          }
+        );
+        logDirectorResult(result);
+        return result;
+      }
       const reason = fallbackReasonFromIssues(local.issues);
       return useGenerator(reason, { issues: local.issues });
     }

@@ -3,7 +3,12 @@
  * Pure TypeScript, no DOM, IWSDK or Three.js imports
  */
 
-import type { Issue, ValidationResult } from '@roomquest/level-core';
+import type {
+  GeneratePlanOptions,
+  Issue,
+  RepairResult,
+  ValidationResult,
+} from '@roomquest/level-core';
 import type {
   ErrorCode,
   LevelPlan,
@@ -24,6 +29,13 @@ export const DEFAULT_CLIENT_VERSION = '0.1.0';
 
 export const DEVICE_ID_STORAGE_KEY = 'roomquest:deviceId';
 
+/**
+ * Default difficulty. F-03 has no `?tier=` flag; the API and generator
+ * both accept `easy` | `normal`. The client sends `normal` unless the
+ * caller injects a tier.
+ */
+export const DEFAULT_TIER: Tier = 'normal';
+
 export type DirectorMode = 'live' | 'mock' | 'off';
 
 export type FallbackReason =
@@ -31,6 +43,7 @@ export type FallbackReason =
   | 'network'
   | 'invalid-plan'
   | 'graph-mismatch'
+  | 'repaired'
   | 'api-error'
   | 'http-error'
   | 'director-off'
@@ -50,7 +63,8 @@ export interface KvStore {
 export type GenerateFn = (
   graph: SurfaceGraph,
   seed: string,
-  tier: Tier
+  tier: Tier,
+  options?: GeneratePlanOptions
 ) => LevelPlan | Promise<LevelPlan>;
 
 export type ValidateResult = ValidationResult;
@@ -59,6 +73,11 @@ export type ValidateFn = (
   plan: LevelPlan,
   graph: SurfaceGraph
 ) => ValidationResult | Promise<ValidationResult>;
+
+export type RepairFn = (
+  plan: LevelPlan,
+  graph: SurfaceGraph
+) => RepairResult | Promise<RepairResult>;
 
 /**
  * Narrow fetch contract so tests can mock without a full Request polyfill.
@@ -80,6 +99,7 @@ export interface DirectorClientOptions {
   clientVersion?: string;
   generate?: GenerateFn;
   validate?: ValidateFn;
+  repair?: RepairFn;
   directorMode?: DirectorMode;
   date?: string;
   seed?: string;
