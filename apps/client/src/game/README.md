@@ -153,10 +153,11 @@ procedural plan is used. API failures are invisible to the player.
 ```
 
 A 200 that is schema-valid but placed on fixture surface ids (`s1`/`s2`/`s4`)
-is the B-02 mock until B-05. Local re-validation fails, the client logs
-`reason=graph-mismatch`, and it falls back to the generator — not an error.
-`?director=mock` never hits the network and still returns a plan bound to the
-player's graph.
+is the B-02 mock until B-05. `validatePlan` from `@roomquest/level-core`
+reports `UNKNOWN_SURFACE`; the client maps that to `graph-mismatch`, logs at
+info, exposes the typed issues on the store, and falls back to the generator
+— not an error. `?director=mock` never hits the network and still returns a
+plan bound to the player's graph.
 
 `{error:{code,message,issues}}` with `INVALID_REQUEST` or `INTERNAL` also
 falls back. The code is stored as `apiErrorCode` for the debug overlay.
@@ -165,9 +166,9 @@ falls back. The code is stored as `apiErrorCode` for the debug overlay.
 device id. `createDirectorClientFromEnv` reads flags from a query string and
 persists a UUID v4 in injected storage (`roomquest:deviceId`).
 
-Until B-03/B-04 merge, `schemaValidate` + `stubGenerate` stand in for
-`level-core.validate` / `level-core.generate`. Same function signatures, so
-the swap is a one-line import.
+API plans are re-validated with `validatePlan` (B-03). `stubGenerate` stands
+in for `level-core.generate` until B-04. Par time is clamped with
+`clampParTimeMs` when the store reads it from the plan.
 
 ## Design Decisions
 
@@ -179,7 +180,7 @@ the swap is a one-line import.
 
 - The B-01 schema package (PR #5) now includes `parTimeMs` as a required field with bounds 60000-480000ms (1-8 minutes)
 - Backend's `level-core` clamps par time to these bounds during plan generation
-- The store accepts an optional `parTimeMs` override in `startBuilding(plan, { parTimeMs })` for testing, but production code uses `plan.parTimeMs`
+- The store accepts an optional `parTimeMs` override in `startBuilding(plan, { parTimeMs })` for testing, but production code uses `clampParTimeMs(plan.parTimeMs)`
 
 ### 2. Timer Implementation
 
@@ -206,10 +207,12 @@ valid plan. B-04 replaces `stubGenerate` with `level-core.generate`.
 ### 6. B-02 fixture-id mismatch is expected
 
 **Decision**: a 200 `LevelResponse` whose placements reference fixture surface
-ids (not the scanned graph) is `fallbackReason: 'graph-mismatch'`, logged at
-info, and never drives the store into `error`. B-05 will emit graph-relative
-plans; until then the generator is the playable path. `?director=mock` skips
-the API entirely so emulator sessions do not depend on that mismatch.
+ids (not the scanned graph) fails `validatePlan` with `UNKNOWN_SURFACE`. That
+maps to `fallbackReason: 'graph-mismatch'`, is logged at info, and never
+drives the store into `error`. Typed issues are stored as `validationIssues`
+for the debug overlay. B-05 will emit graph-relative plans; until then the
+generator is the playable path. `?director=mock` skips the API entirely so
+emulator sessions do not depend on that mismatch.
 
 ## Purity Enforcement
 

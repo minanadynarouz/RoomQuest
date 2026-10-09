@@ -3,6 +3,7 @@
  * Pure TypeScript, no DOM, IWSDK or Three.js imports
  */
 
+import type { Issue } from '@roomquest/level-core';
 import type { ErrorCode, LevelPlan, PlanSource } from '@roomquest/schema';
 import type { FallbackReason } from './director/types.js';
 
@@ -17,6 +18,7 @@ export interface StartBuildingOptions {
   cacheKey?: string;
   fallbackReason?: FallbackReason;
   apiErrorCode?: ErrorCode;
+  issues?: Issue[];
 }
 
 /**
@@ -157,4 +159,6 @@ export interface GameState {
   fallbackReason: FallbackReason | null;
   /** API `{error.code}` (`INVALID_REQUEST` / `INTERNAL`) when the envelope parsed. */
   apiErrorCode: ErrorCode | null;
+  /** Typed `validatePlan` issues for the debug overlay. */
+  validationIssues: Issue[];
 }

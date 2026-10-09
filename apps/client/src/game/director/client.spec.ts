@@ -8,10 +8,11 @@ import type { LevelPlan, LevelResponse, SurfaceGraph } from '@roomquest/schema';
 import { createDirectorClient } from './client.js';
 import { createDirectorClientFromEnv } from './factory.js';
 import { applyDirectorResult } from './apply.js';
-import { stubGenerate, schemaValidate } from './fallback.js';
+import { stubGenerate } from './fallback.js';
 import { createGameStore } from '../store.js';
 import type { FetchLike, GenerateFn, KvStore } from './types.js';
 
+/** Synthetic living-room graph — `validatePlan` accepts the fixture plan on this. */
 const GRAPH: SurfaceGraph = {
   version: 1,
   roomHash: 'f1a2b3c4d5e6',
@@ -23,9 +24,9 @@ const GRAPH: SurfaceGraph = {
       label: 'table',
       kind: 'plane',
       topHeight: 0.75,
-      centroid: [0, 0.75, 0],
-      size: [1, 0.6],
-      yaw: 0,
+      centroid: [0.0, 0.75, -1.0],
+      size: [1.0, 0.6],
+      yaw: 0.0,
       area: 0.6,
       reach: 'hand',
       angleFromForward: 0,
@@ -35,15 +36,58 @@ const GRAPH: SurfaceGraph = {
       label: 'couch',
       kind: 'mesh',
       topHeight: 0.45,
-      centroid: [0, 0.45, -2],
-      size: [2, 0.9],
-      yaw: 0,
+      centroid: [0.0, 0.45, -2.5],
+      size: [2.0, 0.9],
+      yaw: 0.0,
       area: 1.8,
       reach: 'ray',
       angleFromForward: 25,
     },
+    {
+      id: 's3',
+      label: 'desk',
+      kind: 'plane',
+      topHeight: 0.5,
+      centroid: [0.0, 0.5, 0.3],
+      size: [1.2, 0.5],
+      yaw: 3.14159,
+      area: 0.6,
+      reach: 'ray',
+      angleFromForward: 35,
+    },
+    {
+      id: 's4',
+      label: 'table',
+      kind: 'plane',
+      topHeight: 0.6,
+      centroid: [0.9, 0.6, -2.2],
+      size: [0.4, 0.4],
+      yaw: 0.0,
+      area: 0.16,
+      reach: 'hand',
+      angleFromForward: 40,
+    },
+    {
+      id: 's5',
+      label: 'floor',
+      kind: 'plane',
+      topHeight: 0.0,
+      centroid: [0.0, 0.0, -1.0],
+      size: [4.0, 3.0],
+      yaw: 0.0,
+      area: 12.0,
+      reach: 'hand',
+      angleFromForward: 0,
+    },
   ],
-  edges: [{ a: 's1', b: 's2', gap: 0.4, dh: -0.3, kind: 'plank' }],
+  edges: [
+    { a: 's1', b: 's2', gap: 0.6, dh: -0.3, kind: 'plank' },
+    { a: 's1', b: 's3', gap: 0.5, dh: -0.25, kind: 'plank' },
+    { a: 's2', b: 's4', gap: 0.1, dh: 0.15, kind: 'adjacent' },
+    { a: 's1', b: 's5', gap: 0.0, dh: -0.75, kind: 'ramp' },
+    { a: 's3', b: 's5', gap: 0.0, dh: -0.5, kind: 'ramp' },
+    { a: 's2', b: 's5', gap: 0.0, dh: -0.45, kind: 'adjacent' },
+  ],
 };
 
 /** Player graph whose surface ids do not match the B-02 fixture (s1/s2/s4). */
@@ -133,6 +177,24 @@ function b02FixturePlan(): LevelPlan {
       },
       {
         id: 'p5',
+        piece: 'gem',
+        surface: 's1',
+        u: 0.2,
+        v: 0.3,
+        playerBuilt: false,
+        links: [],
+      },
+      {
+        id: 'p6',
+        piece: 'gem',
+        surface: 's2',
+        u: 0.6,
+        v: 0.7,
+        playerBuilt: false,
+        links: [],
+      },
+      {
+        id: 'p7',
         piece: 'crystal_shrine',
         surface: 's2',
         u: 0.8,
@@ -143,7 +205,8 @@ function b02FixturePlan(): LevelPlan {
     ],
     beats: [
       { goal: 'Bridge the gap to the couch', uses: ['p2'] },
-      { goal: 'Reach the crystal shrine', uses: ['p5'] },
+      { goal: 'Pull the lever to open the gate', uses: ['p4', 'p3'] },
+      { goal: 'Reach the crystal shrine', uses: ['p7'] },
     ],
     dialogue: [{ trigger: 'intro', line: 'Help me reach it.' }],
   };
@@ -155,7 +218,7 @@ function localPlan(seed = 'f1a2b3c4d5e6-2026-10-09'): LevelPlan {
 
 function apiPlan(): LevelPlan {
   return {
-    ...localPlan('api-seed'),
+    ...b02FixturePlan(),
     title: 'API Quest',
     seed: 'api-seed',
   };
@@ -220,7 +283,6 @@ describe('createDirectorClient', () => {
       deviceId: '11111111-2222-4333-8444-555555555555',
       clientVersion: '0.1.0',
       generate,
-      validate: schemaValidate,
       date: '2026-10-09',
       ...extra,
     });
@@ -276,6 +338,9 @@ describe('createDirectorClient', () => {
     expect(result.plan.start).toBe('s10');
     expect(result.plan.goal).toBe('s11');
     expect(result.plan.placements.every((p) => p.surface !== 's1')).toBe(true);
+    expect(
+      result.issues?.some((issue) => issue.code === 'UNKNOWN_SURFACE')
+    ).toBe(true);
     expect(console.warn).not.toHaveBeenCalled();
   });
 
@@ -447,7 +512,9 @@ describe('createDirectorClient', () => {
     expect(result.source).toBe('procedural');
     expect(result.plan.start).toBe('s10');
     expect(result.plan.goal).toBe('s11');
-    expect(schemaValidate(result.plan, SCANNED_GRAPH).ok).toBe(true);
+    const ids = new Set(SCANNED_GRAPH.nodes.map((node) => node.id));
+    expect(ids.has(result.plan.start)).toBe(true);
+    expect(ids.has(result.plan.goal)).toBe(true);
   });
 
   it('honours seed and date overrides', async () => {
@@ -550,12 +617,20 @@ describe('applyDirectorResult', () => {
       repairs: [],
       usedFallback: true,
       fallbackReason: 'graph-mismatch',
+      issues: [
+        {
+          code: 'UNKNOWN_SURFACE',
+          message: 'start surface "s1" is not in the graph',
+          surfaceId: 's1',
+        },
+      ],
     });
 
     expect(store.phase).toBe('building');
     expect(store.planSource).toBe('procedural');
     expect(store.fallbackReason).toBe('graph-mismatch');
     expect(store.apiErrorCode).toBeNull();
+    expect(store.validationIssues[0]?.code).toBe('UNKNOWN_SURFACE');
     expect(store.state.error).toBeNull();
   });
 

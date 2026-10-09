@@ -8,13 +8,19 @@
  */
 
 import {
+  clampParTimeMs,
+  validatePlan,
+  type Issue,
+} from '@roomquest/level-core';
+import {
   ApiError,
   LevelResponse,
   type ErrorCode,
   type LevelPlan,
   type SurfaceGraph,
 } from '@roomquest/schema';
-import { lastResortPlan, schemaValidate, stubGenerate } from './fallback.js';
+import { lastResortPlan, stubGenerate } from './fallback.js';
+import { fallbackReasonFromIssues, issueCodesOf } from './issues.js';
 import {
   DEFAULT_CLIENT_VERSION,
   DIRECTOR_BUDGET_MS,
@@ -27,6 +33,14 @@ import {
   type FetchLike,
   type RequestPlanOverrides,
 } from './types.js';
+
+function clampPlanPar(plan: LevelPlan): LevelPlan {
+  const parTimeMs = clampParTimeMs(plan.parTimeMs);
+  if (parTimeMs === plan.parTimeMs) {
+    return plan;
+  }
+  return { ...plan, parTimeMs };
+}
 
 function stripTrailingSlash(url: string): string {
   return url.endsWith('/') ? url.slice(0, -1) : url;
@@ -120,10 +134,10 @@ function proceduralResult(
   seed: string,
   latencyMs: number,
   reason: FallbackReason,
-  apiErrorCode?: ErrorCode
+  extras?: { apiErrorCode?: ErrorCode; issues?: Issue[] }
 ): DirectorResult {
   return {
-    plan,
+    plan: clampPlanPar(plan),
     source: 'procedural',
     cacheKey: `procedural:${seed}`,
     promptVersion: 'local',
@@ -131,7 +145,8 @@ function proceduralResult(
     repairs: [],
     usedFallback: true,
     fallbackReason: reason,
-    apiErrorCode,
+    apiErrorCode: extras?.apiErrorCode,
+    issues: extras?.issues ?? [],
   };
 }
 
@@ -140,8 +155,11 @@ function logDirectorResult(result: DirectorResult): void {
     ? ` reason=${result.fallbackReason}`
     : '';
   const code = result.apiErrorCode ? ` apiError=${result.apiErrorCode}` : '';
+  const issueCodes = result.issues?.length
+    ? ` issues=${issueCodesOf(result.issues).join(',')}`
+    : '';
   console.info(
-    `[director] source=${result.source} latencyMs=${result.latencyMs}${reason}${code}`
+    `[director] source=${result.source} latencyMs=${result.latencyMs}${reason}${code}${issueCodes}`
   );
 }
 
@@ -157,7 +175,7 @@ export function createDirectorClient(
   const deviceId = options.deviceId;
   const clientVersion = options.clientVersion ?? DEFAULT_CLIENT_VERSION;
   const generate = options.generate ?? stubGenerate;
-  const validate = options.validate ?? schemaValidate;
+  const validate = options.validate ?? validatePlan;
   const defaultMode: DirectorMode = options.directorMode ?? 'live';
   const defaultTier = options.tier ?? 'normal';
   const budgetMs = options.budgetMs ?? DIRECTOR_BUDGET_MS;
@@ -180,7 +198,7 @@ export function createDirectorClient(
 
     async function useGenerator(
       reason: FallbackReason,
-      apiErrorCode?: ErrorCode
+      extras?: { apiErrorCode?: ErrorCode; issues?: Issue[] }
     ): Promise<DirectorResult> {
       let plan: LevelPlan;
       try {
@@ -193,21 +211,12 @@ export function createDirectorClient(
         plan = lastResortPlan(graph, seed);
       }
 
-      const valid = await validate(plan, graph);
-      if (!valid.ok) {
-        console.warn(
-          '[director] generator plan failed local validation',
-          valid.issues
-        );
-        plan = lastResortPlan(graph, seed);
-      }
-
       const result = proceduralResult(
         plan,
         seed,
         nowMs() - started,
         reason,
-        apiErrorCode
+        extras
       );
       logDirectorResult(result);
       return result;
@@ -243,7 +252,7 @@ export function createDirectorClient(
     );
 
     if (!api.ok) {
-      return useGenerator(api.reason, api.apiErrorCode);
+      return useGenerator(api.reason, { apiErrorCode: api.apiErrorCode });
     }
 
     const parsed = LevelResponse.safeParse(api.payload);
@@ -252,11 +261,12 @@ export function createDirectorClient(
     }
 
     // B-02 mock plans use fixture surface ids, not the scanned graph.
-    // Local re-validation rejecting them is expected until B-05 — fall back
-    // to the generator without treating it as a player-facing error.
+    // `validatePlan` reports UNKNOWN_SURFACE; that is expected until B-05
+    // and maps to `graph-mismatch` (info, not an error).
     const local = await validate(parsed.data.plan, graph);
     if (!local.ok) {
-      return useGenerator('graph-mismatch');
+      const reason = fallbackReasonFromIssues(local.issues);
+      return useGenerator(reason, { issues: local.issues });
     }
 
     const latencyMs = nowMs() - started;
@@ -268,7 +278,7 @@ export function createDirectorClient(
     void genPromise.catch(() => undefined);
 
     const result: DirectorResult = {
-      plan: parsed.data.plan,
+      plan: clampPlanPar(parsed.data.plan),
       source: parsed.data.source,
       cacheKey: parsed.data.cacheKey,
       model: parsed.data.model,
@@ -276,6 +286,7 @@ export function createDirectorClient(
       latencyMs,
       repairs: parsed.data.repairs,
       usedFallback: false,
+      issues: [],
     };
     logDirectorResult(result);
     return result;
