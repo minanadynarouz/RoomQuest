@@ -155,6 +155,8 @@ function registerSessionHooks(): void {
   registerRqHook('pause', () => sessionController?.pause(), gate);
   registerRqHook('resume', () => sessionController?.resume(), gate);
   registerRqHook('forceWin', () => sessionController?.forceWin(), gate);
+  registerRqHook('replay', () => sessionController?.replay(), gate);
+  registerRqHook('exit', () => sessionController?.exit(), gate);
 }
 
 function bindVisibilityPause(world: World): void {
