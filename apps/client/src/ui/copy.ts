@@ -41,11 +41,11 @@ export function formatStarsLabel(stars: 1 | 2 | 3): string {
 }
 
 export function formatWinStats(gems: number, timeMs: number): string {
-  return `Gems ${String(gems)} · ${formatHudTime(timeMs)}`;
+  return `Gems ${String(gems)} - ${formatHudTime(timeMs)}`;
 }
 
 export function formatTomorrowLine(isoDate: string): string {
-  return `New quest tomorrow · ${isoDate}`;
+  return `New quest tomorrow - ${isoDate}`;
 }
 
 export function formatBeatLabel(beatIndex: number, beatCount: number): string {

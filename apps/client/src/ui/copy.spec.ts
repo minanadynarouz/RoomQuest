@@ -39,9 +39,9 @@ describe('HUD copy', () => {
   it('formats win lines', () => {
     expect(formatStarsLabel(1)).toBe('1 star');
     expect(formatStarsLabel(3)).toBe('3 stars');
-    expect(formatWinStats(4, 185_000)).toBe('Gems 4 · 3:05');
+    expect(formatWinStats(4, 185_000)).toBe('Gems 4 - 3:05');
     expect(formatTomorrowLine('2026-10-10')).toBe(
-      'New quest tomorrow · 2026-10-10'
+      'New quest tomorrow - 2026-10-10'
     );
     expect(formatBeatLabel(0, 3)).toBe('Beat 1 of 3');
   });

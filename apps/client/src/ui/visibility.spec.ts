@@ -213,7 +213,7 @@ describe('store-to-panel visibility mapping', () => {
     expect(view.win.title).toBe('Home at last.');
     expect(view.win.starsLabel).toBe('3 stars');
     expect(view.win.statsLabel).toContain('Gems 3');
-    expect(view.win.tomorrowLabel).toBe('New quest tomorrow · 2026-10-09');
+    expect(view.win.tomorrowLabel).toBe('New quest tomorrow - 2026-10-09');
     expect(view.win.replayLabel).toBe('Replay');
   });
 
