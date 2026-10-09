@@ -9,8 +9,8 @@ export interface DebugLine {
   text: string;
 }
 
-function padLabel(label: string, width = 10): string {
-  return label.length >= width ? label : label + ' '.repeat(width - label.length);
+function padLabel(label: string, width = 9): string {
+  return label.length >= width ? `${label} ` : label + ' '.repeat(width - label.length);
 }
 
 export function formatDash(value: string | number | null | undefined): string {

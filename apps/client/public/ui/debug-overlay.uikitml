@@ -1,7 +1,7 @@
 <style>
   .panel-root {
     flex-direction: column;
-    width: 230px;
+    width: 210px;
   }
 
   .panel-content {

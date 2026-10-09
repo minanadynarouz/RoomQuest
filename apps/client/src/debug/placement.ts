@@ -4,10 +4,10 @@
 
 export type DebugVec3 = readonly [number, number, number];
 
-/** Head-local offset, metres. Right / below eye / forward. */
-export const DEBUG_PANEL_OFFSET: DebugVec3 = [0.26, -0.28, -0.82];
+/** Head-local offset, metres. Right / below the HUD / forward. */
+export const DEBUG_PANEL_OFFSET: DebugVec3 = [0.4, -0.4, -0.78];
 
-export const DEBUG_PANEL_SCALE = 0.13;
+export const DEBUG_PANEL_SCALE = 0.14;
 
 export const DEBUG_FOLLOW_MAX_ANGLE_DEG = 30;
 

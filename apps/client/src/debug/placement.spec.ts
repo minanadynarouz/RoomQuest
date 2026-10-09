@@ -17,6 +17,7 @@ describe('debug overlay placement', () => {
 
     const hud = leashedHudOffset();
     expect(DEBUG_PANEL_OFFSET[0]).not.toBe(hud[0]);
-    expect(Math.abs(DEBUG_PANEL_OFFSET[0])).toBeGreaterThan(0.1);
+    expect(Math.abs(DEBUG_PANEL_OFFSET[0])).toBeGreaterThan(0.2);
+    expect(DEBUG_PANEL_OFFSET[1]).toBeLessThan(hud[1]);
   });
 });

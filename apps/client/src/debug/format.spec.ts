@@ -17,12 +17,12 @@ describe('debug overlay format', () => {
       validationIssues: 0,
     });
     expect(block).toContain('PERF');
-    expect(block).toContain('fps       60');
-    expect(block).toContain('draws     24');
-    expect(block).toContain('tris      18000');
-    expect(block).toContain('source    cache');
-    expect(block).toContain('latency   8ms');
-    expect(block).toContain('fallback  -');
+    expect(block).toContain('fps      60');
+    expect(block).toContain('draws    24');
+    expect(block).toContain('tris     18000');
+    expect(block).toContain('source   cache');
+    expect(block).toContain('latency  8ms');
+    expect(block).toContain('fallback -');
     expect(formatLatency(null)).toBe('-');
     expect(formatDebugLines(EMPTY_PERF_STATS).map((line) => line.id)).toEqual([
       'debug-fps',
