@@ -139,6 +139,13 @@ export const SOUND_MANIFEST: Record<SoundKey, SoundEntry> = {
     duration: 0.16,
     intervals: [0, 3],
   },
+  slimeWoke: {
+    synth: 'mutedThud',
+    gain: 0.18,
+    spatial: false,
+    pitchHz: 140,
+    duration: 0.1,
+  },
   explorerBlocked: {
     synth: 'mutedThud',
     gain: 0.2,
