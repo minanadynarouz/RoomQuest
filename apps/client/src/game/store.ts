@@ -297,6 +297,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
   // Event emission helpers
   type EmittableEvent =
     | { type: 'pieceBuilt'; placementId: string }
+    | { type: 'leverPulled'; placementId: string }
     | { type: 'gateOpened'; placementId: string }
     | { type: 'slimeStunned'; placementId: string }
     | { type: 'gemCollected'; placementId: string }
@@ -306,7 +307,6 @@ export function createGameStore(options: GameStoreOptions = {}) {
       }
     | { type: 'explorerOutOfView' }
     | { type: 'won' }
-    | { type: 'leverPulled'; placementId: string }
     | {
         type: 'beatCompleted';
         beatIndex: number;
@@ -518,6 +518,10 @@ export function createGameStore(options: GameStoreOptions = {}) {
       emitEvent({ type: 'pieceBuilt' as const, placementId });
     },
 
+    leverPulled(placementId: string) {
+      emitEvent({ type: 'leverPulled' as const, placementId });
+    },
+
     gateOpened(placementId: string) {
       emitEvent({ type: 'gateOpened' as const, placementId });
     },
@@ -536,14 +540,6 @@ export function createGameStore(options: GameStoreOptions = {}) {
 
     explorerOutOfView() {
       emitEvent({ type: 'explorerOutOfView' as const });
-    },
-
-    /**
-     * X-06 (gate + lever) should call this when a lever is pulled.
-     * F-08 maps it to the lever SFX; nothing emits it yet.
-     */
-    leverPulled(placementId: string) {
-      emitEvent({ type: 'leverPulled' as const, placementId });
     },
 
     /**

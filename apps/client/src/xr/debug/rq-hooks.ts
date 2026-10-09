@@ -18,6 +18,7 @@ import {
 } from '../flags.js';
 import type { SnapTarget } from '../level/types.js';
 import type { PlacementDebugApi } from '../systems/PlacementSystem.js';
+import type { GateLeverDebugApi } from '../systems/GateLeverSystem.js';
 import type { VillageAnchorDebugApi } from '../systems/VillageAnchorSystem.js';
 import type { RqPerfStats } from './stats.js';
 
@@ -65,6 +66,7 @@ export interface RqHooks {
   forceWin?: () => void;
   /** X-09: village hut XRAnchor persist / restore status. */
   villageAnchor?: VillageAnchorDebugApi;
+  gateLever?: GateLeverDebugApi | null;
 }
 
 /** X-05 walker debug surface. `getWorldPosition` matches F-06's ExplorerTarget. */

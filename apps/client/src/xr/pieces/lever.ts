@@ -1,4 +1,9 @@
-import type { BufferGeometry, Object3D } from '@iwsdk/core';
+import {
+  BoxGeometry,
+  Mesh,
+  type BufferGeometry,
+  type Object3D,
+} from '@iwsdk/core';
 import {
   box,
   cylinder,
@@ -37,5 +42,22 @@ export function createLeverGeometry(palette: ToyPalette): BufferGeometry {
 }
 
 export function createLever(kit: GreyboxKit): Object3D {
-  return kit.createMeshPiece('lever', LEVER_FOOTPRINT);
+  const root = kit.createMeshPiece('lever', LEVER_FOOTPRINT);
+  const handle = root.children[0];
+  if (handle) {
+    root.userData.handle = handle;
+  }
+
+  const hitGeo = kit.cachedGeometry('lever-hit', () => {
+    const geo = new BoxGeometry(0.36, 0.4, 0.36);
+    geo.translate(0, 0.2, 0);
+    return geo;
+  });
+  const hit = new Mesh(hitGeo, kit.interactHitMaterial());
+  hit.name = 'lever-hit';
+  hit.castShadow = false;
+  hit.receiveShadow = false;
+  hit.pointerEvents = 'auto';
+  root.add(hit);
+  return root;
 }

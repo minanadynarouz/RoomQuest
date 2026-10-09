@@ -57,4 +57,18 @@ describe('greybox piece factories', () => {
     expect(hasMesh).toBe(true);
     kit.dispose();
   });
+
+  it('builds a gate with an animatable leaf and a lever with a poke hit volume', () => {
+    const kit = createGreyboxKit('forest');
+    const gate = createPiece('gate', kit);
+    const lever = createPiece('lever', kit);
+    expect(gate.userData.leaf).toBeTruthy();
+    expect(lever.userData.handle).toBeTruthy();
+    let hit = false;
+    lever.traverse((obj) => {
+      if (obj.name === 'lever-hit') hit = true;
+    });
+    expect(hit).toBe(true);
+    kit.dispose();
+  });
 });

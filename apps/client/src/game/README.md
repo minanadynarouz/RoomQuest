@@ -58,7 +58,7 @@ All events carry:
 
 Event types:
 
-- `pieceBuilt`, `gateOpened`, `slimeStunned`, `gemCollected`: Game actions
+- `pieceBuilt`, `leverPulled`, `gateOpened`, `slimeStunned`, `gemCollected`: Game actions
 - `explorerBlocked`: Blocked with reason (`unbuiltGap`, `closedGate`, `awakeSlime`)
 - `explorerOutOfView`: Explorer outside player FoV
 - `beatCompleted`: Beat finished with duration

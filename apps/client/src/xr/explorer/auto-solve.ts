@@ -1,5 +1,6 @@
 import type { LevelPlan } from '@roomquest/schema';
 import type { GameStore } from '../../game/index.js';
+import { pullLever } from '../lever/activate.js';
 import type { PlacementDebugApi } from '../systems/PlacementSystem.js';
 
 export interface AutoSolveOptions {
@@ -17,7 +18,7 @@ export function autoSolve(options: AutoSolveOptions): void {
   const events = store.events;
 
   const hasEvent = (
-    type: 'pieceBuilt' | 'gateOpened' | 'slimeStunned',
+    type: 'pieceBuilt' | 'leverPulled' | 'slimeStunned',
     placementId: string
   ): boolean =>
     events.some(
@@ -32,10 +33,10 @@ export function autoSolve(options: AutoSolveOptions): void {
       }
     }
     if (
-      placementRow.piece === 'gate' &&
-      !hasEvent('gateOpened', placementRow.id)
+      placementRow.piece === 'lever' &&
+      !hasEvent('leverPulled', placementRow.id)
     ) {
-      store.gateOpened(placementRow.id);
+      pullLever(store, plan, placementRow.id);
     }
     if (
       placementRow.piece === 'slime' &&

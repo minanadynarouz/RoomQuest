@@ -544,6 +544,25 @@ describe('createGameStore', () => {
       });
     });
 
+    it('emits leverPulled event so F-08 can play the lever SFX', () => {
+      const store = createGameStore({ clock: mockClock });
+      store.requestLevel();
+      store.startSurveying();
+      store.startBuilding(createMockPlan());
+      store.startPlaying();
+
+      mockTime = 2000;
+      store.leverPulled('lever1');
+
+      expect(store.events).toHaveLength(1);
+      expect(store.events[0]).toEqual({
+        type: 'leverPulled',
+        placementId: 'lever1',
+        timestamp: 2000,
+        beatIndex: 0,
+      });
+    });
+
     it('emits gateOpened event', () => {
       const store = createGameStore({ clock: mockClock });
       store.requestLevel();
@@ -618,21 +637,6 @@ describe('createGameStore', () => {
       store.explorerOutOfView();
 
       expect(store.events[0]?.type).toBe('explorerOutOfView');
-    });
-
-    it('emits leverPulled so F-08 can play when X-06 wires the lever', () => {
-      const store = createGameStore({ clock: mockClock });
-      store.requestLevel();
-      store.startSurveying();
-      store.startBuilding(createMockPlan());
-      store.startPlaying();
-
-      store.leverPulled('lever1');
-
-      expect(store.events[0]).toMatchObject({
-        type: 'leverPulled',
-        placementId: 'lever1',
-      });
     });
 
     it('notifies subscribeEvents listeners and supports unsubscribe', () => {

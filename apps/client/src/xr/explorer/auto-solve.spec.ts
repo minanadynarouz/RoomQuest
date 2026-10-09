@@ -39,6 +39,7 @@ describe('autoSolve', () => {
     expect(store.phase).toBe('won');
     expect(store.events.some((e) => e.type === 'won')).toBe(true);
     expect(store.events.some((e) => e.type === 'pieceBuilt')).toBe(true);
+    expect(store.events.some((e) => e.type === 'leverPulled')).toBe(true);
     expect(store.events.some((e) => e.type === 'gateOpened')).toBe(true);
     expect(store.events.filter((e) => e.type === 'beatCompleted').length).toBe(
       SYNTHETIC_LIVING_ROOM_PLAN.beats.length

@@ -1,11 +1,15 @@
 /**
- * Headed Chromium XR E2E against `pnpm dev` (`pnpm --filter client e2e:xr`).
+ * Headed Chromium XR E2E for X-05 / X-06 / X-09 against `pnpm dev`
+ * (`pnpm --filter client e2e:xr`).
  *
- * 1. Desktop fixture screenshots (blocked / walking / won).
+ * 1. Desktop fixture screenshots (blocked / walking / won) via autoSolve
+ *    (opens gates through the same lever path as poke/pinch).
  * 2. `?fixture=synthetic_living_room&xr=1` boots a real IWER AR session
  *    from a user click, then drives injected `window.IWER_DEVICE` hands:
- *    XRDevice.hands, XRHandInput.position.set, updatePinchValue.
- *    Each hand pinch-places the plank, then autoSolve walks to won.
+ *    XRDevice.hands, XRHandInput.position.set, quaternion.set, poseId,
+ *    updatePinchValue.
+ *    Left: pinch-place the plank, then near poke the lever.
+ *    Right: pinch-place the plank, then far ray+pinch the lever from ~2 m.
  * 3. X-09 village-anchor scenario: persist in session 1, restore (or clean
  *    largest-table fallback) in session 2 with the same origin storage.
  */
@@ -19,10 +23,18 @@ import { runVillageAnchorScenario } from './x09-xr-village-anchor.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLIENT_ROOT = path.resolve(__dirname, '..');
 const OUT_DIR = path.join(__dirname, '../../../docs/img/x05');
+const OUT_DIR_X06 = path.join(__dirname, '../../../docs/img/x06');
 const DEFAULT_PORT = 5173;
 
 interface IwerHand {
   position: { set: (x: number, y: number, z: number) => void };
+  quaternion: {
+    set: (x: number, y: number, z: number, w: number) => void;
+    x: number;
+    y: number;
+    z: number;
+    w: number;
+  };
   poseId: string;
   connected: boolean;
   pinchValue: number;
@@ -58,10 +70,18 @@ interface RqWindow {
     explorer?: {
       state: () => string;
       reason: () => string | undefined;
+      pose: () => { x: number; y: number; z: number; yaw: number };
     };
     autoSolve?: () => void;
+    gateLever?: { pull: (id: string) => boolean; boundCount?: () => number };
   };
 }
+
+/** IWER `point` pose index-finger-tip offset from targetRaySpace (right x mirrored). */
+const INDEX_TIP_POINT = {
+  left: { x: 0.031, y: 0.063, z: -0.041 },
+  right: { x: -0.031, y: 0.063, z: -0.041 },
+} as const;
 
 const IWER_APIS_USED = [
   'window.IWER_DEVICE',
@@ -71,8 +91,10 @@ const IWER_APIS_USED = [
   'XRHandInput.connected',
   'XRHandInput.poseId',
   'XRHandInput.position.set',
+  'XRHandInput.quaternion.set',
   'XRHandInput.updatePinchValue',
   'XRHandInput.setPinchValueImmediate',
+  'XRHandInput.poseId=point|pinch|default',
 ] as const;
 
 function sleep(ms: number): Promise<void> {
@@ -177,13 +199,17 @@ async function dismissViteOverlay(page: Page): Promise<void> {
   });
 }
 
-async function shot(page: Page, name: string): Promise<void> {
+async function shot(
+  page: Page,
+  name: string,
+  dir: string = OUT_DIR
+): Promise<void> {
   await dismissViteOverlay(page);
   const canvas = page.locator('#scene-container canvas').first();
   if ((await canvas.count()) > 0) {
-    await canvas.screenshot({ path: path.join(OUT_DIR, name) });
+    await canvas.screenshot({ path: path.join(dir, name) });
   } else {
-    await page.screenshot({ path: path.join(OUT_DIR, name), type: 'png' });
+    await page.screenshot({ path: path.join(dir, name), type: 'png' });
   }
 }
 
@@ -217,6 +243,15 @@ async function captureDesktopScreenshots(
       events: rq?.store.events.map((e) => e.type),
     };
   });
+  const desktopEvents = solved.events ?? [];
+  if (
+    !desktopEvents.includes('leverPulled') ||
+    !desktopEvents.includes('gateOpened')
+  ) {
+    throw new Error(
+      `autoSolve did not use the lever path: ${JSON.stringify(solved)}`
+    );
+  }
   console.log('[X-05 e2e] desktop autoSolve', solved);
 
   await sleep(2500);
@@ -419,8 +454,355 @@ async function pinchPlace(
   return result;
 }
 
+function lookRotation(
+  dx: number,
+  dy: number,
+  dz: number
+): { x: number; y: number; z: number; w: number } {
+  const len = Math.hypot(dx, dy, dz);
+  if (len === 0) return { x: 0, y: 0, z: 0, w: 1 };
+  const fx = dx / len;
+  const fy = dy / len;
+  const fz = dz / len;
+  let rx = fy * 1 - fz * 0;
+  let ry = fz * 0 - fx * 1;
+  let rz = fx * 0 - fy * 0;
+  const rLen = Math.hypot(rx, ry, rz);
+  if (rLen === 0) {
+    rx = 1;
+    ry = 0;
+    rz = 0;
+  } else {
+    rx /= rLen;
+    ry /= rLen;
+    rz /= rLen;
+  }
+  const ux = ry * fz - rz * fy;
+  const uy = rz * fx - rx * fz;
+  const uz = rx * fy - ry * fx;
+  const m00 = rx,
+    m01 = ux,
+    m02 = -fx;
+  const m10 = ry,
+    m11 = uy,
+    m12 = -fy;
+  const m20 = rz,
+    m21 = uz,
+    m22 = -fz;
+  const trace = m00 + m11 + m22;
+  let qw: number, qx: number, qy: number, qz: number;
+  if (trace > 0) {
+    const s = 0.5 / Math.sqrt(trace + 1);
+    qw = 0.25 / s;
+    qx = (m21 - m12) * s;
+    qy = (m02 - m20) * s;
+    qz = (m10 - m01) * s;
+  } else if (m00 > m11 && m00 > m22) {
+    const s = 2 * Math.sqrt(1 + m00 - m11 - m22);
+    qw = (m21 - m12) / s;
+    qx = 0.25 * s;
+    qy = (m01 + m10) / s;
+    qz = (m02 + m20) / s;
+  } else if (m11 > m22) {
+    const s = 2 * Math.sqrt(1 + m11 - m00 - m22);
+    qw = (m02 - m20) / s;
+    qx = (m01 + m10) / s;
+    qy = 0.25 * s;
+    qz = (m12 + m21) / s;
+  } else {
+    const s = 2 * Math.sqrt(1 + m22 - m00 - m11);
+    qw = (m10 - m01) / s;
+    qx = (m02 + m20) / s;
+    qy = (m12 + m21) / s;
+    qz = 0.25 * s;
+  }
+  const qLen = Math.hypot(qx, qy, qz, qw) || 1;
+  return { x: qx / qLen, y: qy / qLen, z: qz / qLen, w: qw / qLen };
+}
+
+async function connectHand(page: Page, hand: 'left' | 'right'): Promise<void> {
+  const ok = await page.evaluate((handedness) => {
+    const w = window as unknown as RqWindow;
+    const device = w.IWER_DEVICE;
+    const input = device?.hands[handedness];
+    if (!device || !input) return false;
+    device.primaryInputMode = 'hand';
+    device.controlMode = 'programmatic';
+    input.connected = true;
+    return true;
+  }, hand);
+  if (!ok) {
+    throw new Error(`${hand} IWER hand missing`);
+  }
+}
+
+async function setHandPose(
+  page: Page,
+  hand: 'left' | 'right',
+  pose: {
+    x: number;
+    y: number;
+    z: number;
+    poseId?: string;
+    qx?: number;
+    qy?: number;
+    qz?: number;
+    qw?: number;
+  }
+): Promise<void> {
+  await page.evaluate(
+    ({ handedness, pose: next }) => {
+      const input = (window as unknown as RqWindow).IWER_DEVICE?.hands[
+        handedness
+      ];
+      if (!input) return;
+      input.poseId = next.poseId ?? 'default';
+      input.updatePinchValue(0);
+      input.setPinchValueImmediate?.(0);
+      input.quaternion.set(
+        next.qx ?? 0,
+        next.qy ?? 0,
+        next.qz ?? 0,
+        next.qw ?? 1
+      );
+      input.position.set(next.x, next.y, next.z);
+    },
+    { handedness: hand, pose }
+  );
+}
+
+async function pokeLever(
+  page: Page,
+  hand: 'left' | 'right'
+): Promise<Record<string, unknown>> {
+  await connectHand(page, hand);
+  const lever = await page.evaluate(() => {
+    return (window as unknown as RqWindow).__rq?.placement?.pieceWorldPose(
+      'p4'
+    );
+  });
+  if (!lever) {
+    throw new Error('missing lever p4 world pose');
+  }
+
+  const tip = INDEX_TIP_POINT[hand];
+  const hitY = lever.y + 0.2;
+  const wristAt = (tx: number, ty: number, tz: number) => ({
+    x: tx - tip.x,
+    y: ty - tip.y,
+    z: tz - tip.z,
+    poseId: 'point',
+  });
+
+  // Park away so grab/ray selection can release before the poke approach.
+  await setHandPose(page, hand, wristAt(lever.x, hitY + 0.55, lever.z));
+  await sleep(450);
+
+  // Approach from above (outside the 0.2 m poke hover sphere) then hold on
+  // the hit volume so a slow CI XR frame still sees a stable Pressed.
+  const heights = [0.45, 0.28, 0.14, 0.04, 0];
+  for (const dy of heights) {
+    await setHandPose(page, hand, wristAt(lever.x, hitY + dy, lever.z));
+    await sleep(280);
+    if (await leverWasPulled(page)) {
+      const summary = await leverGateSummary(page);
+      console.log(`[X-06 e2e] ${hand} near poke`, summary);
+      return summary;
+    }
+  }
+
+  try {
+    await page.waitForFunction(
+      () => {
+        const events =
+          (window as unknown as RqWindow).__rq?.store.events ?? [];
+        return events.some(
+          (e) => e.type === 'leverPulled' && e.placementId === 'p4'
+        );
+      },
+      null,
+      { timeout: 12_000 }
+    );
+  } catch {
+    const summary = await leverGateSummary(page);
+    const bound = await page.evaluate(() => {
+      return (window as unknown as RqWindow).__rq?.gateLever?.boundCount?.();
+    });
+    throw new Error(
+      `${hand} poke never emitted leverPulled. ${JSON.stringify({
+        lever,
+        bound,
+        ...summary,
+      })}`
+    );
+  }
+
+  const summary = await leverGateSummary(page);
+  console.log(`[X-06 e2e] ${hand} near poke`, summary);
+  return summary;
+}
+
+async function leverWasPulled(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const events = (window as unknown as RqWindow).__rq?.store.events ?? [];
+    return events.some(
+      (e) => e.type === 'leverPulled' && e.placementId === 'p4'
+    );
+  });
+}
+
+async function rayPinchLever(
+  page: Page,
+  hand: 'left' | 'right'
+): Promise<Record<string, unknown>> {
+  await connectHand(page, hand);
+  const prepared = await page.evaluate((handedness) => {
+    const w = window as unknown as RqWindow;
+    const input = w.IWER_DEVICE?.hands[handedness];
+    const lever = w.__rq?.placement?.pieceWorldPose('p4');
+    if (!input || !lever) {
+      return { ok: false as const, reason: 'missing hand or lever' };
+    }
+    const seated = {
+      x: handedness === 'left' ? -0.22 : 0.22,
+      y: 1.35,
+      z: 0.05,
+    };
+    const dx = lever.x - seated.x;
+    const dy = lever.y - seated.y;
+    const dz = lever.z - seated.z;
+    const dist = Math.hypot(dx, dy, dz);
+    return { ok: true as const, seated, lever, dist, dx, dy, dz };
+  }, hand);
+
+  if (!prepared.ok) {
+    throw new Error(`${hand} far prepare failed: ${JSON.stringify(prepared)}`);
+  }
+  if (prepared.dist < 1.8) {
+    throw new Error(
+      `${hand} far lever is only ${prepared.dist.toFixed(2)} m; need ~2 m seated`
+    );
+  }
+
+  const rot = lookRotation(prepared.dx, prepared.dy, prepared.dz);
+  await page.evaluate(
+    ({ handedness, seated, rot: q }) => {
+      const input = (window as unknown as RqWindow).IWER_DEVICE?.hands[
+        handedness
+      ];
+      if (!input) return;
+      input.poseId = 'default';
+      input.updatePinchValue(0);
+      input.setPinchValueImmediate?.(0);
+      input.position.set(seated.x, seated.y, seated.z);
+      input.quaternion.set(q.x, q.y, q.z, q.w);
+    },
+    { handedness: hand, seated: prepared.seated, rot }
+  );
+  await sleep(700);
+
+  await page.evaluate((handedness) => {
+    const input = (window as unknown as RqWindow).IWER_DEVICE?.hands[
+      handedness
+    ];
+    if (!input) return;
+    input.poseId = 'pinch';
+    input.setPinchValueImmediate?.(1);
+    input.updatePinchValue(1);
+  }, hand);
+
+  try {
+    await page.waitForFunction(
+      () => {
+        const events =
+          (window as unknown as RqWindow).__rq?.store.events ?? [];
+        return (
+          events.some(
+            (e) => e.type === 'leverPulled' && e.placementId === 'p4'
+          ) &&
+          events.some((e) => e.type === 'gateOpened' && e.placementId === 'p3')
+        );
+      },
+      null,
+      { timeout: 12_000 }
+    );
+  } catch {
+    const summary = await leverGateSummary(page);
+    throw new Error(
+      `${hand} far ray+pinch failed: ${JSON.stringify({ prepared, summary })}`
+    );
+  }
+
+  await page.evaluate((handedness) => {
+    const input = (window as unknown as RqWindow).IWER_DEVICE?.hands[
+      handedness
+    ];
+    if (!input) return;
+    input.updatePinchValue(0);
+    input.setPinchValueImmediate?.(0);
+    input.poseId = 'default';
+  }, hand);
+  await sleep(200);
+
+  const summary = await leverGateSummary(page);
+  console.log(`[X-06 e2e] ${hand} far ray+pinch`, {
+    dist: prepared.dist,
+    summary,
+  });
+  return { ...summary, dist: prepared.dist };
+}
+
+async function leverGateSummary(page: Page): Promise<{
+  leverPulled: boolean;
+  gateOpened: boolean;
+  explorer: string | undefined;
+  reason: string | undefined;
+  events: string[];
+  phase: string | undefined;
+}> {
+  return page.evaluate(() => {
+    const rq = (window as unknown as RqWindow).__rq;
+    const events = rq?.store.events ?? [];
+    return {
+      leverPulled: events.some(
+        (e) => e.type === 'leverPulled' && e.placementId === 'p4'
+      ),
+      gateOpened: events.some(
+        (e) => e.type === 'gateOpened' && e.placementId === 'p3'
+      ),
+      explorer: rq?.explorer?.state(),
+      reason: rq?.explorer?.reason(),
+      events: events.map((e) => e.type),
+      phase: rq?.store.phase,
+    };
+  });
+}
+
+async function waitForExplorerPastGate(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => {
+      const rq = (window as unknown as RqWindow).__rq;
+      if (!rq) return false;
+      const opened = rq.store.events.some(
+        (e) => e.type === 'gateOpened' && e.placementId === 'p3'
+      );
+      if (!opened) return false;
+      if (rq.store.phase === 'won') return true;
+      const state = rq.explorer?.state();
+      const reason = rq.explorer?.reason();
+      const pose = rq.explorer?.pose();
+      if (state === 'celebrating') return true;
+      if (reason === 'closedGate') return false;
+      return Boolean(pose && pose.z < -2.45 && state === 'walking');
+    },
+    null,
+    { timeout: 90_000 }
+  );
+}
+
 async function main(): Promise<void> {
   await mkdir(OUT_DIR, { recursive: true });
+  await mkdir(OUT_DIR_X06, { recursive: true });
   const server = await startVite();
   const browser = await launchBrowser();
   try {
@@ -438,18 +820,24 @@ async function main(): Promise<void> {
     await shot(leftPage, 'xr-blocked-gap.png');
     const left = await pinchPlace(leftPage, 'left');
     console.log('[X-05 e2e] LEFT', left);
+    const leftPoke = await pokeLever(leftPage, 'left');
+    console.log('[X-06 e2e] LEFT poke', leftPoke);
+    await shot(leftPage, 'near-poke.png', OUT_DIR_X06);
+    await waitForExplorerPastGate(leftPage);
+    await shot(leftPage, 'gate-open-near.png', OUT_DIR_X06);
     await leftPage.close();
 
     const rightPage = await browser.newPage({ ignoreHTTPSErrors: true });
     await enterXrFixture(rightPage, server.url);
     const right = await pinchPlace(rightPage, 'right');
     console.log('[X-05 e2e] RIGHT', right);
-    await rightPage.evaluate(() => {
-      (window as unknown as RqWindow).__rq?.autoSolve?.();
-    });
+    const rightFar = await rayPinchLever(rightPage, 'right');
+    console.log('[X-06 e2e] RIGHT far', rightFar);
+    await shot(rightPage, 'far-ray-pinch.png', OUT_DIR_X06);
     await sleep(2200);
     await shot(rightPage, 'walking.png');
     await shot(rightPage, 'xr-walking.png');
+    await waitForExplorerPastGate(rightPage);
     await rightPage.waitForFunction(
       () => (window as unknown as RqWindow).__rq?.store.phase === 'won',
       null,
@@ -463,15 +851,23 @@ async function main(): Promise<void> {
         events: rq?.store.events.map((e) => e.type),
       };
     });
-    console.log('[X-05 e2e] autoSolve won', summary);
+    const wonEvents = summary.events ?? [];
+    if (
+      !wonEvents.includes('leverPulled') ||
+      !wonEvents.includes('gateOpened')
+    ) {
+      throw new Error(`won without lever path: ${JSON.stringify(summary)}`);
+    }
+    console.log('[X-06 e2e] far lever won', summary);
     await sleep(400);
     await shot(rightPage, 'xr-won.png');
     await shot(rightPage, 'won.png');
+    await shot(rightPage, 'gate-open-far.png', OUT_DIR_X06);
     await rightPage.close();
 
     console.log('[X-05 e2e] IWER APIs used:', IWER_APIS_USED.join(', '));
     console.log(
-      '[X-05 e2e] both hands pinch-placed p2 within 1 cm; autoSolve reached won'
+      '[X-06 e2e] near poke and far ray+pinch opened the gate; explorer passed'
     );
 
     await runVillageAnchorScenario({ browser, baseUrl: server.url });

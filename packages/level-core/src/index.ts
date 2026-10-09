@@ -6,3 +6,4 @@ export * from './generate';
 export * from './snap';
 export * from './path';
 export * from './anchor';
+export * from './interact';

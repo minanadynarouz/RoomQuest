@@ -93,10 +93,15 @@ describe('registerRqHook / installRqHooks', () => {
     registerRqHook('pause', pause, { ...debugOn, target });
     registerRqHook('resume', pause, { ...debugOn, target });
     registerRqHook('forceWin', pause, { ...debugOn, target });
+    registerRqHook('gateLever', { pull: () => true, boundCount: () => 1 }, {
+      ...debugOn,
+      target,
+    });
     installRqHooks({ drawCalls: 2 }, { ...debugOn, target });
     expect(target.__rq?.autoSolve).toBe(autoSolve);
     expect(target.__rq?.pause).toBe(pause);
     expect(target.__rq?.forceWin).toBe(pause);
+    expect(target.__rq?.gateLever?.boundCount()).toBe(1);
   });
 
   it('does not expose pause on window.__rq when gated off', () => {

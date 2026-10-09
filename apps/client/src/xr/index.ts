@@ -14,6 +14,7 @@ export type { RqHooks, ExplorerTarget } from './boot.js';
 export { LevelBuilderSystem } from './systems/LevelBuilderSystem.js';
 export { PlacementSystem } from './systems/PlacementSystem.js';
 export { ExplorerSystem } from './systems/ExplorerSystem.js';
+export { GateLeverSystem } from './systems/GateLeverSystem.js';
 export { SurfaceGraphSystem } from './systems/SurfaceGraphSystem.js';
 export { VillageAnchorSystem } from './systems/VillageAnchorSystem.js';
 export { mountGreyboxLevel } from './level/mount-level.js';

@@ -6,6 +6,7 @@ import {
 import { explorerPath } from '@roomquest/level-core';
 import type { LevelPlan } from '@roomquest/schema';
 import { createGameStore } from '../../game/index.js';
+import { pullLever } from '../lever/activate.js';
 import { ExplorerWalker } from './walker.js';
 
 const GRAPH = SYNTHETIC_LIVING_ROOM;
@@ -68,6 +69,47 @@ describe('ExplorerWalker blockers', () => {
     ).toBe(true);
 
     store.gateOpened('p3');
+    tick(4);
+    expect(walker.reason).not.toBe('closedGate');
+  });
+
+  it('unblocks the gate when the lever is pulled via the shared path', () => {
+    const { store, walker, tick } = playing();
+    store.pieceBuilt('p2');
+    tick(120);
+    expect(walker.reason).toBe('closedGate');
+    pullLever(store, PLAN, 'p4');
+    tick(4);
+    expect(
+      store.events.some(
+        (e) => e.type === 'leverPulled' && e.placementId === 'p4'
+      )
+    ).toBe(true);
+    expect(
+      store.events.some(
+        (e) => e.type === 'gateOpened' && e.placementId === 'p3'
+      )
+    ).toBe(true);
+    expect(walker.reason).not.toBe('closedGate');
+  });
+
+  it('keeps a closed-gate block across F-07 pause/resume', () => {
+    const { store, walker, tick } = playing();
+    store.pieceBuilt('p2');
+    tick(120);
+    expect(walker.reason).toBe('closedGate');
+    const pose = { x: walker.pose.x, z: walker.pose.z };
+    store.pause();
+    tick(40);
+    expect(store.phase).toBe('paused');
+    expect(walker.reason).toBe('closedGate');
+    expect(walker.pose.x).toBe(pose.x);
+    expect(walker.pose.z).toBe(pose.z);
+    store.resume();
+    tick(4);
+    expect(store.phase).toBe('playing');
+    expect(walker.reason).toBe('closedGate');
+    pullLever(store, PLAN, 'p4');
     tick(4);
     expect(walker.reason).not.toBe('closedGate');
   });
