@@ -2,7 +2,11 @@ import { createSystem, Vector3, type Entity, type Object3D } from '@iwsdk/core';
 import { explorerPath } from '@roomquest/level-core';
 import type { LevelPlan, SurfaceGraph } from '@roomquest/schema';
 import type { GameStore } from '../../game/index.js';
-import { setExplorerTarget } from '../../ui/explorer-target.js';
+import {
+  setExplorerTarget,
+  type ExplorerTarget,
+  type ExplorerVec3,
+} from '../../ui/explorer-target.js';
 import { setExplorerAnchor } from '../../ui/HudSystem.js';
 import { createExplorerModel } from '../explorer/model.js';
 import { isExplorerOutOfView } from '../explorer/out-of-view.js';
@@ -17,17 +21,17 @@ export interface ExplorerDebugApi {
   state: () => ExplorerStateName;
   reason: () => string | undefined;
   pose: () => ExplorerPose;
-  getWorldPosition: (out: {
-    x: number;
-    y: number;
-    z: number;
-  }) => { x: number; y: number; z: number };
+  getWorldPosition: (out: ExplorerVec3) => ExplorerVec3;
 }
 
 /**
  * Kinematic explorer walker. No physics, no per-frame allocations.
+ * Implements F-06 `ExplorerTarget`; `boot.ts` registers it via `setExplorerTarget`.
  */
-export class ExplorerSystem extends createSystem({}, {}) {
+export class ExplorerSystem
+  extends createSystem({}, {})
+  implements ExplorerTarget
+{
   private readonly walker = new ExplorerWalker();
   private readonly pose: ExplorerPose = { x: 0, y: 0, z: 0, yaw: 0 };
   private readonly tmpHead = new Vector3();
@@ -52,6 +56,8 @@ export class ExplorerSystem extends createSystem({}, {}) {
     this.model = model;
     this.entity = this.world.createTransformEntity(model, { persistent: true });
     setExplorerAnchor(model);
+    // F-04's setExplorerAnchor also writes the target; re-register the walker.
+    setExplorerTarget(this);
     this.cleanupFuncs.push(() => {
       setExplorerAnchor(null);
       setExplorerTarget(null);
@@ -71,12 +77,8 @@ export class ExplorerSystem extends createSystem({}, {}) {
     this.syncModel(0);
   }
 
-  /** F-06 `ExplorerTarget` shape. `boot.ts` calls `setExplorerTarget(explorer)`. */
-  getWorldPosition(out: { x: number; y: number; z: number }): {
-    x: number;
-    y: number;
-    z: number;
-  } {
+  /** F-06 `ExplorerTarget`: writes walker world pose into caller-owned `out`. */
+  getWorldPosition(out: ExplorerVec3): ExplorerVec3 {
     return this.walker.getWorldPosition(out);
   }
 
