@@ -1,7 +1,7 @@
 # Roomquest API
 
 Source of truth for these endpoints: architecture §6 (`docs/ARCHITECTURE-AND-PLAN.md`).
-This document describes the API contract. B-02 shipped the skeleton and mock director; B-10 adds optional Prisma/Neon (health `db` ping); B-05 adds the live LangChain director; B-06 adds the Postgres level cache, daily seed, and rate limits. B-09 (results) still comes later.
+This document describes the API contract. B-02 shipped the skeleton and mock director; B-10 adds optional Prisma/Neon (health `db` ping); B-05 adds the live LangChain director; B-06 adds the Postgres level cache, daily seed, and rate limits; B-07 adds the LLM eval harness (`pnpm --filter api eval`). B-09 (results) still comes later.
 
 ## Base URL
 
@@ -19,9 +19,9 @@ JSON only. Request body ≤ **16 KB**.
 
 ## Routes
 
-| Method & path         | Request                                                                           | Success                                     | Errors                                                                                                                       |
-| --------------------- | --------------------------------------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/health`     | none                                                                              | `200 {status:"ok", version, db, llm, time}` | none (always 200 if the process is up)                                                                                       |
+| Method & path         | Request                                                                           | Success                                     | Errors                                                                                                                                                                          |
+| --------------------- | --------------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/health`     | none                                                                              | `200 {status:"ok", version, db, llm, time}` | none (always 200 if the process is up)                                                                                                                                          |
 | `POST /api/v1/levels` | Headers `X-Device-Id` (UUID v4), `X-Client-Version` (semver). Body `LevelRequest` | `200 LevelResponse`                         | `400 {error:{code:"INVALID_REQUEST", message, issues}}` · `413` oversized body (see below) · `429 {error:{code:"RATE_LIMITED", retryAfterS}}` · `500 {error:{code:"INTERNAL"}}` |
 
 Out of scope here: `POST /api/v1/levels/:cacheKey/result` (B-09), `POST /api/v1/levels/:cacheKey/adapt` (post-MVP).
@@ -42,13 +42,13 @@ Always **200** while the Node process is up. Used by the landing-page pre-warm a
 }
 ```
 
-| Field     | Meaning                                                                                                                                    |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `status`  | Always `"ok"`.                                                                                                                             |
-| `version` | `GIT_SHA` env var. Local default `"dev"` when unset or empty. Staging/prod should set this to the git commit sha.                          |
+| Field     | Meaning                                                                                                                                                                             |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status`  | Always `"ok"`.                                                                                                                                                                      |
+| `version` | `GIT_SHA` env var. Local default `"dev"` when unset or empty. Staging/prod should set this to the git commit sha.                                                                   |
 | `db`      | `"ok"` or `"down"`. `"ok"` when `DATABASE_URL` is set and a `SELECT 1` ping succeeds; `"down"` when the URL is unset or the database is unreachable. The process still returns 200. |
-| `llm`     | `"configured"` if `GOOGLE_API_KEY` or `ANTHROPIC_API_KEY` is a non-empty string, else `"missing"`. Keys are not required to start the API. |
-| `time`    | ISO 8601 UTC timestamp (`Date.toISOString()`).                                                                                             |
+| `llm`     | `"configured"` if `GOOGLE_API_KEY` or `ANTHROPIC_API_KEY` is a non-empty string, else `"missing"`. Keys are not required to start the API.                                          |
+| `time`    | ISO 8601 UTC timestamp (`Date.toISOString()`).                                                                                                                                      |
 
 ---
 
@@ -157,10 +157,10 @@ The `Retry-After` header is set to the same `retryAfterS` value (seconds).
 
 Two independent limiters (both **in-memory in this process** for the MVP — they reset on deploy / Render sleep; not shared across instances, no Redis):
 
-| Limiter | Key | Budget | Counts |
-| --- | --- | --- | --- |
-| `@nestjs/throttler` guard | client IP (`X-Forwarded-For` when `trust proxy` is on) | **60 / hour** | every `POST /api/v1/levels`, including cache hits |
-| Custom limiter in the levels service | `X-Device-Id` | **10 / hour** | **cache misses only** (a valid cache hit is free) |
+| Limiter                              | Key                                                    | Budget        | Counts                                            |
+| ------------------------------------ | ------------------------------------------------------ | ------------- | ------------------------------------------------- |
+| `@nestjs/throttler` guard            | client IP (`X-Forwarded-For` when `trust proxy` is on) | **60 / hour** | every `POST /api/v1/levels`, including cache hits |
+| Custom limiter in the levels service | `X-Device-Id`                                          | **10 / hour** | **cache misses only** (a valid cache hit is free) |
 
 The 11th cache miss from one device in an hour is 429. Health is not throttled.
 
@@ -204,25 +204,53 @@ Validated in `apps/api/src/config/env.ts`. Copy `.env.example` (repo root or `ap
 
 None of these are required to start the API. CI does not set a database. Local DB, when used, is **Docker Postgres 17** only (B-10 does not create Render or Neon projects).
 
-| Name | Required | Default | Example | Environments |
-| --- | --- | --- | --- | --- |
-| `PORT` | optional | `3000` | `3000` | **local**. Render injects `PORT` at runtime; it is not in `render.yaml`. |
-| `NODE_ENV` | optional | `development` | `development` / `test` / `production` | **local** `development`; **CI** / Vitest `test`; **staging** / **prod** `production`. |
-| `DIRECTOR_MODE` | optional | `mock` | `mock` / `live` | **local** / **CI** `mock`; **staging** / **prod** `live`. |
-| `CORS_ORIGINS` | optional | `http://localhost:5173,https://localhost:5173` | `http://localhost:5173,https://localhost:5173,https://roomquest.vercel.app` | **all**. Comma-separated extra origins. Vercel preview hosts and `https://localhost:*` are hardcoded in CORS. |
-| `GIT_SHA` | optional | `dev` (empty/unset also becomes `dev`) | `9f8e7d6c5b4a3210` | **local** `dev`; **staging** / **prod** = deployed git sha (set by the deploy workflow). |
-| `DIRECTOR_MODEL` | optional | `gemini-3.8-flash` | `gemini-3.8-flash` | **staging** / **prod**; **local** only when exercising live director. |
-| `FALLBACK_MODEL` | optional | `claude-haiku-4-5` | `claude-haiku-4-5` | **staging** / **prod**; **local** only when exercising live director. |
-| `GOOGLE_API_KEY` | optional | unset | Gemini API key (never commit) | **staging** / **prod** when `DIRECTOR_MODE=live`; **local** only for live director tests. Blank → health `llm:"missing"`. |
-| `ANTHROPIC_API_KEY` | optional | unset | Anthropic API key (never commit) | **staging** / **prod** fallback; **local** only for live director tests. Either key makes health `llm:"configured"`. |
-| `DATABASE_URL` | optional | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **local** Docker Postgres 17 (runtime / pooled). **staging** / **prod**: Neon pooled URL — declared in `render.yaml`, values set later (M-10). Unset or unreachable → health `db:"down"`, `/levels` serves without cache (warning logged); process still 200. |
-| `DIRECT_URL` | optional | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **local** Docker (Prisma CLI / `pnpm --filter api db:migrate`). **staging** / **prod**: Neon unpooled URL for `migrate deploy` (GitHub Environments, L-03 / L-04). |
-| `NODE_VERSION` | Render build only (not read by Nest) | `22` in `render.yaml` | `22` | **staging** / **prod** Render native runtime. **local** uses `.nvmrc` (`22`). |
-| `TEST_DATABASE_URL` | tests only (not read by Nest) | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **CI** test job (GitHub Actions `postgres:17` service). **local** cache integration tests when Docker Postgres is up. When unset, those tests skip unless `CI=true` (then they fail). |
+| Name                | Required                             | Default                                        | Example                                                                     | Environments                                                                                                                                                                                                                                                    |
+| ------------------- | ------------------------------------ | ---------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`              | optional                             | `3000`                                         | `3000`                                                                      | **local**. Render injects `PORT` at runtime; it is not in `render.yaml`.                                                                                                                                                                                        |
+| `NODE_ENV`          | optional                             | `development`                                  | `development` / `test` / `production`                                       | **local** `development`; **CI** / Vitest `test`; **staging** / **prod** `production`.                                                                                                                                                                           |
+| `DIRECTOR_MODE`     | optional                             | `mock`                                         | `mock` / `live`                                                             | **local** / **CI** `mock`; **staging** / **prod** `live`.                                                                                                                                                                                                       |
+| `CORS_ORIGINS`      | optional                             | `http://localhost:5173,https://localhost:5173` | `http://localhost:5173,https://localhost:5173,https://roomquest.vercel.app` | **all**. Comma-separated extra origins. Vercel preview hosts and `https://localhost:*` are hardcoded in CORS.                                                                                                                                                   |
+| `GIT_SHA`           | optional                             | `dev` (empty/unset also becomes `dev`)         | `9f8e7d6c5b4a3210`                                                          | **local** `dev`; **staging** / **prod** = deployed git sha (set by the deploy workflow).                                                                                                                                                                        |
+| `DIRECTOR_MODEL`    | optional                             | `gemini-3.8-flash`                             | `gemini-3.8-flash`                                                          | **staging** / **prod**; **local** only when exercising live director.                                                                                                                                                                                           |
+| `FALLBACK_MODEL`    | optional                             | `claude-haiku-4-5`                             | `claude-haiku-4-5`                                                          | **staging** / **prod**; **local** only when exercising live director.                                                                                                                                                                                           |
+| `GOOGLE_API_KEY`    | optional                             | unset                                          | Gemini API key (never commit)                                               | **staging** / **prod** when `DIRECTOR_MODE=live`; **local** live director / **eval** (`pnpm --filter api eval`). Also a **GitHub Actions repository secret** for `.github/workflows/eval.yml`. Blank → health `llm:"missing"`; live eval skips unless `--mock`. |
+| `ANTHROPIC_API_KEY` | optional                             | unset                                          | Anthropic API key (never commit)                                            | **staging** / **prod** fallback; **local** live director / **eval**. Optional **GitHub Actions repository secret** for `eval.yml`. Either key makes health `llm:"configured"`.                                                                                  |
+| `DATABASE_URL`      | optional                             | unset                                          | `postgresql://postgres:postgres@localhost:5432/roomquest`                   | **local** Docker Postgres 17 (runtime / pooled). **staging** / **prod**: Neon pooled URL — declared in `render.yaml`, values set later (M-10). Unset or unreachable → health `db:"down"`, `/levels` serves without cache (warning logged); process still 200.   |
+| `DIRECT_URL`        | optional                             | unset                                          | `postgresql://postgres:postgres@localhost:5432/roomquest`                   | **local** Docker (Prisma CLI / `pnpm --filter api db:migrate`). **staging** / **prod**: Neon unpooled URL for `migrate deploy` (GitHub Environments, L-03 / L-04).                                                                                              |
+| `NODE_VERSION`      | Render build only (not read by Nest) | `22` in `render.yaml`                          | `22`                                                                        | **staging** / **prod** Render native runtime. **local** uses `.nvmrc` (`22`).                                                                                                                                                                                   |
+| `TEST_DATABASE_URL` | tests only (not read by Nest)        | unset                                          | `postgresql://postgres:postgres@localhost:5432/roomquest`                   | **CI** test job (GitHub Actions `postgres:17` service). **local** cache integration tests when Docker Postgres is up. When unset, those tests skip unless `CI=true` (then they fail).                                                                           |
 
 No extra env knobs for rate limits: 60/h per IP and 10 cache-misses/h per device are constants. Counters live in process memory.
 
 `render.yaml` lists the staging/prod keys with `sync: false` so the blueprint never stores secret values. How to fill them later: `docs/deploy-api.md`.
+
+## Director eval (B-07)
+
+`pnpm --filter api eval` calls the LangChain director module **directly** (no HTTP, no Postgres cache, no rate limits) over every available room fixture (up to 5; `packages/fixtures/rooms/*.json` if present, otherwise `synthetic_living_room`) × 4 seed dates × 2 tiers.
+
+It writes `docs/eval/<YYYY-MM-DD>.md` and `docs/eval/<YYYY-MM-DD>.json`, prints a summary, and reports whether the bar is met (≥ 90% valid after repair **and** p95 ≤ 7 s). The process exits non-zero only on harness errors — a missed bar is still exit 0.
+
+| Flag                        | Meaning                                                                                            |
+| --------------------------- | -------------------------------------------------------------------------------------------------- |
+| `--mock`                    | Drive `FakeListChatModel` (the existing director test fake) so the pipeline runs without LLM keys. |
+| `--rooms N`                 | Cap rooms (default: all available, max 5).                                                         |
+| `--seeds N`                 | Cap seed dates (default: 4).                                                                       |
+| `--tiers easy\|normal\|all` | Subset of tiers (default: both).                                                                   |
+| `--out-dir DIR`             | Report directory (default: `docs/eval`).                                                           |
+| `--no-write`                | Print only; do not write files.                                                                    |
+
+Live eval needs `GOOGLE_API_KEY`. `ANTHROPIC_API_KEY` is optional (provider fallback). If `GOOGLE_API_KEY` is unset, the harness prints that clearly and **skips** (exit 0) unless you pass `--mock`. Never hardcode keys. Prices used for the cost estimate live in `apps/api/eval/prices.ts`.
+
+### GitHub Actions `eval.yml`
+
+Manual **`workflow_dispatch` only** — it does **not** run on pull requests. Required / optional repository secrets:
+
+| Secret              | Required                   | Used for                                                       |
+| ------------------- | -------------------------- | -------------------------------------------------------------- |
+| `GOOGLE_API_KEY`    | **required for live eval** | Gemini primary (`DIRECTOR_MODEL`, default `gemini-3.8-flash`)  |
+| `ANTHROPIC_API_KEY` | optional                   | Claude fallback (`FALLBACK_MODEL`, default `claude-haiku-4-5`) |
+
+The workflow also reads optional repository **variables** `DIRECTOR_MODEL` and `FALLBACK_MODEL` (blank → API defaults). Dispatch with `mock=true` to run FakeListChatModel and skip the live-key check. The markdown + JSON report is uploaded as the `director-eval-report` artifact.
 
 ## Local run (no database)
 

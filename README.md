@@ -55,6 +55,7 @@ cp .env.example .env
 For the client, set `VITE_API_BASE_URL` (defaults to `http://localhost:3000`).
 
 For the API (see `apps/api/.env.example` for full details):
+
 - `DATABASE_URL` - PostgreSQL connection string (pooled). Optional; the API boots without it.
 - `DIRECT_URL` - Direct PostgreSQL connection (for migrations)
 - `GOOGLE_API_KEY` - Google AI API key for Gemini
@@ -79,6 +80,7 @@ pnpm dev
 ```
 
 This starts:
+
 - **Client** at `https://localhost:5173` (HTTPS for WebXR, with IWER emulator)
 - **API** at `http://localhost:3000`
 
@@ -114,21 +116,25 @@ pnpm lint
 ## Development Workflow
 
 1. **Create a feature branch** from `revision_branch`:
+
    ```bash
    git checkout -b feat/<ticket>-<slug>
    ```
 
 2. **Make your changes** and ensure all checks pass:
+
    ```bash
    pnpm lint && pnpm typecheck && pnpm test && pnpm build
    ```
 
 3. **Commit** using Conventional Commits format:
+
    ```bash
    git commit -m "feat(client): add surface graph system"
    ```
 
 4. **Push** and open a PR against `revision_branch`:
+
    ```bash
    git push -u origin feat/<ticket>-<slug>
    ```
@@ -149,6 +155,7 @@ Root workspace scripts (via Turborepo):
 - `pnpm typecheck` - Type check all packages
 - `pnpm test` - Run all tests
 - `pnpm clean` - Clean all build artifacts
+- `pnpm --filter api eval` - LLM director eval harness (see `docs/api.md`)
 
 ## Project Documentation
 
@@ -156,8 +163,9 @@ Comprehensive documentation is available in the `docs/` directory:
 
 - `PRD.md` - Product Requirements Document
 - `ARCHITECTURE-AND-PLAN.md` - Technical architecture and 2-week development plan
-- `api.md` - API contract and endpoint documentation
+- `api.md` - API contract, endpoints, env vars, and eval harness
 - `deploy-api.md` - Render blueprint, Neon branches, and env vars
+- `eval/` - Director eval reports (`pnpm --filter api eval`)
 - Additional docs will be added as development progresses
 
 ## License
