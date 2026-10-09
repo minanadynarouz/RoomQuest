@@ -1,9 +1,9 @@
 import type { GameStore } from '../../game/index.js';
 
-type SlimeEventLike = {
+interface SlimeEventLike {
   type: string;
   placementId?: string;
-};
+}
 
 /**
  * Latest slime event for `placementId` wins: true only when that event is
@@ -16,7 +16,7 @@ export function isSlimeStunStillActive(
 ): boolean {
   for (let i = events.length - 1; i >= 0; i -= 1) {
     const event = events[i];
-    if (!event || event.placementId !== placementId) continue;
+    if (event?.placementId !== placementId) continue;
     if (event.type === 'slimeStunned') return true;
     if (event.type === 'slimeWoke') return false;
   }
