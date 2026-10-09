@@ -26,7 +26,7 @@ describe('landing-ui', () => {
           <button id="enter-button"></button>
           <div id="status-message"></div>
           <div id="loading-spinner"></div>
-          <a id="try-emulator-link" class="hidden"></a>
+          <a id="try-emulator-link" class="invisible pointer-events-none"></a>
         </body>
       </html>
     `);
@@ -96,6 +96,10 @@ describe('landing-ui', () => {
       expect(ui.enterButton.disabled).toBe(true);
       expect(ui.statusMessage.textContent).toBe('Test unsupported message');
       expect(ui.tryEmulatorLink.classList.contains('hidden')).toBe(false);
+      expect(ui.tryEmulatorLink.classList.contains('invisible')).toBe(false);
+      expect(ui.tryEmulatorLink.classList.contains('pointer-events-none')).toBe(
+        false
+      );
     });
   });
 
@@ -126,6 +130,7 @@ describe('landing-ui', () => {
       expect(ui.enterButton.disabled).toBe(true);
       expect(ui.statusMessage.textContent).toBe('Not supported');
       expect(ui.tryEmulatorLink.classList.contains('hidden')).toBe(false);
+      expect(ui.tryEmulatorLink.classList.contains('invisible')).toBe(false);
     });
   });
 });

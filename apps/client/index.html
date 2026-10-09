@@ -49,11 +49,12 @@
               <span id="status-message" class="text-sm"></span>
             </div>
             
-            <!-- Try in emulator link (hidden by default, shown on desktop) -->
+            <!-- Invisible until unsupported: keeps layout height so the
+                 capability check does not shift the How-to-play card (CLS). -->
             <a
               id="try-emulator-link"
               href="?emulator=1&room=living_room"
-              class="hidden text-purple-200 hover:text-white underline text-sm"
+              class="invisible pointer-events-none text-purple-200 hover:text-white underline text-sm"
             >
               Try in emulator
             </a>
