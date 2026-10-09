@@ -13,7 +13,7 @@ import {
   resetAudioManager,
   setAudioClock,
 } from './manager.js';
-import { putAudioBuffer, resetAudioEngine } from './engine.js';
+import { resetAudioEngine } from './engine.js';
 import { resetAudioUnlock, unlockAudio } from './unlock.js';
 
 interface MockPanner {
@@ -46,27 +46,58 @@ function playingStore() {
   return store;
 }
 
-function installMockAudio(): { started: unknown[]; panners: MockPanner[] } {
-  const started: unknown[] = [];
+function param() {
+  return {
+    value: 1,
+    setValueAtTime: vi.fn(),
+    exponentialRampToValueAtTime: vi.fn(),
+  };
+}
+
+function installMockAudio(): { voices: number; panners: MockPanner[] } {
   const panners: MockPanner[] = [];
+  const rec = { voices: 0 };
   class MockAudioContext {
     state = 'running';
     currentTime = 0;
+    sampleRate = 22050;
     destination = {};
     resume = vi.fn(() => Promise.resolve());
     decodeAudioData = vi.fn((data: ArrayBuffer) => Promise.resolve(data));
     createGain() {
-      return { gain: { value: 1 }, connect: vi.fn() };
+      return { gain: param(), connect: vi.fn() };
     }
     createBufferSource() {
-      const source = {
-        buffer: null as unknown,
+      return {
+        buffer: null,
         connect: vi.fn(),
         start: vi.fn(() => {
-          started.push(source.buffer);
+          rec.voices += 1;
         }),
+        stop: vi.fn(),
       };
-      return source;
+    }
+    createOscillator() {
+      return {
+        type: 'sine',
+        frequency: param(),
+        connect: vi.fn(),
+        start: vi.fn(() => {
+          rec.voices += 1;
+        }),
+        stop: vi.fn(),
+      };
+    }
+    createBiquadFilter() {
+      return {
+        type: 'lowpass',
+        frequency: param(),
+        Q: param(),
+        connect: vi.fn(),
+      };
+    }
+    createBuffer(_c: number, length: number) {
+      return { getChannelData: () => new Float32Array(length) };
     }
     createPanner() {
       const panner = {
@@ -81,12 +112,30 @@ function installMockAudio(): { started: unknown[]; panners: MockPanner[] } {
       return panner;
     }
   }
-  (window as unknown as { AudioContext: typeof MockAudioContext }).AudioContext =
-    MockAudioContext;
-  return { started, panners };
+  Object.defineProperty(window, 'AudioContext', {
+    configurable: true,
+    writable: true,
+    value: MockAudioContext,
+  });
+  Object.defineProperty(window, 'webkitAudioContext', {
+    configurable: true,
+    writable: true,
+    value: undefined,
+  });
+  return {
+    get voices() {
+      return rec.voices;
+    },
+    panners,
+  };
 }
 
 describe('audio manager', () => {
+  const originalAudio = window.AudioContext;
+  const originalWebkit = (
+    window as typeof window & { webkitAudioContext?: unknown }
+  ).webkitAudioContext;
+
   beforeEach(() => {
     resetAudioManager();
     resetAudioEngine();
@@ -100,25 +149,21 @@ describe('audio manager', () => {
     resetAudioEngine();
     resetAudioUnlock();
     resetExplorerTarget();
+    Object.defineProperty(window, 'AudioContext', {
+      configurable: true,
+      writable: true,
+      value: originalAudio,
+    });
+    Object.defineProperty(window, 'webkitAudioContext', {
+      configurable: true,
+      writable: true,
+      value: originalWebkit,
+    });
   });
 
-  it('plays the mapped sound for each store event', () => {
-    const { started } = installMockAudio();
+  it('plays a synth voice for each store event', () => {
+    const audio = installMockAudio();
     unlockAudio();
-    const buffers = {
-      pieceBuilt: { id: 'snap' },
-      gateOpened: { id: 'gate' },
-      slimeStunned: { id: 'stun' },
-      gemCollected: { id: 'gem' },
-      explorerBlocked: { id: 'blocked' },
-      beatCompleted: { id: 'beat' },
-      won: { id: 'win' },
-      leverPulled: { id: 'lever' },
-    };
-    for (const [id, buffer] of Object.entries(buffers)) {
-      putAudioBuffer(id as keyof typeof buffers, buffer);
-    }
-
     const store = playingStore();
     bindAudioStore(store);
     store.pieceBuilt('p1');
@@ -129,31 +174,25 @@ describe('audio manager', () => {
     store.advanceBeat();
     store.win();
     store.leverPulled('lev1');
-
-    expect(started).toContain(buffers.pieceBuilt);
-    expect(started).toContain(buffers.gateOpened);
-    expect(started).toContain(buffers.slimeStunned);
-    expect(started).toContain(buffers.gemCollected);
-    expect(started).toContain(buffers.explorerBlocked);
-    expect(started).toContain(buffers.beatCompleted);
-    expect(started).toContain(buffers.won);
-    expect(started).toContain(buffers.leverPulled);
-    expect(SOUND_MANIFEST.pieceBuilt.file).toBe('snap.ogg');
+    expect(audio.voices).toBeGreaterThan(8);
+    expect(SOUND_MANIFEST.pieceBuilt.synth).toBe('woodClick');
+    expect(SOUND_MANIFEST.gateOpened.synth).toBe('marimbaRise');
+    expect(SOUND_MANIFEST.won.synth).toBe('chimeSting');
   });
 
-  it('plays grab as a UI sound (not a store event)', () => {
-    const { started } = installMockAudio();
+  it('plays grab and invalidPlace as UI sounds', () => {
+    const audio = installMockAudio();
     unlockAudio();
-    const grab = { id: 'grab' };
-    putAudioBuffer('grab', grab);
+    const before = audio.voices;
     playUiSound('grab');
-    expect(started).toContain(grab);
+    playUiSound('invalidPlace');
+    expect(audio.voices).toBeGreaterThan(before);
+    expect(SOUND_MANIFEST.invalidPlace.synth).toBe('mutedThud');
   });
 
   it('spatially chirps at the ExplorerTarget and respects cooldown', () => {
-    const { panners, started } = installMockAudio();
+    const audio = installMockAudio();
     unlockAudio();
-    putAudioBuffer('explorerOutOfView', { id: 'chirp' });
     setExplorerTarget({
       getWorldPosition(out) {
         out.x = 3;
@@ -168,19 +207,21 @@ describe('audio manager', () => {
       { type: 'explorerOutOfView', timestamp: 0, beatIndex: 0 },
       0
     );
-    expect(panners[0]?.setPosition).toHaveBeenCalledWith(3, 1, -4);
-    const afterFirst = started.length;
+    expect(audio.panners[0]?.setPosition).toHaveBeenCalledWith(3, 1, -4);
+    const afterFirst = audio.voices;
     t = 500;
     handleGameEvent(
       { type: 'explorerOutOfView', timestamp: 500, beatIndex: 0 },
       500
     );
-    expect(started.length).toBe(afterFirst);
+    expect(audio.voices).toBe(afterFirst);
     t = 5000;
     handleGameEvent(
       { type: 'explorerOutOfView', timestamp: 5000, beatIndex: 0 },
       5000
     );
-    expect(started.length).toBe(afterFirst + 1);
+    expect(audio.voices).toBeGreaterThan(afterFirst);
+    expect(SOUND_MANIFEST.explorerOutOfView.spatial).toBe(true);
+    expect(SOUND_MANIFEST.explorerOutOfView.randomPitchCents).toBeGreaterThan(0);
   });
 });

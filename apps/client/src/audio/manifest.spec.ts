@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { readdir, stat } from 'node:fs/promises';
-import { join } from 'node:path';
 import type { GameEvent } from '../game/types.js';
 import {
   SOUND_KEYS,
   SOUND_MANIFEST,
-  soundPublicUrl,
   type SoundKey,
 } from './manifest.js';
 
@@ -22,37 +19,35 @@ const STORE_EVENTS: GameEvent['type'][] = [
 ];
 
 describe('SOUND_MANIFEST', () => {
-  it('defines every store event plus grab with file, gain, and spatial', () => {
-    expect(SOUND_MANIFEST.grab.file).toBe('grab.ogg');
-    expect(SOUND_MANIFEST.grab.spatial).toBe(false);
-    expect(SOUND_MANIFEST.explorerOutOfView.spatial).toBe(true);
-    for (const key of STORE_EVENTS) {
-      const entry = SOUND_MANIFEST[key];
-      expect(entry.file.length).toBeGreaterThan(0);
-      expect(entry.gain).toBeGreaterThan(0);
-      expect(entry.gain).toBeLessThanOrEqual(1);
-      expect(typeof entry.spatial).toBe('boolean');
-    }
+  it('defines every store event plus grab and invalidPlace', () => {
     expect(SOUND_KEYS).toEqual(
-      expect.arrayContaining<SoundKey>([...STORE_EVENTS, 'grab'])
+      expect.arrayContaining<SoundKey>([...STORE_EVENTS, 'grab', 'invalidPlace'])
     );
+    for (const key of SOUND_KEYS) {
+      const entry = SOUND_MANIFEST[key];
+      expect(entry.gain).toBeGreaterThan(0);
+      expect(entry.gain).toBeLessThanOrEqual(0.35);
+      expect(typeof entry.spatial).toBe('boolean');
+      expect(entry.synth).toBeTruthy();
+    }
   });
 
-  it('points each placeholder file at public/audio and stays under 300 KB', async () => {
-    const dir = join(process.cwd(), 'public', 'audio');
-    const names = await readdir(dir);
-    let total = 0;
-    const seen = new Set<string>();
+  it('follows the toy-box direction', () => {
+    expect(SOUND_MANIFEST.pieceBuilt.synth).toBe('woodClick');
+    expect(SOUND_MANIFEST.grab.synth).toBe('woodClick');
+    expect(SOUND_MANIFEST.gateOpened.synth).toBe('marimbaRise');
+    expect(SOUND_MANIFEST.gemCollected.synth).toBe('marimbaRise');
+    expect(SOUND_MANIFEST.beatCompleted.synth).toBe('marimbaRise');
+    expect(SOUND_MANIFEST.invalidPlace.synth).toBe('mutedThud');
+    expect(SOUND_MANIFEST.won.synth).toBe('chimeSting');
+    expect(SOUND_MANIFEST.explorerOutOfView.synth).toBe('voiceBlip');
+    expect(SOUND_MANIFEST.explorerOutOfView.spatial).toBe(true);
+    expect(SOUND_MANIFEST.explorerOutOfView.randomPitchCents).toBeGreaterThan(0);
+  });
+
+  it('ships procedural placeholders with no file override', () => {
     for (const key of SOUND_KEYS) {
-      const { file } = SOUND_MANIFEST[key];
-      expect(soundPublicUrl(file)).toMatch(new RegExp(`audio/${file}$`));
-      expect(names).toContain(file);
-      if (seen.has(file)) continue;
-      seen.add(file);
-      const info = await stat(join(dir, file));
-      expect(info.size).toBeGreaterThan(100);
-      total += info.size;
+      expect(SOUND_MANIFEST[key].file).toBeUndefined();
     }
-    expect(total).toBeLessThan(300 * 1024);
   });
 });

@@ -100,6 +100,9 @@ export class PlacementSystem extends createSystem(
       onGrab: () => {
         playUiSound('grab');
       },
+      onInvalidPlace: () => {
+        playUiSound('invalidPlace');
+      },
     });
   }
 

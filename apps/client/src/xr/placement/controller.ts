@@ -25,6 +25,7 @@ export interface PlacementControllerOptions {
   onPieceBuilt?: (placementId: string) => void;
   onDisableGrab?: (placementId: string) => void;
   onGrab?: (placementId: string, hand: PlacementHand) => void;
+  onInvalidPlace?: (placementId: string) => void;
 }
 
 /**
@@ -166,6 +167,7 @@ export class PlacementController {
     }
 
     this.beginTrayReturn(piece);
+    this.opts.onInvalidPlace?.(placementId);
     this.releasing = false;
     return 'return';
   }

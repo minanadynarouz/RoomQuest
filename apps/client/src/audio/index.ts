@@ -22,6 +22,7 @@ export {
   soundPublicUrl,
   type SoundKey,
   type SoundEntry,
+  type SynthKind,
 } from './manifest.js';
 export {
   playSound,
@@ -30,6 +31,7 @@ export {
   resetAudioEngine,
   DEFAULT_MASTER_VOLUME,
 } from './engine.js';
+export { setSynthRandom, resetSynthRandom } from './synth.js';
 
 export function resetAudio(): void {
   resetAudioManager();

@@ -3,17 +3,11 @@ import {
   DEFAULT_MASTER_VOLUME,
   getMasterVolume,
   playSound,
-  putAudioBuffer,
   resetAudioEngine,
   setMasterVolume,
 } from './engine.js';
 import { SOUND_MANIFEST } from './manifest.js';
 import { resetAudioUnlock, unlockAudio } from './unlock.js';
-
-interface Started {
-  buffer: unknown;
-  destination: 'gain' | 'panner';
-}
 
 interface MockPanner {
   panningModel: string;
@@ -24,18 +18,28 @@ interface MockPanner {
   connect: (node: unknown) => unknown;
 }
 
+function param() {
+  const rec = {
+    value: 1,
+    setValueAtTime: vi.fn((value: number) => {
+      rec.value = value;
+    }),
+    exponentialRampToValueAtTime: vi.fn(),
+  };
+  return rec;
+}
+
 function installMockAudio(): {
-  starts: Started[];
   panners: MockPanner[];
   gains: { gain: { value: number } }[];
 } {
-  const starts: Started[] = [];
   const panners: MockPanner[] = [];
   const gains: { gain: { value: number } }[] = [];
 
   class MockAudioContext {
     state = 'suspended';
     currentTime = 0;
+    sampleRate = 22050;
     destination = { kind: 'destination' };
     resume = vi.fn(() => {
       this.state = 'running';
@@ -43,29 +47,37 @@ function installMockAudio(): {
     });
     decodeAudioData = vi.fn((data: ArrayBuffer) => Promise.resolve(data));
     createGain() {
-      const node = {
-        gain: { value: 1 },
-        connect: vi.fn(),
-      };
+      const node = { gain: param(), connect: vi.fn() };
       gains.push(node);
       return node;
     }
     createBufferSource() {
-      const source = {
-        buffer: null as unknown,
-        viaPanner: false,
-        connect: (node: { setPosition?: unknown }) => {
-          source.viaPanner = typeof node.setPosition === 'function';
-          return node;
-        },
-        start: vi.fn(() => {
-          starts.push({
-            buffer: source.buffer,
-            destination: source.viaPanner ? 'panner' : 'gain',
-          });
-        }),
+      return {
+        buffer: null,
+        connect: vi.fn(),
+        start: vi.fn(),
+        stop: vi.fn(),
       };
-      return source;
+    }
+    createOscillator() {
+      return {
+        type: 'sine',
+        frequency: param(),
+        connect: vi.fn(),
+        start: vi.fn(),
+        stop: vi.fn(),
+      };
+    }
+    createBiquadFilter() {
+      return {
+        type: 'lowpass',
+        frequency: param(),
+        Q: param(),
+        connect: vi.fn(),
+      };
+    }
+    createBuffer(_c: number, length: number) {
+      return { getChannelData: () => new Float32Array(length) };
     }
     createPanner() {
       const panner: MockPanner = {
@@ -81,16 +93,38 @@ function installMockAudio(): {
     }
   }
 
-  (
-    window as unknown as { AudioContext: typeof MockAudioContext }
-  ).AudioContext = MockAudioContext;
-  return { starts, panners, gains };
+  Object.defineProperty(window, 'AudioContext', {
+    configurable: true,
+    writable: true,
+    value: MockAudioContext,
+  });
+  Object.defineProperty(window, 'webkitAudioContext', {
+    configurable: true,
+    writable: true,
+    value: undefined,
+  });
+  return { panners, gains };
 }
 
 describe('audio engine', () => {
+  const originalAudio = window.AudioContext;
+  const originalWebkit = (
+    window as typeof window & { webkitAudioContext?: unknown }
+  ).webkitAudioContext;
+
   afterEach(() => {
     resetAudioEngine();
     resetAudioUnlock();
+    Object.defineProperty(window, 'AudioContext', {
+      configurable: true,
+      writable: true,
+      value: originalAudio,
+    });
+    Object.defineProperty(window, 'webkitAudioContext', {
+      configurable: true,
+      writable: true,
+      value: originalWebkit,
+    });
   });
 
   beforeEach(() => {
@@ -101,7 +135,6 @@ describe('audio engine', () => {
   it('applies master volume to the gain node', () => {
     const { gains } = installMockAudio();
     unlockAudio();
-    putAudioBuffer('pieceBuilt', { id: 'snap-buf' });
     setMasterVolume(0.4);
     playSound('pieceBuilt');
     expect(getMasterVolume()).toBe(0.4);
@@ -117,10 +150,9 @@ describe('audio engine', () => {
     expect(getMasterVolume()).toBe(0);
   });
 
-  it('plays through a PannerNode when a position is given', () => {
+  it('plays spatial chirps through a PannerNode', () => {
     const { panners } = installMockAudio();
     unlockAudio();
-    putAudioBuffer('explorerOutOfView', { id: 'chirp-buf' });
     playSound('explorerOutOfView', { x: 1.5, y: 0.8, z: -2 });
     expect(panners).toHaveLength(1);
     expect(panners[0]?.setPosition).toHaveBeenCalledWith(1.5, 0.8, -2);
@@ -130,7 +162,6 @@ describe('audio engine', () => {
   it('applies the manifest per-clip gain', () => {
     const { gains } = installMockAudio();
     unlockAudio();
-    putAudioBuffer('pieceBuilt', { id: 'snap-buf' });
     playSound('pieceBuilt');
     const clipGains = gains.map((g) => g.gain.value);
     expect(clipGains).toContain(SOUND_MANIFEST.pieceBuilt.gain);
@@ -139,15 +170,21 @@ describe('audio engine', () => {
   it('ignores a position when the manifest says the clip is not spatial', () => {
     const { panners } = installMockAudio();
     unlockAudio();
-    putAudioBuffer('pieceBuilt', { id: 'snap-buf' });
     playSound('pieceBuilt', { x: 9, y: 9, z: 9 });
     expect(panners).toHaveLength(0);
   });
 
   it('does not throw when audio is unavailable', () => {
-    delete (window as unknown as { AudioContext?: unknown }).AudioContext;
-    delete (window as unknown as { webkitAudioContext?: unknown })
-      .webkitAudioContext;
+    Object.defineProperty(window, 'AudioContext', {
+      configurable: true,
+      writable: true,
+      value: undefined,
+    });
+    Object.defineProperty(window, 'webkitAudioContext', {
+      configurable: true,
+      writable: true,
+      value: undefined,
+    });
     expect(() => playSound('won')).not.toThrow();
   });
 });

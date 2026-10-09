@@ -72,6 +72,7 @@ function setup(clockNow: { t: number }) {
   const built: string[] = [];
   const disabled: string[] = [];
   const grabbed: string[] = [];
+  const invalid: string[] = [];
 
   const controller = new PlacementController({
     getTargets: () => targets,
@@ -89,6 +90,9 @@ function setup(clockNow: { t: number }) {
     onGrab: (id) => {
       grabbed.push(id);
     },
+    onInvalidPlace: (id) => {
+      invalid.push(id);
+    },
   });
 
   return {
@@ -99,6 +103,7 @@ function setup(clockNow: { t: number }) {
     built,
     disabled,
     grabbed,
+    invalid,
     root,
     tray,
   };
@@ -107,7 +112,7 @@ function setup(clockNow: { t: number }) {
 describe('PlacementController', () => {
   it('left-hand grab shows a ghost in range and snaps on release', () => {
     const clock = { t: 0 };
-    const { controller, plank, targets, built, disabled, grabbed, root } =
+    const { controller, plank, targets, built, disabled, grabbed, invalid, root } =
       setup(clock);
 
     expect(controller.grab('p2', 'left', true)).toBe(true);
@@ -118,6 +123,7 @@ describe('PlacementController', () => {
     expect(controller.activeGhostTarget?.placementId).toBe('p2');
 
     expect(controller.release()).toBe('snap');
+    expect(invalid).toEqual([]);
     expect(built).toEqual(['p2']);
     expect(disabled).toEqual(['p2']);
     expect(targets[0]?.filled).toBe(true);
@@ -147,12 +153,13 @@ describe('PlacementController', () => {
 
   it('hides the ghost out of range and tweens back to the tray slot', () => {
     const clock = { t: 0 };
-    const { controller, plank, tray } = setup(clock);
+    const { controller, plank, tray, invalid } = setup(clock);
 
     expect(controller.grab('p2', 'left', true)).toBe(true);
     expect(controller.moveTo(4, 1, 4)).toBe(true);
     expect(controller.isGhostVisible).toBe(false);
     expect(controller.release()).toBe('return');
+    expect(invalid).toEqual(['p2']);
     expect(plank.object.parent).toBe(tray);
     expect(controller.isTweening).toBe(true);
 
@@ -166,7 +173,7 @@ describe('PlacementController', () => {
 
   it('does not snap a plank onto a ramp target at the same pose', () => {
     const clock = { t: 0 };
-    const { controller, targets } = setup(clock);
+    const { controller, targets, invalid } = setup(clock);
     const rampTarget = targets[1];
     if (!rampTarget) throw new Error('missing ramp target');
 
@@ -175,5 +182,6 @@ describe('PlacementController', () => {
     controller.moveTo(p[0], p[1], p[2]);
     expect(controller.isGhostVisible).toBe(false);
     expect(controller.release()).toBe('return');
+    expect(invalid).toEqual(['p2']);
   });
 });
