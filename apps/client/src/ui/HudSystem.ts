@@ -39,6 +39,7 @@ import {
   HUD_FOLLOW_MAX_ANGLE_DEG,
   HUD_MODAL_SCALE,
 } from './placement.js';
+import { setObjectTreeVisible } from './tree-visible.js';
 import {
   mapStoreToHud,
   snapshotGameStore,
@@ -225,7 +226,7 @@ export class HudSystem extends createSystem({}) {
 
   private hideScaffoldWelcome(): void {
     const welcome = this.world.getSceneObject('welcome-panel');
-    if (welcome) welcome.visible = false;
+    if (welcome) setObjectTreeVisible(welcome, false);
   }
 
   private async mount(): Promise<void> {
@@ -438,7 +439,7 @@ export class HudSystem extends createSystem({}) {
   private setPanelVisible(id: HudPanelId, visible: boolean): void {
     const panel = this.panels.get(id);
     const object = panel?.entity.object3D ?? panel?.asset;
-    if (object) object.visible = visible;
+    if (object) setObjectTreeVisible(object, visible);
   }
 
   private syncStubPose(): void {

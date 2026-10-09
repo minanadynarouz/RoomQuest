@@ -43,6 +43,7 @@ import {
   readGuidanceOverlay,
   writeGuidanceOverlay,
 } from './guidance/overlay.js';
+import { setObjectTreeVisible } from './tree-visible.js';
 import { selectGazeHint } from './visibility.js';
 
 const ARROW_DISTANCE_M = 0.7;
@@ -304,7 +305,7 @@ export class GuidanceSystem extends createSystem({}) {
   }
 
   private setArrowVisible(visible: boolean): void {
-    if (this.arrowRoot) this.arrowRoot.visible = visible;
+    if (this.arrowRoot) setObjectTreeVisible(this.arrowRoot, visible);
   }
 
   private publishDebug(): void {
