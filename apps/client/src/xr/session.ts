@@ -8,6 +8,7 @@
 import type { LevelPlan, PlanSource, SurfaceGraph, Tier } from '@roomquest/schema';
 import {
   DEFAULT_TIER,
+  calculateStars,
   resolveLevelKey,
   type GameStore,
   type PostLevelResultInput,
@@ -63,13 +64,26 @@ function snapshotPost(store: GameStore, deviceId: string, completed: boolean): {
   });
   if (!levelKey) return null;
   const result = store.result;
+  const gems = result?.gems ?? store.state.gemsCollected;
+  const timeMs = result?.timeMs ?? store.elapsedMs;
+  // `win()` emits `won` before the phase becomes `won`, so `store.result.stars`
+  // is still 0 (calculateStars treats incomplete runs as 0). Score from the
+  // completed flag we are about to post instead.
+  const stars = completed
+    ? calculateStars({
+        plan,
+        gemsCollected: gems,
+        elapsedMs: timeMs,
+        completed: true,
+      })
+    : 0;
   return {
     levelKey,
     body: {
       deviceId,
-      stars: completed ? (result?.stars ?? 0) : 0,
-      gems: result?.gems ?? store.state.gemsCollected,
-      timeMs: result?.timeMs ?? store.elapsedMs,
+      stars,
+      gems,
+      timeMs,
       completed,
       planSource: source,
     },
