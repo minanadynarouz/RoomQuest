@@ -140,11 +140,13 @@ console.log(store.planSource, store.directorLatencyMs); // F-03
 
 ## Director client (F-03)
 
-Races `POST ${VITE_API_BASE_URL}/api/v1/levels` against a local generator.
-Headers: `X-Device-Id` (UUID v4) and `X-Client-Version` (`0.1.0`). The API
-plan is used only if it arrives in ≤ 8 s, parses as `LevelResponse`, **and**
-passes local re-validation against the scanned graph. Otherwise the local
-procedural plan is used. API failures are invisible to the player.
+Races `POST ${VITE_API_BASE_URL}/api/v1/levels` against `generatePlan` from
+`@roomquest/level-core`. Headers: `X-Device-Id` (UUID v4) and
+`X-Client-Version` (`0.1.0`). The API plan is used only if it arrives in
+≤ 8 s, parses as `LevelResponse`, **and** passes `validatePlan` against the
+scanned graph. If validation fails, `repairPlan` is tried first; only a
+failed repair falls through to the racing `generatePlan`. API failures are
+invisible to the player.
 
 ```
 ?director=live|mock|off   live (default) races the API; mock/off skip the network
@@ -152,23 +154,28 @@ procedural plan is used. API failures are invisible to the player.
 ?date=YYYY-MM-DD          overrides the daily date sent to the API
 ```
 
+Daily seed (when `?seed=` is unset) is `roomHash-YYYY-MM-DD` using `?date=`
+or the client's local date (FR-6). Tier defaults to `normal` — F-03 has no
+`?tier=` flag.
+
 A 200 that is schema-valid but placed on fixture surface ids (`s1`/`s2`/`s4`)
-is the B-02 mock until B-05. `validatePlan` from `@roomquest/level-core`
-reports `UNKNOWN_SURFACE`; the client maps that to `graph-mismatch`, logs at
-info, exposes the typed issues on the store, and falls back to the generator
-— not an error. `?director=mock` never hits the network and still returns a
-plan bound to the player's graph.
+is the B-02 mock until B-05. `validatePlan` reports `UNKNOWN_SURFACE`; the
+client tries `repairPlan`, then `generatePlan`. If repair cannot bind the
+plan to the graph, `fallbackReason` is `graph-mismatch`, logged at info,
+with typed issues on the store — not an error. `?director=off` uses
+`generatePlan` only. `?director=mock` skips the network and still returns a
+plan bound to the player's graph (`generatePlan`).
 
 `{error:{code,message,issues}}` with `INVALID_REQUEST` or `INTERNAL` also
 falls back. The code is stored as `apiErrorCode` for the debug overlay.
 
-`createDirectorClient` takes injected `fetch`, `generate`, `validate`, and
-device id. `createDirectorClientFromEnv` reads flags from a query string and
-persists a UUID v4 in injected storage (`roomquest:deviceId`).
+`createDirectorClient` takes injected `fetch`, `generate`, `validate`,
+`repair`, and device id. `createDirectorClientFromEnv` reads flags from a
+query string and persists a UUID v4 in injected storage
+(`roomquest:deviceId`).
 
-API plans are re-validated with `validatePlan` (B-03). `stubGenerate` stands
-in for `level-core.generate` until B-04. Par time is clamped with
-`clampParTimeMs` when the store reads it from the plan.
+Par time is clamped with `clampParTimeMs` when the store reads it from the
+plan.
 
 ## Design Decisions
 
@@ -199,20 +206,24 @@ The spec said "Exit returns to landing" but didn't specify from which states. I 
 
 `beatCompleted` includes its own `beatIndex` and `timestamp` since it refers to the completed beat, not the current one. Other events use the current beat index.
 
-### 5. Local generator until B-04
+### 5. Local generator is `generatePlan` (B-04)
 
-**Decision**: ship a deterministic stub generator so F-03 always resolves to a
-valid plan. B-04 replaces `stubGenerate` with `level-core.generate`.
+**Decision**: race `generatePlan(graph, seed, tier, { recentThemes? })` with
+the API. Same `(graph, seed, tier)` always yields the same plan (~0.5 ms).
+When a server plan fails `validatePlan`, try `repairPlan` first
+(`source: 'llm_repaired'`, `fallbackReason: 'repaired'`). Only if repair
+does not validate do we keep the procedural plan.
 
 ### 6. B-02 fixture-id mismatch is expected
 
 **Decision**: a 200 `LevelResponse` whose placements reference fixture surface
-ids (not the scanned graph) fails `validatePlan` with `UNKNOWN_SURFACE`. That
-maps to `fallbackReason: 'graph-mismatch'`, is logged at info, and never
-drives the store into `error`. Typed issues are stored as `validationIssues`
-for the debug overlay. B-05 will emit graph-relative plans; until then the
-generator is the playable path. `?director=mock` skips the API entirely so
-emulator sessions do not depend on that mismatch.
+ids (not the scanned graph) fails `validatePlan` with `UNKNOWN_SURFACE`.
+Repair is tried; if it cannot produce a valid plan, `fallbackReason` is
+`graph-mismatch`, logged at info, and never drives the store into `error`.
+Typed issues are stored as `validationIssues` for the debug overlay. B-05
+will emit graph-relative plans; until then `generatePlan` is the playable
+path. `?director=mock` skips the API entirely so emulator sessions do not
+depend on that mismatch.
 
 ## Purity Enforcement
 

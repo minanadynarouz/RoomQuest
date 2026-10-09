@@ -7,6 +7,7 @@ export {
   DIRECTOR_BUDGET_MS,
   LEVELS_PATH,
   DEFAULT_CLIENT_VERSION,
+  DEFAULT_TIER,
   DEVICE_ID_STORAGE_KEY,
 } from './types.js';
 export type {
@@ -18,6 +19,7 @@ export type {
   FallbackReason,
   FetchLike,
   GenerateFn,
+  RepairFn,
   ValidateFn,
   ValidateResult,
   KvStore,
@@ -26,7 +28,6 @@ export type {
 export type { ErrorCode } from '@roomquest/schema';
 export { parseDirectorFlags } from './flags.js';
 export { getOrCreateDeviceId } from './device-id.js';
-export { stubGenerate } from './fallback.js';
 export { fallbackReasonFromIssues } from './issues.js';
 export { createDirectorClient } from './client.js';
 export { createDirectorClientFromEnv } from './factory.js';
