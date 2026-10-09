@@ -141,11 +141,29 @@ async function launchBrowser(): Promise<Browser> {
 }
 
 async function waitForRq(page: Page, timeout = 45_000): Promise<void> {
-  await page.waitForFunction(
-    () => Boolean((window as unknown as RqWindow).__rq?.placement),
-    null,
-    { timeout }
-  );
+  try {
+    await page.waitForFunction(
+      () => Boolean((window as unknown as RqWindow).__rq?.placement),
+      null,
+      { timeout }
+    );
+  } catch (error) {
+    const debug = await page.evaluate(() => {
+      const w = window as unknown as RqWindow;
+      return {
+        href: location.href,
+        title: document.title,
+        hasRq: Boolean(w.__rq),
+        rqKeys: w.__rq ? Object.keys(w.__rq) : [],
+        hasIwer: Boolean(w.IWER_DEVICE),
+        overlay: Boolean(document.querySelector('vite-error-overlay')),
+        bodyStart: document.body.innerText.slice(0, 400),
+      };
+    });
+    throw new Error(
+      `waitForRq failed: ${JSON.stringify(debug)} original=${String(error)}`
+    );
+  }
 }
 
 async function dismissViteOverlay(page: Page): Promise<void> {

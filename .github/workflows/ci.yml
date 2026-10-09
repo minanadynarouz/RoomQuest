@@ -255,6 +255,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build workspace packages
+        run: pnpm --filter @roomquest/schema --filter @roomquest/fixtures --filter @roomquest/level-core build
+
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
@@ -263,7 +266,7 @@ jobs:
 
       - name: Start client dev server
         run: |
-          pnpm --filter client dev -- --host 127.0.0.1 --port 5173 > /tmp/client-dev.log 2>&1 &
+          pnpm --filter client dev > /tmp/client-dev.log 2>&1 &
           echo $! > /tmp/client-dev.pid
 
       - name: Wait for https://localhost:5173
