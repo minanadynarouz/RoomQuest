@@ -45,6 +45,36 @@ export default defineAssets({
     type: AssetType.UIKitML,
     name: 'Welcome Panel',
   },
+  'hud-surveying': {
+    url: publicAssetUrl('ui/hud-surveying.uikitml'),
+    type: AssetType.UIKitML,
+    name: 'HUD Surveying',
+  },
+  'hud-dialogue': {
+    url: publicAssetUrl('ui/hud-dialogue.uikitml'),
+    type: AssetType.UIKitML,
+    name: 'HUD Dialogue',
+  },
+  'hud-beat': {
+    url: publicAssetUrl('ui/hud-beat.uikitml'),
+    type: AssetType.UIKitML,
+    name: 'HUD Beat Goal',
+  },
+  'hud-no-surfaces': {
+    url: publicAssetUrl('ui/hud-no-surfaces.uikitml'),
+    type: AssetType.UIKitML,
+    name: 'HUD No Surfaces',
+  },
+  'hud-pause': {
+    url: publicAssetUrl('ui/hud-pause.uikitml'),
+    type: AssetType.UIKitML,
+    name: 'HUD Pause',
+  },
+  'hud-win': {
+    url: publicAssetUrl('ui/hud-win.uikitml'),
+    type: AssetType.UIKitML,
+    name: 'HUD Win',
+  },
   'webxr-banner': {
     url: publicAssetUrl('gltf/webxr-banner/banner.gltf'),
     type: AssetType.GLTF,
