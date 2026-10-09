@@ -21,6 +21,7 @@ const FIXTURE = 'synthetic_platform_portal';
 
 interface IwerHand {
   position: { set: (x: number, y: number, z: number) => void };
+  quaternion: { set: (x: number, y: number, z: number, w: number) => void };
   poseId: string;
   connected: boolean;
   pinchValue: number;
@@ -39,6 +40,7 @@ interface PlatformApi {
   moveToT: (t: number, id?: string) => boolean;
   railT: (id?: string) => number | null;
   aligned: (id?: string) => boolean;
+  grabbed: (id?: string) => boolean;
   worldPose: (id?: string) => { x: number; y: number; z: number } | null;
 }
 
@@ -56,6 +58,76 @@ interface RqWindow {
     };
     autoSolve?: () => void;
   };
+}
+
+/** Aim IWER targetRaySpace along (dx,dy,dz). Same basis as X-06 far ray. */
+function lookRotation(
+  dx: number,
+  dy: number,
+  dz: number
+): { x: number; y: number; z: number; w: number } {
+  const len = Math.hypot(dx, dy, dz);
+  if (len === 0) return { x: 0, y: 0, z: 0, w: 1 };
+  const fx = dx / len;
+  const fy = dy / len;
+  const fz = dz / len;
+  let rx = fy;
+  let ry = -fx;
+  let rz = 0;
+  const rLen = Math.hypot(rx, ry, rz);
+  if (rLen === 0) {
+    rx = 1;
+    ry = 0;
+    rz = 0;
+  } else {
+    rx /= rLen;
+    ry /= rLen;
+    rz /= rLen;
+  }
+  const ux = ry * fz - rz * fy;
+  const uy = rz * fx - rx * fz;
+  const uz = rx * fy - ry * fx;
+  const m00 = rx;
+  const m01 = ux;
+  const m02 = -fx;
+  const m10 = ry;
+  const m11 = uy;
+  const m12 = -fy;
+  const m20 = rz;
+  const m21 = uz;
+  const m22 = -fz;
+  const trace = m00 + m11 + m22;
+  let qw: number;
+  let qx: number;
+  let qy: number;
+  let qz: number;
+  if (trace > 0) {
+    const s = 0.5 / Math.sqrt(trace + 1);
+    qw = 0.25 / s;
+    qx = (m21 - m12) * s;
+    qy = (m02 - m20) * s;
+    qz = (m10 - m01) * s;
+  } else if (m00 > m11 && m00 > m22) {
+    const s = 2 * Math.sqrt(1 + m00 - m11 - m22);
+    qw = (m21 - m12) / s;
+    qx = 0.25 * s;
+    qy = (m01 + m10) / s;
+    qz = (m02 + m20) / s;
+  } else if (m11 > m22) {
+    const s = 2 * Math.sqrt(1 + m11 - m00 - m22);
+    qw = (m02 - m20) / s;
+    qx = (m01 + m10) / s;
+    qy = 0.25 * s;
+    qz = (m12 + m21) / s;
+  } else {
+    const s = 2 * Math.sqrt(1 + m22 - m00 - m11);
+    qw = (m10 - m01) / s;
+    qx = (m02 + m20) / s;
+    qy = (m12 + m21) / s;
+    qz = 0.25 * s;
+  }
+  const qLen = Math.hypot(qx, qy, qz, qw) || 1;
+  return { x: qx / qLen, y: qy / qLen, z: qz / qLen, w: qw / qLen };
 }
 
 function sleep(ms: number): Promise<void> {
@@ -257,8 +329,7 @@ async function pinchDragPlatform(page: Page): Promise<Record<string, unknown>> {
   const prepared = await page.evaluate(() => {
     const w = window as unknown as RqWindow;
     const device = w.IWER_DEVICE;
-    const rq = w.__rq;
-    const platform = rq?.platform;
+    const platform = w.__rq?.platform;
     if (!device) {
       return { ok: false as const, reason: 'missing window.IWER_DEVICE' };
     }
@@ -276,18 +347,37 @@ async function pinchDragPlatform(page: Page): Promise<Record<string, unknown>> {
     device.primaryInputMode = 'hand';
     device.controlMode = 'programmatic';
     input.connected = true;
-    input.poseId = 'default';
-    input.updatePinchValue(0);
-    input.setPinchValueImmediate?.(0);
-    input.position.set(from.x, from.y + 0.04, from.z);
-    return { ok: true as const, from, t: platform.railT('p2') };
+    const seated = { x: 0.22, y: 1.35, z: 0.15 };
+    return {
+      ok: true as const,
+      from,
+      seated,
+      t0: platform.railT('p2'),
+      dx: from.x - seated.x,
+      dy: from.y - seated.y,
+      dz: from.z - seated.z,
+    };
   });
 
   if (!prepared.ok) {
     throw new Error(`prepare failed: ${JSON.stringify(prepared)}`);
   }
 
-  await sleep(400);
+  const rot = lookRotation(prepared.dx, prepared.dy, prepared.dz);
+  await page.evaluate(
+    ({ seated, rot: q }) => {
+      const device = (window as unknown as RqWindow).IWER_DEVICE;
+      const input = device?.hands.right ?? device?.hands.left;
+      if (!input) return;
+      input.poseId = 'default';
+      input.updatePinchValue(0);
+      input.setPinchValueImmediate?.(0);
+      input.position.set(seated.x, seated.y, seated.z);
+      input.quaternion.set(q.x, q.y, q.z, q.w);
+    },
+    { seated: prepared.seated, rot }
+  );
+  await sleep(600);
 
   await page.evaluate(() => {
     const device = (window as unknown as RqWindow).IWER_DEVICE;
@@ -297,21 +387,41 @@ async function pinchDragPlatform(page: Page): Promise<Record<string, unknown>> {
     input.setPinchValueImmediate?.(1);
     input.updatePinchValue(1);
   });
-  await sleep(500);
+  await sleep(700);
 
-  // Drag toward the boarding end (alignT = 0) in several steps.
-  for (let i = 0; i < 8; i += 1) {
-    await page.evaluate((step) => {
-      const w = window as unknown as RqWindow;
-      const device = w.IWER_DEVICE;
-      const input = device?.hands.right ?? device?.hands.left;
-      const pose = w.__rq?.platform?.worldPose('p2');
-      if (!input || !pose) return;
-      const t = 1 - (step + 1) / 8;
-      // Nudge toward -Z / boarding; the rail clamp keeps it on-axis.
-      input.position.set(pose.x, pose.y + 0.04, pose.z - 0.12 * t);
-    }, i);
-    await sleep(180);
+  const grabbed = await page.evaluate(
+    () => (window as unknown as RqWindow).__rq?.platform?.grabbed('p2') ?? false
+  );
+  if (!grabbed) {
+    const summary = await page.evaluate(() => {
+      const rq = (window as unknown as RqWindow).__rq;
+      return {
+        t: rq?.platform?.railT('p2'),
+        aligned: rq?.platform?.aligned('p2'),
+        events: rq?.store.events.map((e) => e.type),
+      };
+    });
+    throw new Error(
+      `ray+pinch never grabbed the platform: ${JSON.stringify({ prepared, summary })}`
+    );
+  }
+
+  // MoveAtSource: slide the hand toward the boarding end (rail -axis / -Z).
+  for (let i = 0; i < 10; i += 1) {
+    await page.evaluate(
+      ({ seated, step }) => {
+        const device = (window as unknown as RqWindow).IWER_DEVICE;
+        const input = device?.hands.right ?? device?.hands.left;
+        if (!input) return;
+        input.position.set(seated.x, seated.y, seated.z - 0.1 * (step + 1));
+      },
+      { seated: prepared.seated, step: i }
+    );
+    await sleep(160);
+    const alignedNow = await page.evaluate(
+      () => (window as unknown as RqWindow).__rq?.platform?.aligned('p2') ?? false
+    );
+    if (alignedNow) break;
   }
 
   await page.evaluate(() => {
@@ -326,35 +436,20 @@ async function pinchDragPlatform(page: Page): Promise<Record<string, unknown>> {
 
   const dragged = await page.evaluate(() => {
     const rq = (window as unknown as RqWindow).__rq;
-    const aligned = rq?.platform?.aligned('p2') ?? false;
-    const events = rq?.store.events.map((e) => e.type) ?? [];
     return {
-      aligned,
+      aligned: rq?.platform?.aligned('p2') ?? false,
+      grabbed: rq?.platform?.grabbed('p2') ?? false,
       t: rq?.platform?.railT('p2'),
-      events,
+      events: rq?.store.events.map((e) => e.type) ?? [],
       explorer: rq?.explorer?.state(),
       reason: rq?.explorer?.reason(),
     };
   });
 
   if (!dragged.aligned && !dragged.events.includes('platformAligned')) {
-    // Fallback: IWER grab may not latch; snap via the same rail API the
-    // player drag would have ended on, then fail if still unaligned.
-    const snapped = await page.evaluate(() => {
-      const rq = (window as unknown as RqWindow).__rq;
-      const ok = rq?.platform?.align('p2') ?? false;
-      return {
-        ok,
-        aligned: rq?.platform?.aligned('p2') ?? false,
-        events: rq?.store.events.map((e) => e.type) ?? [],
-      };
-    });
-    if (!snapped.aligned && !snapped.events.includes('platformAligned')) {
-      throw new Error(
-        `platform never aligned after ray+pinch. drag=${JSON.stringify(dragged)} snap=${JSON.stringify(snapped)}`
-      );
-    }
-    console.log('[X-07 e2e] pinch drag did not latch; align() after grab', snapped);
+    throw new Error(
+      `platform grabbed but never aligned: ${JSON.stringify(dragged)}`
+    );
   }
 
   console.log('[X-07 e2e] ray+pinch platform', dragged);

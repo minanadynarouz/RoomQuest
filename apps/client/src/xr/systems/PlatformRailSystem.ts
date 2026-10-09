@@ -41,6 +41,7 @@ export interface PlatformDebugApi {
   moveToT: (t: number, placementId?: string) => boolean;
   railT: (placementId?: string) => number | null;
   aligned: (placementId?: string) => boolean;
+  grabbed: (placementId?: string) => boolean;
   worldPose: (
     placementId?: string
   ) => { x: number; y: number; z: number } | null;
@@ -92,6 +93,7 @@ export class PlatformRailSystem extends createSystem(
       moveToT: (t, placementId) => this.snapToT(t, placementId),
       railT: (placementId) => this.slotOf(placementId)?.sample.t ?? null,
       aligned: (placementId) => this.slotOf(placementId)?.aligned ?? false,
+      grabbed: (placementId) => this.slotOf(placementId)?.grabbed ?? false,
       worldPose: (placementId) => {
         const slot = this.slotOf(placementId);
         if (!slot?.used) return null;

@@ -4,16 +4,17 @@
  */
 
 import { initLanding } from './landing/index.js';
-import { isFixtureXrSession, readClientFlags } from './xr/flags.js';
+import {
+  isFixtureXrSession,
+  isSyntheticFixture,
+  readClientFlags,
+} from './xr/flags.js';
 
 const bootFlags = readClientFlags(window.location.search);
 
 // X-03: desktop fixture auto-boots. `?xr=1` goes through landing so launchXR
 // runs from a user click inside a real IWER AR session.
-if (
-  bootFlags.fixture === 'synthetic_living_room' &&
-  !isFixtureXrSession(bootFlags)
-) {
+if (isSyntheticFixture(bootFlags) && !isFixtureXrSession(bootFlags)) {
   void import('./xr/index.js')
     .then(({ launchXR }) => launchXR())
     .catch((error: unknown) => {
