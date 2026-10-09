@@ -24,6 +24,7 @@ export interface PlacementControllerOptions {
   radiusM?: number;
   onPieceBuilt?: (placementId: string) => void;
   onDisableGrab?: (placementId: string) => void;
+  onGrab?: (placementId: string, hand: PlacementHand) => void;
 }
 
 /**
@@ -104,6 +105,7 @@ export class PlacementController {
     this.heldId = placementId;
     this.heldHand = hand;
     this.ghostTarget = null;
+    this.opts.onGrab?.(placementId, hand);
 
     if (simulate) {
       const mount = this.opts.getMount();

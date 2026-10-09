@@ -23,7 +23,9 @@ describe('landing isolation from HUD', () => {
         source.includes('DebugOverlaySystem') ||
         source.includes('rolling-fps') ||
         /from ['"]\.\.\/debug\//.test(source) ||
-        /from ['"]\.\.\/xr\/(?!flags)/.test(source)
+        /from ['"]\.\.\/xr\/(?!flags)/.test(source) ||
+        /from ['"]\.\.\/audio\/(?!unlock)/.test(source) ||
+        source.includes('.ogg')
       ) {
         violations.push(path);
       }
@@ -33,10 +35,17 @@ describe('landing isolation from HUD', () => {
       join(process.cwd(), 'src', 'index.ts'),
       'utf8'
     );
+    const landing = await readFile(
+      join(process.cwd(), 'src', 'landing', 'index.ts'),
+      'utf8'
+    );
     expect(entry).toContain("import('./xr/index.js')");
     expect(entry).toContain("from './xr/flags.js'");
     expect(entry).not.toContain('HudSystem');
     expect(entry).not.toContain('DebugOverlaySystem');
+    expect(entry).not.toContain("from './audio/");
+    expect(landing).toContain("from '../audio/unlock.js'");
+    expect(landing).toContain('unlockAudio()');
     expect(violations).toEqual([]);
   });
 });

@@ -71,6 +71,7 @@ function setup(clockNow: { t: number }) {
 
   const built: string[] = [];
   const disabled: string[] = [];
+  const grabbed: string[] = [];
 
   const controller = new PlacementController({
     getTargets: () => targets,
@@ -85,6 +86,9 @@ function setup(clockNow: { t: number }) {
     onDisableGrab: (id) => {
       disabled.push(id);
     },
+    onGrab: (id) => {
+      grabbed.push(id);
+    },
   });
 
   return {
@@ -94,6 +98,7 @@ function setup(clockNow: { t: number }) {
     targets,
     built,
     disabled,
+    grabbed,
     root,
     tray,
   };
@@ -102,9 +107,11 @@ function setup(clockNow: { t: number }) {
 describe('PlacementController', () => {
   it('left-hand grab shows a ghost in range and snaps on release', () => {
     const clock = { t: 0 };
-    const { controller, plank, targets, built, disabled, root } = setup(clock);
+    const { controller, plank, targets, built, disabled, grabbed, root } =
+      setup(clock);
 
     expect(controller.grab('p2', 'left', true)).toBe(true);
+    expect(grabbed).toEqual(['p2']);
     expect(controller.heldPlacementHand).toBe('left');
     expect(controller.moveTo(1.04, 0.5, -1)).toBe(true);
     expect(controller.isGhostVisible).toBe(true);
