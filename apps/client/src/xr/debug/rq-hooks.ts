@@ -29,6 +29,18 @@ export interface RqOverlayDebug {
   ready: boolean;
 }
 
+export interface RqGuidanceDebug {
+  ready: boolean;
+  onboardingActive: boolean;
+  hintVisible: boolean;
+  arrowVisible: boolean;
+  angleDeg: number;
+  looking: boolean;
+  line: string | null;
+  skipOnboarding: () => void;
+  placeTargetAtAngle: (deg: number) => void;
+}
+
 export interface RqHooks {
   store?: GameStore;
   graph?: SurfaceGraph | null;
@@ -37,9 +49,12 @@ export interface RqHooks {
   drawCalls?: number;
   hud?: RqHudDebug;
   overlay?: RqOverlayDebug;
+  guidance?: RqGuidanceDebug;
   placement?: PlacementDebugApi | null;
   stats?: () => RqPerfStats;
   autoSolve?: () => Promise<void>;
+  /** Debug/e2e: force the synthetic living-room plan into `playing`. */
+  playSynthetic?: () => boolean;
 }
 
 export type RqHookName = keyof RqHooks;

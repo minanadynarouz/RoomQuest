@@ -4,6 +4,7 @@
  * F-04: spatial HUD panels (lazy-loaded with this XR module)
  * X-04: PlacementSystem pinch-place with snap
  * F-05: debug overlay + window.__rq (dev or ?debug=1); overlay lazy-loads
+ * F-06: onboarding, gaze hint, FoV edge arrow (ExplorerTarget for X-05)
  */
 
 import {
@@ -18,8 +19,14 @@ import {
   SYNTHETIC_LIVING_ROOM,
   SYNTHETIC_LIVING_ROOM_PLAN,
 } from '@roomquest/fixtures';
-import { createGameStore } from '../game/index.js';
-import { bindHudStore, HudSystem } from '../ui/HudSystem.js';
+import {
+  applyDirectorResult,
+  createDirectorClientFromEnv,
+  createGameStore,
+} from '../game/index.js';
+import { bindGuidanceStore, GuidanceSystem } from '../ui/GuidanceSystem.js';
+import { bindHudStore, HudSystem, setExplorerAnchor } from '../ui/HudSystem.js';
+import { setExplorerTarget } from '../ui/explorer-target.js';
 import { createStatsGetter, isOverlayReady } from './debug/hooks.js';
 import { installRqHooks } from './debug/rq-hooks.js';
 import { collectPerfStats } from './debug/stats.js';
@@ -38,8 +45,11 @@ import { countDrawCalls } from './level/draw-calls.js';
 import type { LevelPlan, SurfaceGraph } from '@roomquest/schema';
 import type { SnapTarget } from './level/types.js';
 
-export type { RqHooks, RqHudDebug } from './debug/rq-hooks.js';
+export type { RqHooks, RqHudDebug, RqGuidanceDebug } from './debug/rq-hooks.js';
 export { registerRqHook } from './debug/rq-hooks.js';
+export { setExplorerAnchor };
+export { setExplorerTarget };
+export type { ExplorerTarget } from '../ui/explorer-target.js';
 
 let worldInstance: World | null = null;
 const gameStore = createGameStore();
@@ -89,8 +99,91 @@ function exposeHooks(
       overlay: isOverlayReady() ? { ready: true } : window.__rq?.overlay,
       placement: latestPlacement,
       stats: statsGetter,
+      playSynthetic: playSyntheticLevel,
     },
     { flags: clientFlags, isDev: import.meta.env.DEV }
+  );
+}
+
+function browserKv(): {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+} {
+  const memory = new Map<string, string>();
+  const fallback = {
+    getItem: (key: string) => memory.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      memory.set(key, value);
+    },
+  };
+  if (typeof window === 'undefined') return fallback;
+  try {
+    window.localStorage.getItem('rq.storage.probe');
+    return window.localStorage;
+  } catch {
+    return fallback;
+  }
+}
+
+function canBuildFromDirector(phase: string): boolean {
+  return phase === 'surveying' || phase === 'requesting';
+}
+
+function playSyntheticLevel(): boolean {
+  const world = worldInstance;
+  const builder = world?.getSystem(LevelBuilderSystem);
+  if (!world || !builder) return false;
+  const phase = gameStore.phase;
+  if (phase === 'playing') return true;
+  if (phase === 'noSurfaces' || phase === 'requesting') {
+    gameStore.startSurveying();
+  }
+  if (gameStore.phase === 'surveying') {
+    gameStore.startBuilding(SYNTHETIC_LIVING_ROOM_PLAN, {
+      source: 'procedural',
+    });
+    builder.build(SYNTHETIC_LIVING_ROOM_PLAN, SYNTHETIC_LIVING_ROOM);
+  }
+  if (gameStore.phase === 'building') {
+    gameStore.startPlaying();
+  }
+  exposeHooks(
+    SYNTHETIC_LIVING_ROOM,
+    SYNTHETIC_LIVING_ROOM_PLAN,
+    builder.getSnapTargets(),
+    countDrawCalls(world.scene),
+    latestPlacement
+  );
+  return true;
+}
+
+async function startPlayableLevel(
+  graph: SurfaceGraph,
+  builder: LevelBuilderSystem,
+  placement: PlacementSystem
+): Promise<void> {
+  if (!canBuildFromDirector(gameStore.phase)) {
+    return;
+  }
+  const director = createDirectorClientFromEnv({
+    search: typeof window === 'undefined' ? '' : window.location.search,
+    storage: browserKv(),
+    fetch: (input, init) => fetch(input, init),
+    apiBaseUrl: import.meta.env.VITE_API_BASE_URL ?? '',
+  });
+  const result = await director.requestPlan(graph);
+  if (!canBuildFromDirector(gameStore.phase)) {
+    return;
+  }
+  applyDirectorResult(gameStore, result);
+  builder.build(result.plan, graph);
+  gameStore.startPlaying();
+  exposeHooks(
+    graph,
+    result.plan,
+    builder.getSnapTargets(),
+    worldInstance ? countDrawCalls(worldInstance.scene) : 0,
+    placement.debugApi()
   );
 }
 
@@ -201,7 +294,9 @@ export async function launchXR(): Promise<World> {
   worldInstance = await World.create(container, xrOptions);
   worldInstance.registerSystem(LevelBuilderSystem, { priority: 5 });
   bindHudStore(gameStore);
+  bindGuidanceStore(gameStore);
   worldInstance.registerSystem(HudSystem, { priority: 0 });
+  worldInstance.registerSystem(GuidanceSystem, { priority: 1 });
   // After GrabSystem (-3) so the held world pose is current for the ghost.
   worldInstance.registerSystem(PlacementSystem, { priority: -2 });
   await loadDebugOverlay();
@@ -264,6 +359,7 @@ export async function launchXR(): Promise<World> {
           0,
           placement.debugApi()
         );
+        void startPlayableLevel(graph, builder, placement);
       });
       graphSystem.addEventListener('noSurfaces', () => {
         gameStore.noSurfaces();

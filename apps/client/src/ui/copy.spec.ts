@@ -7,6 +7,8 @@ import {
   formatTomorrowLine,
   formatWinStats,
   HUD_COPY,
+  ONBOARDING_DURATION_MS,
+  ONBOARDING_STEPS,
 } from './copy.js';
 
 describe('HUD copy', () => {
@@ -21,8 +23,15 @@ describe('HUD copy', () => {
       HUD_COPY.retry,
       HUD_COPY.resume,
       HUD_COPY.replay,
+      HUD_COPY.skip,
+      HUD_COPY.gazeFallback,
+      ...ONBOARDING_STEPS.map((step) => step.line),
     ].join(' ');
     expect(blob).not.toMatch(/meta|quest|horizon|iwsdk|roomquest/i);
+    expect(ONBOARDING_DURATION_MS).toBe(30_000);
+    for (const step of ONBOARDING_STEPS) {
+      expect(step.line.length).toBeLessThanOrEqual(40);
+    }
     expect(HUD_COPY.noSurfacesBody.length).toBeLessThan(80);
     expect(HUD_COPY.surveyingBodySurveying.length).toBeLessThan(40);
   });
