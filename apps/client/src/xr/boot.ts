@@ -23,7 +23,7 @@ let worldInstance: World | null = null;
  */
 export async function launchXR(): Promise<World> {
   if (worldInstance) {
-    await worldInstance.launchXR();
+    worldInstance.launchXR();
     return worldInstance;
   }
 
@@ -67,7 +67,7 @@ export async function launchXR(): Promise<World> {
   worldInstance.registerSystem(PlaneTestSystem, { priority: 10 });
 
   // Launch the XR session
-  await worldInstance.launchXR();
+  worldInstance.launchXR();
 
   return worldInstance;
 }

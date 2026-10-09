@@ -20,7 +20,7 @@ console.log('[X-01] Client index.ts loaded, DEV=', import.meta.env.DEV);
 // In dev mode, wire up the button for manual launch
 if (import.meta.env.DEV) {
   function setupButton() {
-    const btn = document.getElementById('enter-ar') as HTMLButtonElement;
+    const btn = document.getElementById('enter-ar') as HTMLButtonElement | null;
     if (!btn) {
       console.warn('[X-01] Enter AR button not found, retrying...');
       setTimeout(setupButton, 100);
@@ -32,34 +32,36 @@ if (import.meta.env.DEV) {
     // Show button immediately in dev mode
     btn.style.display = 'block';
     
-    btn.onclick = async () => {
-      console.log('[X-01] Enter AR button clicked');
-      
-      // Check navigator.xr at click time
-      if (!navigator.xr) {
-        console.error('[X-01] navigator.xr not available');
-        alert('WebXR not available');
-        return;
-      }
-      
-      console.log('[X-01] navigator.xr available, checking session support...');
-      
-      try {
-        const supported = await navigator.xr.isSessionSupported('immersive-ar');
-        if (!supported) {
-          console.error('[X-01] immersive-ar not supported');
-          alert('immersive-ar not supported');
+    btn.onclick = () => {
+      void (async () => {
+        console.log('[X-01] Enter AR button clicked');
+        
+        // Check navigator.xr at click time
+        if (!navigator.xr) {
+          console.error('[X-01] navigator.xr not available');
+          alert('WebXR not available');
           return;
         }
-        console.log('[X-01] immersive-ar supported, launching XR...');
-      } catch (err) {
-        console.error('[X-01] Error checking session support:', err);
-        alert(`Session support check failed: ${err}`);
-        return;
-      }
-      
-      const { launchXR } = await import('./xr/index.js');
-      await launchXR();
+        
+        console.log('[X-01] navigator.xr available, checking session support...');
+        
+        try {
+          const supported = await navigator.xr.isSessionSupported('immersive-ar');
+          if (!supported) {
+            console.error('[X-01] immersive-ar not supported');
+            alert('immersive-ar not supported');
+            return;
+          }
+          console.log('[X-01] immersive-ar supported, launching XR...');
+        } catch (err) {
+          console.error('[X-01] Error checking session support:', err);
+          alert(`Session support check failed: ${err}`);
+          return;
+        }
+        
+        const { launchXR } = await import('./xr/index.js');
+        await launchXR();
+      })();
     };
   }
   
