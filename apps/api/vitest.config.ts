@@ -7,6 +7,9 @@ export default defineConfig({
     environment: 'node',
     setupFiles: ['./src/test-setup.ts'],
     include: ['src/**/*.spec.ts', 'test/**/*.spec.ts'],
+    pool: 'forks',
+    isolate: true,
+    fileParallelism: true,
   },
   plugins: [
     swc.vite({

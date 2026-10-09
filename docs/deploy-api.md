@@ -69,4 +69,4 @@ pnpm --filter api db:generate   # also runs as part of build / lint / typecheck 
 pnpm --filter api dev
 ```
 
-`GET /api/health` reports `db: "ok"` when `DATABASE_URL` points at a reachable Postgres, and `db: "down"` when the URL is unset or the database is unreachable. The process still starts either way; mock `/api/v1/levels` does not need a database.
+`GET /api/health` reports `db: "ok"` when `DATABASE_URL` points at a reachable Postgres, and `db: "down"` when the URL is unset or the database is unreachable. The process still starts either way; `POST /api/v1/levels` does not need a database (it skips the cache, logs a warning, and still returns 200).

@@ -110,6 +110,22 @@ jobs:
     name: test
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: roomquest
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d roomquest"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/roomquest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -148,6 +164,12 @@ jobs:
           key: ${{ runner.os }}-turbo-test-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-turbo-test-
+
+      - name: Run Prisma migrations
+        run: pnpm --filter api db:migrate:deploy
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+          DIRECT_URL: ${{ env.TEST_DATABASE_URL }}
 
       - name: Run tests
         run: pnpm test

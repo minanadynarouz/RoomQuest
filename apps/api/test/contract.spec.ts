@@ -48,6 +48,8 @@ describe('API contract (B-02)', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
+    delete process.env.DATABASE_URL;
+    delete process.env.DIRECT_URL;
     app = await createApp();
     await app.init();
   });

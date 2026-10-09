@@ -8,8 +8,7 @@ export type LlmCallOutcome =
   | 'error';
 
 /**
- * One LLM round-trip. B-07 eval can reuse this record; B-06 will persist
- * later. Do not log API keys.
+ * One LLM round-trip. B-07 eval can reuse this record. Do not log API keys.
  */
 export interface LlmCallTelemetry {
   provider: LlmProvider;

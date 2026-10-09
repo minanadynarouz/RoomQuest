@@ -86,6 +86,9 @@ export function configureApp(app: NestExpressApplication): void {
   app.use(bodyParserErrorHandler);
 
   app.setGlobalPrefix('api');
+  // Render (and other reverse proxies) set X-Forwarded-For. Needed so the
+  // per-IP throttler sees the client, not the proxy.
+  app.set('trust proxy', 1);
 
   app.enableCors({
     origin: (
@@ -104,7 +107,7 @@ export function configureApp(app: NestExpressApplication): void {
       'X-Client-Version',
       'X-Request-Id',
     ],
-    exposedHeaders: ['X-Request-Id'],
+    exposedHeaders: ['X-Request-Id', 'Retry-After'],
     methods: ['GET', 'POST', 'OPTIONS'],
     maxAge: 600,
   });
