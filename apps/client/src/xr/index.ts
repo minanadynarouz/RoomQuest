@@ -1,6 +1,10 @@
 /**
  * XR module exports
- * X-01: Entry point for the frontend to launch XR
  */
 
-export { launchXR, getWorld } from './boot.js';
+export { launchXR, getWorld, getGameStore } from './boot.js';
+export { LevelBuilderSystem } from './systems/LevelBuilderSystem.js';
+export { SurfaceGraphSystem } from './systems/SurfaceGraphSystem.js';
+export { mountGreyboxLevel } from './level/mount-level.js';
+export { countDrawCalls } from './level/draw-calls.js';
+export { createPiece, createGreyboxKit } from './pieces/index.js';

@@ -123,6 +123,9 @@ importers:
       '@preact/signals-core':
         specifier: ^1.14.4
         version: 1.14.4
+      '@roomquest/fixtures':
+        specifier: workspace:*
+        version: link:../../packages/fixtures
       '@roomquest/level-core':
         specifier: workspace:*
         version: link:../../packages/level-core
