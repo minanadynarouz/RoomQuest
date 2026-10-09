@@ -31,6 +31,10 @@ describe('client URL flags', () => {
     expect(isSyntheticLivingRoomFixture(flags)).toBe(true);
     expect(flags.xr).toBe(true);
     expect(isFixtureXrSession(flags)).toBe(true);
+    expect(
+      isFixtureXrSession(readClientFlags('?fixture=synthetic_living_room'))
+    ).toBe(false);
+    expect(isFixtureXrSession(readClientFlags('?xr=1'))).toBe(false);
   });
 
   it('enables debug (the perf flag) only for the exact value 1', () => {

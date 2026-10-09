@@ -138,4 +138,27 @@ describe('registerRqHook / installRqHooks', () => {
     installRqHooks({ drawCalls: 1 }, { ...off, target });
     expect(target.__rq).toBeUndefined();
   });
+
+  it('lets X-09 register villageAnchor without replacing the rest of __rq', () => {
+    installRqHooks({ drawCalls: 3, plan: null }, { ...debugOn, target });
+    const villageAnchor = {
+      status: () => ({
+        ready: true,
+        placement: 'fallback' as const,
+        reason: 'anchors-unsupported' as const,
+        persisted: false,
+        handle: null,
+        surfaceId: 's1',
+        persistentAnchorsSupported: false,
+        storageAvailable: true,
+        attached: false,
+        hutPose: null,
+      }),
+    };
+    expect(
+      registerRqHook('villageAnchor', villageAnchor, { ...debugOn, target })
+    ).toBe(true);
+    expect(target.__rq?.drawCalls).toBe(3);
+    expect(target.__rq?.villageAnchor).toBe(villageAnchor);
+  });
 });

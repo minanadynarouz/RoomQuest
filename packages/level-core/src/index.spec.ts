@@ -3,6 +3,11 @@ import { buildSurfaceGraph } from './surface-pipeline';
 import { placementToPose, SURFACE_INSET_M } from './placement';
 import { generatePlan, repairPlan, validatePlan, explorerPath } from './index';
 import { findNearestSnapTarget, SNAP_RADIUS_M } from './snap';
+import {
+  chooseLargestTable,
+  readVillageAnchorHandle,
+  writeVillageAnchorHandle,
+} from './anchor';
 
 describe('level-core', () => {
   it('exports buildSurfaceGraph', () => {
@@ -27,5 +32,11 @@ describe('level-core', () => {
 
   it('exports explorerPath', () => {
     expect(explorerPath).toBeTypeOf('function');
+  });
+
+  it('exports village-anchor fallback and storage helpers', () => {
+    expect(chooseLargestTable).toBeTypeOf('function');
+    expect(readVillageAnchorHandle).toBeTypeOf('function');
+    expect(writeVillageAnchorHandle).toBeTypeOf('function');
   });
 });

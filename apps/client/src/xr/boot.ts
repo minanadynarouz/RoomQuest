@@ -8,6 +8,7 @@
  * X-05: ExplorerSystem + registerRqHook('autoSolve')
  * F-07: win HUD, stars, pause, silent result posting
  * F-08: audio manager + CC0 SFX (unlocked on Enter, lazy with this chunk)
+ * X-09: VillageAnchorSystem persist/restore (largest-table fallback)
  */
 
 import {
@@ -60,6 +61,7 @@ import {
   type PlacementDebugApi,
 } from './systems/PlacementSystem.js';
 import { SurfaceGraphSystem } from './systems/SurfaceGraphSystem.js';
+import { VillageAnchorSystem } from './systems/VillageAnchorSystem.js';
 import { countDrawCalls } from './level/draw-calls.js';
 import type { LevelPlan, SurfaceGraph } from '@roomquest/schema';
 import type { SnapTarget } from './level/types.js';
@@ -223,6 +225,37 @@ function browserKv(): {
     return window.localStorage;
   } catch {
     return fallback;
+  }
+}
+
+/** Real localStorage only. Private mode surfaces as unavailable, never a memory fake. */
+function villageAnchorStorage(): {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem?(key: string): void;
+} {
+  if (typeof window === 'undefined') {
+    return {
+      getItem() {
+        throw new Error('no localStorage');
+      },
+      setItem() {
+        throw new Error('no localStorage');
+      },
+    };
+  }
+  try {
+    window.localStorage.getItem('rq.storage.probe');
+    return window.localStorage;
+  } catch {
+    return {
+      getItem() {
+        throw new Error('localStorage unavailable');
+      },
+      setItem() {
+        throw new Error('localStorage unavailable');
+      },
+    };
   }
 }
 
@@ -415,6 +448,8 @@ export async function launchXR(): Promise<World> {
   worldInstance.registerSystem(PlacementSystem, { priority: -2 });
   // Before GuidanceSystem (1) so gaze/edge-arrow read the current pose.
   worldInstance.registerSystem(ExplorerSystem, { priority: -1 });
+  // X-09: after the hut exists; event-driven, not on the grab hot path.
+  worldInstance.registerSystem(VillageAnchorSystem, { priority: 6 });
   await loadDebugOverlay();
 
   const builder = worldInstance.getSystem(LevelBuilderSystem);
@@ -434,6 +469,19 @@ export async function launchXR(): Promise<World> {
   setExplorerTarget(explorer);
   bindVisibilityPause(worldInstance);
   registerRqHook('explorer', explorer.debugApi(), {
+    flags: clientFlags,
+    isDev: import.meta.env.DEV,
+  });
+  const villageAnchor = worldInstance.getSystem(VillageAnchorSystem);
+  if (!villageAnchor) {
+    throw new Error('VillageAnchorSystem failed to register');
+  }
+  villageAnchor.configure({
+    builder,
+    storage: villageAnchorStorage(),
+    expectSession: fixtureXr || !fixtureMode,
+  });
+  registerRqHook('villageAnchor', villageAnchor.debugApi(), {
     flags: clientFlags,
     isDev: import.meta.env.DEV,
   });

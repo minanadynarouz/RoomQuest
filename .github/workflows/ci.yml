@@ -294,5 +294,6 @@ jobs:
           name: e2e-xr-artifacts
           path: |
             docs/img/x05/
+            docs/img/x09/
             /tmp/client-dev.log
           if-no-files-found: ignore

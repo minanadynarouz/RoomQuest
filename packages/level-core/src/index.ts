@@ -5,3 +5,4 @@ export * from './repair';
 export * from './generate';
 export * from './snap';
 export * from './path';
+export * from './anchor';

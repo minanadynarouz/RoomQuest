@@ -18,6 +18,7 @@ import {
 } from '../flags.js';
 import type { SnapTarget } from '../level/types.js';
 import type { PlacementDebugApi } from '../systems/PlacementSystem.js';
+import type { VillageAnchorDebugApi } from '../systems/VillageAnchorSystem.js';
 import type { RqPerfStats } from './stats.js';
 
 export interface RqHudDebug {
@@ -62,6 +63,8 @@ export interface RqHooks {
   resume?: () => void;
   /** F-07: jump to the win HUD without walking. */
   forceWin?: () => void;
+  /** X-09: village hut XRAnchor persist / restore status. */
+  villageAnchor?: VillageAnchorDebugApi;
 }
 
 /** X-05 walker debug surface. `getWorldPosition` matches F-06's ExplorerTarget. */
