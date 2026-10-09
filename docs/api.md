@@ -1,7 +1,7 @@
 # Roomquest API
 
 Source of truth for these endpoints: architecture §6 (`docs/ARCHITECTURE-AND-PLAN.md`).
-This document describes the API contract. B-02 shipped the skeleton and mock director; B-10 adds optional Prisma/Neon (health `db` ping). Later tickets (B-05 live director, B-06 cache/rate limits, B-09 results) extend the same contract.
+This document describes the API contract. B-02 shipped the skeleton and mock director; B-10 adds optional Prisma/Neon (health `db` ping); B-05 adds the live LangChain director. Later tickets (B-06 cache/rate limits, B-09 results) extend the same contract.
 
 ## Base URL
 
@@ -84,22 +84,24 @@ Always **200** while the Node process is up. Used by the landing-page pre-warm a
 
 ### Success (`LevelResponse`)
 
-Architecture server semantics that B-02 **does** implement:
+Architecture server semantics:
 
 1. Validate headers + body with zod (400 on failure).
-2. `cacheKey = sha256(roomHash\|date\|tier\|promptVersion)` as **hex**, then the **first 16 hex characters**.
-3. Mock director (`DIRECTOR_MODE=mock`, the default): return the `synthetic_living_room` plan fixture from `@roomquest/fixtures`, parsed with `LevelPlan` before it is wrapped in `LevelResponse`.
-4. `source` is always `"procedural"` in mock mode.
-5. `promptVersion` is the API constant `v1` (B-05 will bump this with the live prompt).
+2. `seed = roomHash + "-" + date`. `cacheKey = sha256(roomHash\|date\|tier\|promptVersion)` as **hex**, then the **first 16 hex characters**. `promptVersion` is `PROMPT_VERSION` (`v1.0`).
+3. **Mock** (`DIRECTOR_MODE=mock`, the default): return the `synthetic_living_room` plan fixture from `@roomquest/fixtures`, parsed with `LevelPlan`. `source` is `"procedural"`. `model` is omitted. No LLM keys required.
+4. **Live** (`DIRECTOR_MODE=live`): LangChain director with a **7 s** `AbortSignal` budget.
+   1. Primary: `ChatGoogleGenerativeAI` (`DIRECTOR_MODEL`, default `gemini-3.8-flash`), temperature 0.7, `thinkingConfig.thinkingLevel = LOW`, `.withStructuredOutput(LevelPlanLLM)`.
+   2. Parse `LevelPlanLLM` → `clampParTimeMs` → `LevelPlan.parse` → `validatePlan(plan, graph)`.
+   3. If invalid: local `repairPlan` first. If still invalid: **one** LLM repair call that includes the issue messages (same static system prefix).
+   4. Provider error on the primary: try Anthropic `ChatAnthropic` (`FALLBACK_MODEL`, default `claude-haiku-4-5`) only when **≥ 3 s** of budget remain and `ANTHROPIC_API_KEY` is set.
+   5. Still invalid, out of time, or any remaining provider error: `generatePlan(graph, seed, tier)` with `source:"procedural"`.
+5. `source` is `"llm"` | `"llm_repaired"` | `"procedural"` (`"cache"` is B-06). `model` is set for LLM sources. `repairs` lists local repair actions (and `"llm-repair"` when the second call ran).
 6. `latencyMs` is server handling time in milliseconds.
-7. `repairs` is `[]` (no validator repair loop until B-04 / B-05).
-8. `model` is omitted (procedural / mock).
+7. If `DIRECTOR_MODE=live` but `GOOGLE_API_KEY` is unset, the API logs a warning and serves a procedural plan so it still starts. CI and local mock runs need no key.
 
-**Mock plan vs request graph:** the fixture plan’s surface ids (`s1`, `s2`, `s4`, …) belong to the synthetic living-room graph. They will **not** match an arbitrary client `SurfaceGraph`. That is intentional for B-02. The client must re-validate with `level-core` and fall back locally (architecture §6 client semantics).
+**Mock plan vs request graph:** the fixture plan’s surface ids (`s1`, `s2`, `s4`, …) belong to the synthetic living-room graph. They will **not** match an arbitrary client `SurfaceGraph`. The client must re-validate with `level-core` and fall back locally (architecture §6 client semantics). Live / procedural plans are validated against the request graph.
 
-`DIRECTOR_MODE=live` is **not implemented** in B-02 (that is B-05 / LangChain). The API still starts and serves the same mock plan, and logs a warning.
-
-The API never returns 5xx for LLM problems (architecture §6.6). There is no LLM call yet.
+The API never returns 5xx for LLM problems (architecture §6.6): it degrades to the procedural plan with 200.
 
 ---
 
@@ -179,11 +181,11 @@ None of these are required to start the API. CI does not set a database. Local D
 | --- | --- | --- | --- | --- |
 | `PORT` | optional | `3000` | `3000` | **local**. Render injects `PORT` at runtime; it is not in `render.yaml`. |
 | `NODE_ENV` | optional | `development` | `development` / `test` / `production` | **local** `development`; **CI** / Vitest `test`; **staging** / **prod** `production`. |
-| `DIRECTOR_MODE` | optional | `mock` | `mock` / `live` | **local** / **CI** `mock`; **staging** / **prod** `live` (or `mock` until B-05). |
+| `DIRECTOR_MODE` | optional | `mock` | `mock` / `live` | **local** / **CI** `mock`; **staging** / **prod** `live`. |
 | `CORS_ORIGINS` | optional | `http://localhost:5173,https://localhost:5173` | `http://localhost:5173,https://localhost:5173,https://roomquest.vercel.app` | **all**. Comma-separated extra origins. Vercel preview hosts and `https://localhost:*` are hardcoded in CORS. |
 | `GIT_SHA` | optional | `dev` (empty/unset also becomes `dev`) | `9f8e7d6c5b4a3210` | **local** `dev`; **staging** / **prod** = deployed git sha (set by the deploy workflow). |
-| `DIRECTOR_MODEL` | optional | unset (B-05 uses `gemini-3.8-flash`) | `gemini-3.8-flash` | **staging** / **prod**; **local** only when exercising live director. |
-| `FALLBACK_MODEL` | optional | unset (B-05 uses `claude-haiku-4-5`) | `claude-haiku-4-5` | **staging** / **prod**; **local** only when exercising live director. |
+| `DIRECTOR_MODEL` | optional | `gemini-3.8-flash` | `gemini-3.8-flash` | **staging** / **prod**; **local** only when exercising live director. |
+| `FALLBACK_MODEL` | optional | `claude-haiku-4-5` | `claude-haiku-4-5` | **staging** / **prod**; **local** only when exercising live director. |
 | `GOOGLE_API_KEY` | optional | unset | Gemini API key (never commit) | **staging** / **prod** when `DIRECTOR_MODE=live`; **local** only for live director tests. Blank → health `llm:"missing"`. |
 | `ANTHROPIC_API_KEY` | optional | unset | Anthropic API key (never commit) | **staging** / **prod** fallback; **local** only for live director tests. Either key makes health `llm:"configured"`. |
 | `DATABASE_URL` | optional | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **local** Docker Postgres 17 (runtime / pooled). **staging** / **prod**: Neon pooled URL — declared in `render.yaml`, values set later (M-10). Unset or unreachable → health `db:"down"`; process still 200. |

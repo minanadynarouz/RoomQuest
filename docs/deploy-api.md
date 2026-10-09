@@ -41,7 +41,7 @@ Set these in the Render Dashboard. They are declared with `sync: false` so `rend
 | `DIRECT_URL` | Neon **staging** direct URL | Neon **main** direct URL |
 | `GOOGLE_API_KEY` | Gemini key | Gemini key |
 | `ANTHROPIC_API_KEY` | Claude fallback key | Claude fallback key |
-| `DIRECTOR_MODE` | `live` (or `mock` until B-05) | `live` |
+| `DIRECTOR_MODE` | `live` | `live` |
 | `DIRECTOR_MODEL` | `gemini-3.8-flash` | `gemini-3.8-flash` |
 | `FALLBACK_MODEL` | `claude-haiku-4-5` | `claude-haiku-4-5` |
 | `CORS_ORIGINS` | staging client origins (Vercel preview / `revision_branch` URL) | prod Vercel domain, GitHub Pages origin |

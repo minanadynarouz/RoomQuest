@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  DEFAULT_DIRECTOR_MODEL,
+  DEFAULT_FALLBACK_MODEL,
+} from '../director/director.constants';
 
 const optionalKey = z
   .string()
@@ -36,8 +40,24 @@ export const envSchema = z.object({
   ANTHROPIC_API_KEY: optionalKey,
   DATABASE_URL: optionalKey,
   DIRECT_URL: optionalKey,
-  DIRECTOR_MODEL: optionalKey,
-  FALLBACK_MODEL: optionalKey,
+  DIRECTOR_MODEL: z
+    .string()
+    .optional()
+    .transform((value) => {
+      if (value === undefined || value.trim().length === 0) {
+        return DEFAULT_DIRECTOR_MODEL;
+      }
+      return value.trim();
+    }),
+  FALLBACK_MODEL: z
+    .string()
+    .optional()
+    .transform((value) => {
+      if (value === undefined || value.trim().length === 0) {
+        return DEFAULT_FALLBACK_MODEL;
+      }
+      return value.trim();
+    }),
 });
 
 export type Env = z.infer<typeof envSchema>;
