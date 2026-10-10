@@ -99,6 +99,14 @@ async function launchBrowser(): Promise<Browser> {
   });
 }
 
+async function dismissViteOverlay(page: Page): Promise<void> {
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => {
+    const overlay = document.querySelector('vite-error-overlay');
+    overlay?.remove();
+  });
+}
+
 async function waitForRq(page: Page): Promise<void> {
   await page.waitForFunction(
     () => {
@@ -157,26 +165,23 @@ async function main(): Promise<void> {
     }
 
     await page.waitForFunction(
-      () => (window as unknown as RqWindow).__rq?.roomReading?.visible() === true,
+      () => {
+        const reading = (window as unknown as RqWindow).__rq?.roomReading;
+        return reading?.visible() === true && reading.surfaceId() === 's5';
+      },
       null,
       { timeout: 5_000 }
     );
-    await sleep(400);
     const during = await readingSnapshot(page);
-    if (!during.visible || !during.surfaceId) {
+    if (!during.visible || during.surfaceId !== 's5') {
       throw new Error(`sweep not visible in-flight: ${JSON.stringify(during)}`);
     }
     console.log('[room-reading e2e] visible', during);
 
+    await dismissViteOverlay(page);
     const canvas = page.locator('#scene-container canvas').first();
-    if ((await canvas.count()) > 0) {
-      await canvas.screenshot({ path: path.join(OUT_DIR, 'sweep.png') });
-    } else {
-      await page.screenshot({
-        path: path.join(OUT_DIR, 'sweep.png'),
-        type: 'png',
-      });
-    }
+    await canvas.waitFor({ state: 'visible', timeout: 15_000 });
+    await canvas.screenshot({ path: path.join(OUT_DIR, 'sweep.png') });
     console.log('[room-reading e2e] screenshot sweep.png');
 
     await page.waitForFunction(
