@@ -157,4 +157,45 @@ describe('compactGraphForPrompt', () => {
       `compactGraphForPrompt ${graph.roomHash} ${String(fullBytes)} → ${String(compactBytes)} bytes (−${String(saved)}, ${pct.toFixed(1)}%)`
     );
   });
+
+  it('omits hint fields by default and when hints is false', () => {
+    const plain = compactGraphForPrompt(SYNTHETIC_LIVING_ROOM);
+    expect(compactGraphForPrompt(SYNTHETIC_LIVING_ROOM, {})).toEqual(plain);
+    expect(compactGraphForPrompt(SYNTHETIC_LIVING_ROOM, { hints: false })).toEqual(
+      plain
+    );
+    for (const node of plain.nodes) {
+      expect(node).not.toHaveProperty('fits');
+      expect(node).not.toHaveProperty('uv');
+      expect(node).not.toHaveProperty('slots');
+    }
+  });
+
+  it('adds compact per-surface fits, uv, and slots when hints is true', () => {
+    const hinted = compactGraphForPrompt(SYNTHETIC_LIVING_ROOM, { hints: true });
+    expect(hinted.nodes).toHaveLength(SYNTHETIC_LIVING_ROOM.nodes.length);
+    const table = hinted.nodes.find((node) => node.id === 's1');
+    expect(table?.fits).toContain('village_hut');
+    expect(table?.fits).toContain('gem');
+    expect(table?.uv).toHaveLength(4);
+    expect(table?.slots?.length).toBeGreaterThan(0);
+    expect(table?.slots?.length).toBeLessThanOrEqual(4);
+    for (const value of table?.uv ?? []) {
+      expect(value).toBe(Number(value.toFixed(2)));
+    }
+    for (const slot of table?.slots ?? []) {
+      expect(slot).toHaveLength(2);
+      expect(slot[0]).toBe(Number(slot[0].toFixed(2)));
+      expect(slot[1]).toBe(Number(slot[1].toFixed(2)));
+    }
+    const couch = hinted.nodes.find((node) => node.id === 's2');
+    expect(couch?.fits).not.toContain('village_hut');
+    expect(couch?.fits).toContain('slime');
+  });
+
+  it('hinted output is deterministic', () => {
+    const a = compactGraphForPrompt(SYNTHETIC_LIVING_ROOM, { hints: true });
+    const b = compactGraphForPrompt(SYNTHETIC_LIVING_ROOM, { hints: true });
+    expect(a).toEqual(b);
+  });
 });

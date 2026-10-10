@@ -7,3 +7,5 @@
 
 export { repairPlan } from './repair-plan';
 export type { RepairResult } from './repair-plan';
+export { snapPlacementsToSlots } from './snap-slots';
+export type { SnapChange, SnapPose, SnapResult } from './snap-slots';

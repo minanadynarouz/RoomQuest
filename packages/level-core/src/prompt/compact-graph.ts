@@ -1,9 +1,11 @@
 import type {
   EdgeKind,
+  PieceId,
   SurfaceGraph,
   SurfaceLabel,
   SurfaceReach,
 } from '@roomquest/schema';
+import { surfaceHints } from '../placement/slots';
 
 /**
  * Prompt-only surface node. Scan metadata (`kind`, `yaw`) is omitted;
@@ -18,6 +20,17 @@ export interface CompactPromptNode {
   area: number;
   reach: SurfaceReach;
   angleFromForward: number;
+  /** Piece ids whose KIT_CATALOG size / orientation rules accept this surface. */
+  fits?: PieceId[];
+  /** Usable u/v box inset by the largest fitting footprint: `[u0,v0,u1,v1]`. */
+  uv?: [number, number, number, number];
+  /** Up to 4 non-overlapping u/v slots, centimetre-rounded. */
+  slots?: [number, number][];
+}
+
+/** Opt-in extras for {@link compactGraphForPrompt}. Default is unchanged. */
+export interface CompactGraphOptions {
+  hints?: boolean;
 }
 
 /**
@@ -70,23 +83,35 @@ function deg(value: number): number {
  * near the ~2k-in budget (PRD NFR-8). Does not mutate `graph`. The
  * director still validates and repairs against the original graph.
  */
-export function compactGraphForPrompt(graph: SurfaceGraph): CompactPromptGraph {
+export function compactGraphForPrompt(
+  graph: SurfaceGraph,
+  opts?: CompactGraphOptions
+): CompactPromptGraph {
   return {
     mode: graph.mode,
-    nodes: graph.nodes.map((node) => ({
-      id: node.id,
-      label: node.label,
-      topHeight: cm(node.topHeight),
-      centroid: [
-        cm(node.centroid[0]),
-        cm(node.centroid[1]),
-        cm(node.centroid[2]),
-      ],
-      size: [cm(node.size[0]), cm(node.size[1])],
-      area: cm(node.area),
-      reach: node.reach,
-      angleFromForward: deg(node.angleFromForward),
-    })),
+    nodes: graph.nodes.map((node) => {
+      const compact: CompactPromptNode = {
+        id: node.id,
+        label: node.label,
+        topHeight: cm(node.topHeight),
+        centroid: [
+          cm(node.centroid[0]),
+          cm(node.centroid[1]),
+          cm(node.centroid[2]),
+        ],
+        size: [cm(node.size[0]), cm(node.size[1])],
+        area: cm(node.area),
+        reach: node.reach,
+        angleFromForward: deg(node.angleFromForward),
+      };
+      if (opts?.hints === true) {
+        const hints = surfaceHints(node);
+        compact.fits = hints.fits;
+        compact.uv = hints.uv;
+        compact.slots = hints.slots;
+      }
+      return compact;
+    }),
     edges: graph.edges.map((edge) => ({
       a: edge.a,
       b: edge.b,

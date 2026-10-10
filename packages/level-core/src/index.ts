@@ -11,3 +11,5 @@ export * from './platform';
 export * from './slime';
 export * from './prompt';
 export * from './room-reading';
+export { snapPlacementsToSlots } from './repair';
+export type { SnapChange, SnapResult } from './repair';
