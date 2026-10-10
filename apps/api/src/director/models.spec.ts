@@ -1,9 +1,10 @@
 import { HumanMessage } from '@langchain/core/messages';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { LevelPlanLLM, LevelPlanLLMGeminiSchema } from '@roomquest/schema';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_DIRECTOR_MODEL } from './director.constants';
 import { defaultDirectorChatFactory, wrapChatModel } from './models';
+import { resetUnsupportedThinkingLevels } from './thinking';
 
 function callerMaxRetries(model: object): number | undefined {
   const caller = (model as unknown as { caller?: { maxRetries?: number } })
@@ -12,6 +13,10 @@ function callerMaxRetries(model: object): number | undefined {
 }
 
 describe('defaultDirectorChatFactory', () => {
+  afterEach(() => {
+    resetUnsupportedThinkingLevels();
+  });
+
   it('constructs a Gemini chat model without invoking it', () => {
     const primary = defaultDirectorChatFactory.createPrimary({
       model: DEFAULT_DIRECTOR_MODEL,
@@ -46,13 +51,17 @@ describe('defaultDirectorChatFactory', () => {
       unknown
     >;
     const properties = sent.properties as Record<string, unknown>;
-    const placements = properties.placements as Record<string, unknown>;
+    const placements = properties.pl as Record<string, unknown>;
     const items = placements.items as Record<string, unknown>;
     const itemProps = items.properties as Record<string, unknown>;
-    const to = itemProps.to as Record<string, unknown>;
+    const to = itemProps.t as Record<string, unknown>;
     expect(to).toEqual({ type: 'string', nullable: true });
-    expect(invoke).toHaveBeenCalledWith([], { signal });
     expect(invoke).toHaveBeenCalledTimes(1);
+    const invokeOpts = invoke.mock.calls[0]?.[1] as
+      | { signal?: AbortSignal; callbacks?: unknown }
+      | undefined;
+    expect(invokeOpts?.signal).toBe(signal);
+    expect(Array.isArray(invokeOpts?.callbacks)).toBe(true);
     expect(sent).not.toBe(LevelPlanLLM);
     expect(sent).not.toHaveProperty('safeParse');
   });
@@ -105,12 +114,105 @@ describe('defaultDirectorChatFactory', () => {
     expect(schema).not.toHaveProperty('additionalProperties');
     expect(schema).not.toHaveProperty('safeParse');
     const properties = schema?.properties as Record<string, unknown>;
-    const placements = properties.placements as Record<string, unknown>;
+    const placements = properties.pl as Record<string, unknown>;
     const items = placements.items as Record<string, unknown>;
     const itemProps = items.properties as Record<string, unknown>;
-    expect(itemProps.to).toEqual({ type: 'string', nullable: true });
-    const parTimeMs = properties.parTimeMs as Record<string, unknown>;
-    expect(parTimeMs.exclusiveMinimum).toBeUndefined();
-    expect(parTimeMs.minimum).toBe(1);
+    expect(itemProps.t).toEqual({ type: 'string', nullable: true });
+    expect(properties.parTimeMs).toBeUndefined();
+    expect(properties.th).toBeDefined();
+  });
+
+  it('sends thinkingLevel LOW by default (MINIMAL 400s on gemini-3.8-flash)', () => {
+    const primary = defaultDirectorChatFactory.createPrimary({
+      model: DEFAULT_DIRECTOR_MODEL,
+      apiKey: 'test-google-key',
+    });
+    const config = (
+      primary as unknown as {
+        thinkingConfig?: { thinkingLevel?: string; thinkingBudget?: number };
+      }
+    ).thinkingConfig;
+    expect(config?.thinkingLevel).toBe('LOW');
+    expect(config?.thinkingBudget).toBeUndefined();
+  });
+
+  it('retries once without thinkingConfig when Gemini 400s the thinking level', async () => {
+    const primary = defaultDirectorChatFactory.createPrimary({
+      model: DEFAULT_DIRECTOR_MODEL,
+      apiKey: 'test-google-key',
+    });
+    let calls = 0;
+    const client = (
+      primary as unknown as {
+        client: {
+          generateContent: (
+            request: unknown,
+            requestOptions?: unknown
+          ) => Promise<unknown>;
+        };
+      }
+    ).client;
+    client.generateContent = () => {
+      calls += 1;
+      if (calls === 1) {
+        const err = Object.assign(
+          new Error('[400 Bad Request] Thinking level LOW is not supported'),
+          { status: 400 }
+        );
+        return Promise.reject(err);
+      }
+      return Promise.resolve({
+        response: {
+          candidates: [
+            {
+              content: {
+                role: 'model',
+                parts: [{ text: '{}' }],
+              },
+              finishReason: 'STOP',
+            },
+          ],
+        },
+      });
+    };
+    const chat = wrapChatModel(primary, 'google', DEFAULT_DIRECTOR_MODEL);
+    await chat.invokeStructured(
+      [new HumanMessage('plan')],
+      new AbortController().signal
+    );
+    expect(calls).toBe(2);
+    expect(
+      (primary as unknown as { thinkingConfig?: unknown }).thinkingConfig
+    ).toBeUndefined();
+
+    await chat.invokeStructured(
+      [new HumanMessage('plan')],
+      new AbortController().signal
+    );
+    expect(calls).toBe(3);
+  });
+
+  it('sends thinkingLevel LOW when configured', () => {
+    const primary = defaultDirectorChatFactory.createPrimary({
+      model: DEFAULT_DIRECTOR_MODEL,
+      apiKey: 'test-google-key',
+      thinking: { thinkingLevel: 'LOW' },
+    });
+    const config = (
+      primary as unknown as { thinkingConfig?: { thinkingLevel?: string } }
+    ).thinkingConfig;
+    expect(config?.thinkingLevel).toBe('LOW');
+  });
+
+  it('omits thinkingConfig for provider default', () => {
+    const primary = defaultDirectorChatFactory.createPrimary({
+      model: DEFAULT_DIRECTOR_MODEL,
+      apiKey: 'test-google-key',
+      thinking: undefined,
+    });
+    const config = (
+      primary as unknown as { thinkingConfig?: unknown }
+    ).thinkingConfig;
+    expect(config).toBeUndefined();
   });
 });

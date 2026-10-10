@@ -90,13 +90,13 @@ Always **200** while the Node process is up. Used by the landing-page pre-warm a
 Architecture server semantics:
 
 1. Validate headers + body with zod (400 on failure).
-2. `seed = roomHash + "-" + date` (the request `date` field, `YYYY-MM-DD`). `generatePlan` is deterministic for a given seed; the next date therefore yields a different seed. `cacheKey = sha256(roomHash\|date\|tier\|promptVersion)` as **hex**, then the **first 16 hex characters**. `promptVersion` is `PROMPT_VERSION` (`v1.0`).
+2. `seed = roomHash + "-" + date` (the request `date` field, `YYYY-MM-DD`). `generatePlan` is deterministic for a given seed; the next date therefore yields a different seed. `cacheKey = sha256(roomHash\|date\|tier\|promptVersion)` as **hex**, then the **first 16 hex characters**. `promptVersion` is `PROMPT_VERSION` (`v1.1`).
 3. **Cache** (when `DATABASE_URL` is set and Postgres is reachable): look up `LevelCache` by `cacheKey`. On a hit, **always** re-run `level-core.validatePlan` against the **incoming** graph (roomHash only covers the 6 largest surfaces). If valid, return `source:"cache"` (this does **not** count against the per-device cache-miss budget). If validation fails, treat it as a miss, regenerate, and overwrite the row.
 4. **Mock** (`DIRECTOR_MODE=mock`, the default): `generatePlan` → `validatePlan` → `repairPlan` → `validatePlan` against the **request graph** (same bind path as the client director and the live procedural fallback). `source` is `"procedural"`. `model` is omitted. No LLM keys required.
 5. **Live** (`DIRECTOR_MODE=live`): LangChain director with a **7 s whole-request** budget (the client aborts `/levels` at 8 s). One `AbortSignal` is shared by every step, measured from request arrival. LLM work is aborted **250 ms** before the 7 s wall so `generatePlan` and the HTTP response still finish in time.
-   1. Primary: `ChatGoogleGenerativeAI` (`DIRECTOR_MODEL`, default `gemini-3.8-flash`), temperature 0.7, `thinkingConfig.thinkingLevel = LOW`, `.withStructuredOutput(LevelPlanLLMGeminiSchema)` then zod `LevelPlanLLM`.
-   2. Parse `LevelPlanLLM` → `clampParTimeMs` → `LevelPlan.parse` → `validatePlan(plan, graph)`.
-   3. If invalid: local `repairPlan` first. If still invalid: **one** LLM repair call that includes the issue messages (same static system prefix), **skipped** when fewer than **2 s** of the LLM window remain.
+   1. Primary: `ChatGoogleGenerativeAI` (`DIRECTOR_MODEL`, default `gemini-3.8-flash`), temperature 0.7, `thinkingConfig.thinkingLevel` from `DIRECTOR_THINKING` (default `low` → `LOW`; `minimal` → `MINIMAL`; `default` omits thinkingConfig). Gemini 3 uses `thinkingLevel`; `thinkingBudget: 0` may be ignored. If Gemini HTTP-400s a thinking level as unsupported, the director retries **once** in the same deadline without `thinkingConfig` and remembers that level process-wide. `.withStructuredOutput(LevelPlanLLMGeminiSchema)` then zod compact `LevelPlanLLM` (`th` + `pl`).
+   2. Hydrate compact `LevelPlanLLM` (theme + placements) via level-core → `clampParTimeMs` → `LevelPlan.parse` → `validatePlan(plan, graph)`.
+   3. If invalid: local deterministic repair (`repairPlan`, then `snapPlacementsToSlots` from level-core when that helper exists) and validate again. Only if still invalid: **one** LLM repair call that includes the issue messages (same static system prefix), **skipped** when fewer than **2 s** of the LLM window remain.
    4. Still invalid, out of time, or a Gemini provider error: `generatePlan(graph, seed, tier)` with `source:"procedural"`.
    5. HTTP 429 or `RESOURCE_EXHAUSTED` opens a process-wide quota breaker for `Retry-After` / `retryDelay` if present, otherwise `LLM_QUOTA_COOLDOWN_S` (default 600 s). While it is open, later misses skip Gemini and return `source:"procedural"` with `fallbackReason:"llm-quota"`. Cache lookup still runs first. Quota fallbacks are not written to `LevelCache` under the LLM key. The breaker logs one warn on open and one info on close, not once per request.
 6. After a successful director/procedural result (except `fallbackReason:"llm-quota"`), the plan is upserted into `LevelCache`. The write is bounded (~200 ms or whatever remains of the 7 s budget) so it cannot push the response past the wall; if the wait elapses the insert continues in the background.
@@ -277,6 +277,8 @@ Allowlist (all must match the request `Origin`):
 
 Requests with no `Origin` (curl, server-side) are allowed. Blocked origins are not reflected in `Access-Control-Allow-Origin` (the route still runs).
 
+`Access-Control-Expose-Headers` includes `X-Request-Id` and `Retry-After` so the cross-origin client can read them.
+
 ---
 
 ## Runtime extras
@@ -301,7 +303,8 @@ None of these are required to start the API. CI sets `TEST_DATABASE_URL` on the 
 | `CORS_ORIGINS` | optional | `http://localhost:5173,https://localhost:5173` | `http://localhost:5173,https://localhost:5173,https://roomquest.vercel.app` | **all**. Comma-separated extra origins. Vercel preview hosts and `https://localhost:*` are hardcoded in CORS. |
 | `GIT_SHA` | optional | `dev` (empty/unset also becomes `dev`) | `9f8e7d6c5b4a3210` | **local** `dev`; **staging** / **prod** = deployed git sha (set by the deploy workflow). |
 | `DIRECTOR_MODEL` | optional | `gemini-3.8-flash` | `gemini-3.8-flash` | **staging** / **prod**; **local** only when exercising live director. |
-| `GOOGLE_API_KEY` | optional | unset | Gemini API key (never commit) | **staging** / **prod** when `DIRECTOR_MODE=live`; **local** live director / **eval** (`pnpm --filter api eval`). Also a **GitHub Actions repository secret** for `.github/workflows/eval.yml`. Blank → health `llm:"disabled"`; live eval skips unless `--mock`. |
+| `DIRECTOR_THINKING` | optional | `low` | `minimal` / `low` / `default` | **staging** / **prod**. Gemini 3 `thinkingLevel`: `LOW` (default; `MINIMAL` 400s on gemini-3.8-flash and is retried once without thinkingConfig), or omit (`default`). |
+| `GOOGLE_API_KEY` | optional | unset | Gemini API key (never commit) | **staging** / **prod** when `DIRECTOR_MODE=live`. **CI / eval / smoke / e2e never call live Gemini** (mock or director-off only). Blank → health `llm:"disabled"`. |
 | `LLM_QUOTA_COOLDOWN_S` | optional | `600` | `600` | **all**. Seconds to skip Gemini after HTTP 429 / `RESOURCE_EXHAUSTED` when the error has no `Retry-After` / `retryDelay`. Health reports `llm:"quota-cooldown"` while the breaker is open. |
 | `DATABASE_URL` | optional | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **local** Docker Postgres 17 (runtime / pooled). **staging** / **prod**: Neon pooled URL — declared in `render.yaml`, values set later (M-10). Unset → health `db:"disabled"`; unreachable → health `db:"down"`. `/levels` still serves without cache (warning logged); `/result` returns `202 {stored:false}`; process still 200. |
 | `DIRECT_URL` | optional | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **local** Docker (Prisma CLI / `pnpm --filter api db:migrate`). **staging** / **prod**: Neon unpooled URL for `migrate deploy` at the end of the Render build (`render.yaml`) and later in GitHub Environments (L-03 / L-04). |
@@ -314,7 +317,7 @@ No extra env knobs for rate limits: 60/h per IP and 10 cache-misses/h per device
 
 ## Director eval (B-07)
 
-`pnpm --filter api eval` calls the LangChain director module **directly** (no HTTP, no Postgres cache, no rate limits) over every available room fixture (up to 5; `IWER_GRAPHS` from `@roomquest/fixtures`, then extra `packages/fixtures/rooms/*.json`, otherwise `synthetic_living_room`) × 4 seed dates × 2 tiers.
+`pnpm --filter api eval` calls the LangChain director module **directly** (no HTTP, no Postgres cache, no rate limits) over every available room fixture (up to 5; **`IWER_GRAPHS` from `@roomquest/fixtures` first**, then extra `packages/fixtures/rooms/*.json`, otherwise `synthetic_living_room`) × 2 tiers × 4 seed dates, capped at `--runs` (default **20**). `--runs` cycles rooms, then tiers, then seeds. The report banner is actual rooms × tiers × seeds (and the `--runs` count when it differs). It includes valid/repaired %, which repair stage fixed each plan, a per-`validatePlan` issue-code table, p50/p95, `thoughtsTokenCount`, distinct surfaces/piece types per plan, and mean pairwise Jaccard overlap of piece-type sets and surface-label sets across rooms (IWER graphs so that overlap is meaningful). Live JSON also stores each run's raw first-try LLM plan (`firstTryPlan`) and, when parse failed, `firstTryRawText`.
 
 It writes `docs/eval/<YYYY-MM-DD>.md` and `docs/eval/<YYYY-MM-DD>.json`, prints a summary, and reports whether the bar is met (≥ 90% valid after repair **and** p95 ≤ 7 s). The process exits non-zero only on harness errors — a missed bar is still exit 0.
 
@@ -324,20 +327,16 @@ It writes `docs/eval/<YYYY-MM-DD>.md` and `docs/eval/<YYYY-MM-DD>.json`, prints 
 | `--rooms N`                 | Cap rooms (default: all available, max 5).                                                         |
 | `--seeds N`                 | Cap seed dates (default: 4).                                                                       |
 | `--tiers easy\|normal\|all` | Subset of tiers (default: both).                                                                   |
+| `--runs N`                  | Total director invocations (default: 20). Cycles the room × tier × seed matrix.                    |
+| `--thinking minimal\|low\|default` | Gemini thinking (default: `DIRECTOR_THINKING` or `low`).                                     |
 | `--out-dir DIR`             | Report directory (default: `docs/eval`).                                                           |
 | `--no-write`                | Print only; do not write files.                                                                    |
 
-Live eval needs `GOOGLE_API_KEY`. If it is unset, the harness prints that clearly and **skips** (exit 0) unless you pass `--mock`. Never hardcode keys. Prices used for the cost estimate live in `apps/api/eval/prices.ts`.
+CI, smoke, e2e and `eval.yml` **never** call live Gemini (billing cap). The GitHub workflow always runs `--mock` (`FakeListChatModel`). If you run the harness without `--mock` and `GOOGLE_API_KEY` is unset, it prints that clearly and **skips** (exit 0). Never hardcode keys. Prices used for the cost estimate live in `apps/api/eval/prices.ts`.
 
 ### GitHub Actions `eval.yml`
 
-Manual **`workflow_dispatch` only** — it does **not** run on pull requests. Required / optional repository secrets:
-
-| Secret           | Required                   | Used for                                                    |
-| ---------------- | -------------------------- | ----------------------------------------------------------- |
-| `GOOGLE_API_KEY` | **required for live eval** | Gemini (`DIRECTOR_MODEL`, default `gemini-3.8-flash`)       |
-
-The workflow sets `DIRECTOR_MODE=live` and reads the API key from that **exact** repository secret name (`GOOGLE_API_KEY` — same as `apps/api/src/config/env.ts`). Optional repository **variable** `DIRECTOR_MODEL` overrides the model id when set (blank → API default). Dispatch with `mock=true` to run FakeListChatModel and skip the live-key check. The markdown + JSON report is uploaded as the `director-eval-report` artifact.
+Manual **`workflow_dispatch` only** — it does **not** run on pull requests. It always uses `--mock` (`DIRECTOR_MODE=mock`) and does **not** read `GOOGLE_API_KEY`. The markdown + JSON report is uploaded as the `director-eval-report` artifact.
 
 ## Local run (no database)
 

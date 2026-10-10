@@ -13,4 +13,6 @@ export interface EvalHarnessOptions {
   logger?: DirectorLogger;
   googleApiKey?: string;
   directorModel?: string;
+  thinking?: string;
+  runCount?: number;
 }

@@ -12,6 +12,9 @@ import {
   stunSlime,
   canExplorerPassSlime,
   compactGraphForPrompt,
+  graphCanSeparateHutAndShrine,
+  graphHasCatalogHut,
+  graphHasPlayableView,
   promptGraphJsonBytes,
   snapPlacementsToSlots,
   orderSurfacesByArea,
@@ -74,6 +77,12 @@ describe('level-core', () => {
 
   it('exports snapPlacementsToSlots as a local geometry repair', () => {
     expect(snapPlacementsToSlots).toBeTypeOf('function');
+  });
+
+  it('exports graph-capacity helpers used by director waiver lines', () => {
+    expect(graphCanSeparateHutAndShrine).toBeTypeOf('function');
+    expect(graphHasCatalogHut).toBeTypeOf('function');
+    expect(graphHasPlayableView).toBeTypeOf('function');
   });
 
   it('exports room-reading order, wander, and sequencer', () => {

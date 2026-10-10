@@ -13,7 +13,6 @@ function formatPiece(id: (typeof PIECE_IDS)[number]): string {
   const piece = KIT_CATALOG[id];
   const bits: string[] = [
     `${piece.id}: ${piece.role}.`,
-    `interaction=${piece.interaction}.`,
     `surfaces=${formatAllowed(piece.allowedSurfaces)}.`,
   ];
   if (piece.minArea !== undefined) {
@@ -41,7 +40,7 @@ function formatPiece(id: (typeof PIECE_IDS)[number]): string {
     bits.push(`maxReachDistance=${String(piece.maxReachDistance)}m.`);
   }
   if (piece.requiresSecondSurface === true) {
-    bits.push('requires second surface (`to`).');
+    bits.push('requires second surface (`t`).');
   }
   if (piece.maxPerLevel !== undefined) {
     bits.push(`maxPerLevel=${String(piece.maxPerLevel)}.`);

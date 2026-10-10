@@ -20,6 +20,7 @@ const NEST_ENV_KEYS = [
   'DATABASE_URL',
   'DIRECT_URL',
   'DIRECTOR_MODEL',
+  'DIRECTOR_THINKING',
 ] as const;
 
 /** Render injects PORT; NODE_VERSION is a native runtime pin, not Nest. */

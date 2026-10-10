@@ -16,6 +16,7 @@ import {
   runDirector,
   type DirectorOutcome,
 } from './run-director';
+import { resolveDirectorThinkingId, thinkingConfigForId } from './thinking';
 
 @Injectable()
 export class DirectorService {
@@ -68,11 +69,17 @@ export class DirectorService {
     }
 
     const directorModel = this.config.get('DIRECTOR_MODEL', { infer: true });
+    const thinking = thinkingConfigForId(
+      resolveDirectorThinkingId(
+        this.config.get('DIRECTOR_THINKING', { infer: true })
+      )
+    );
 
     const primary = wrapChatModel(
       this.factory.createPrimary({
         model: directorModel,
         apiKey: googleKey,
+        thinking,
       }),
       'google',
       directorModel

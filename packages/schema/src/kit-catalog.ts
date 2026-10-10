@@ -43,6 +43,12 @@ export interface PieceConstraints {
  * Complete piece kit catalog with numeric constraints from PRD §4.2
  * Structured for easy addition of post-MVP pieces
  */
+/** Tray pieces the player snaps in; every other kit piece is pre-placed. */
+export const PLAYER_BUILT_PIECE_IDS: ReadonlySet<PieceId> = new Set([
+  'plank_bridge',
+  'ramp',
+]);
+
 export const KIT_CATALOG: Readonly<Record<PieceId, PieceConstraints>> = {
   village_hut: {
     id: 'village_hut',
