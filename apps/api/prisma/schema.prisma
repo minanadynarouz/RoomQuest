@@ -23,6 +23,7 @@ model LevelCache {
   plan          Json
   source        String
   model         String?
+  metadata      Json     @default("{}")
   createdAt     DateTime @default(now())
   results       SessionResult[]
 }
@@ -41,6 +42,7 @@ model SessionResult {
   timeMs     Int
   completed  Boolean
   planSource String
+  relaxed    Json?
   createdAt  DateTime    @default(now())
 
   @@index([levelKey])

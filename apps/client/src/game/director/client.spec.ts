@@ -506,7 +506,9 @@ describe('createDirectorClient', () => {
       result: {
         ok: false,
         issues: [{ code: 'GOAL_UNREACHABLE', message: 'no path' }],
+        relaxed: [],
       },
+      relaxed: [],
     });
     const fetchFn = vi.fn<FetchLike>(() =>
       Promise.resolve(
@@ -686,6 +688,29 @@ describe('createDirectorClient', () => {
     expect(result.apiErrorCode).toBe('INTERNAL');
     expect(result.source).toBe('procedural');
     expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('reports room-unplayable when the API returns 422 ROOM_UNPLAYABLE', async () => {
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve(
+        jsonResponse(
+          {
+            error: {
+              code: 'ROOM_UNPLAYABLE',
+              message: 'Room cannot produce a valid plan even with relaxed rules',
+            },
+          },
+          422
+        )
+      )
+    );
+
+    const result = await client(fetchFn).requestPlan(GRAPH);
+
+    expect(result.usedFallback).toBe(true);
+    expect(result.fallbackReason).toBe('room-unplayable');
+    expect(result.apiErrorCode).toBe('ROOM_UNPLAYABLE');
+    expect(result.source).toBe('procedural');
   });
 
   it('falls back on a non-envelope HTTP error without throwing', async () => {

@@ -2,12 +2,14 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { validatePlan } from '@roomquest/level-core';
 import { LevelPlan, LevelResponse, type LevelRequest } from '@roomquest/schema';
 import { RateLimitedException } from '../common/rate-limited.exception';
+import { RoomUnplayableException } from '../common/room-unplayable.exception';
 import { DirectorService } from '../director/director.service';
 import { DIRECTOR_RUNTIME, type DirectorRuntime } from '../director/models';
 import { PROMPT_VERSION } from '../director/prompts';
 import { makeCacheKey } from './cache-key';
 import { CacheMissLimiter } from './cache-miss-limiter';
 import { LevelCacheRepository } from './level-cache.repository';
+import { cacheMetadataFromRelaxed } from './relaxed-metadata';
 
 @Injectable()
 export class LevelsService {
@@ -53,6 +55,7 @@ export class LevelsService {
             promptVersion,
             latencyMs: Math.max(0, now() - startedMs),
             repairs: [],
+            relaxed: validation.relaxed,
           });
         }
         this.logger.debug(
@@ -67,10 +70,15 @@ export class LevelsService {
     }
 
     const response = await this.director.plan(request);
+    const validation = validatePlan(response.plan, request.graph);
+    if (!validation.ok) {
+      throw new RoomUnplayableException();
+    }
     const body = LevelResponse.parse({
       ...response,
       cacheKey,
       latencyMs: Math.max(0, now() - startedMs),
+      relaxed: validation.relaxed,
     });
 
     if (body.fallbackReason !== 'llm-quota') {
@@ -84,6 +92,7 @@ export class LevelsService {
           plan: body.plan,
           source: body.source,
           model: body.model ?? null,
+          metadata: cacheMetadataFromRelaxed(body.relaxed ?? []),
         },
         startedMs,
         now()

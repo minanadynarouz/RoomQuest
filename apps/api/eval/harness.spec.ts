@@ -47,6 +47,9 @@ describe('eval harness', () => {
     expect(typeof parsed.aggregate.validBeforeRepairPct).toBe('number');
     expect(typeof parsed.aggregate.validAfterRepairPct).toBe('number');
     expect(typeof parsed.aggregate.fallbackToProceduralPct).toBe('number');
+    expect(typeof parsed.aggregate.relaxedPct.minPath).toBe('number');
+    expect(typeof parsed.aggregate.relaxedPct.hutTable).toBe('number');
+    expect(typeof parsed.aggregate.relaxedPct.portalFov).toBe('number');
     expect(typeof parsed.aggregate.p50LatencyMs).toBe('number');
     expect(typeof parsed.aggregate.p95LatencyMs).toBe('number');
     expect(typeof parsed.aggregate.estimatedCostUsd).toBe('number');
@@ -66,6 +69,7 @@ describe('eval harness', () => {
       expect(typeof run.latencyMs).toBe('number');
       expect(Number.isFinite(run.latencyMs)).toBe(true);
       expect(run.latencyMs).toBeGreaterThanOrEqual(0);
+      expect(Array.isArray(run.relaxed)).toBe(true);
       expect(Array.isArray(run.telemetry)).toBe(true);
       expect(run.telemetry.length).toBeGreaterThanOrEqual(1);
     }

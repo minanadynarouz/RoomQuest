@@ -6,6 +6,7 @@ import {
 } from '@roomquest/schema';
 import { clampParTimeMs } from './clamp-par';
 import { checkConstraints } from './constraints';
+import { relaxedRulesFor } from './relaxed-rules';
 import { checkSolvability } from './solvability';
 import { issue, type Issue, type ValidationResult } from './types';
 
@@ -54,13 +55,21 @@ export function validatePlan(
   }
 
   if (!parsedPlan.success || !parsedGraph.success) {
-    return { ok: false, issues };
+    return {
+      ok: false,
+      issues,
+      relaxed: parsedGraph.success ? relaxedRulesFor(parsedGraph.data) : [],
+    };
   }
 
   checkConstraints(parsedPlan.data, parsedGraph.data, issues);
   checkSolvability(parsedPlan.data, parsedGraph.data, issues);
 
-  return { ok: issues.length === 0, issues };
+  return {
+    ok: issues.length === 0,
+    issues,
+    relaxed: relaxedRulesFor(parsedGraph.data),
+  };
 }
 
 function checkParTime(plan: unknown, issues: Issue[]): void {

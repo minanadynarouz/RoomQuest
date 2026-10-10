@@ -6,5 +6,5 @@
  * {@link LevelPlan}.
  */
 
-export { generatePlan } from './generate-plan';
-export type { GeneratePlanOptions } from './generate-plan';
+export { generatePlan, generatePlanResult } from './generate-plan';
+export type { GeneratePlanOptions, GeneratePlanResult } from './generate-plan';

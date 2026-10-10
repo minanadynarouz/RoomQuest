@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { procLevelKey, type ResultRequest } from '@roomquest/schema';
+import { procLevelKey, type RelaxedRule, type ResultRequest } from '@roomquest/schema';
 import { describe, expect, it, vi } from 'vitest';
 import { UnknownLevelException } from '../common/unknown-level.exception';
 import { ResultsService } from './results.service';
@@ -69,6 +69,25 @@ describe('ResultsService', () => {
     expect(insert).toHaveBeenCalledWith({
       ...body,
       levelKey: key,
+    });
+  });
+
+  it('forwards optional relaxed waiver ids to the repository', async () => {
+    const insert = vi.fn(() =>
+      Promise.resolve({ kind: 'stored' as const, id: 'res_relaxed' })
+    );
+    const { service } = await serviceWith(insert);
+    const relaxedBody: ResultRequest = {
+      ...body,
+      relaxed: ['portalFov'] satisfies RelaxedRule[],
+    };
+    await expect(service.submit('abc123def4567890', relaxedBody)).resolves.toEqual({
+      stored: true,
+      id: 'res_relaxed',
+    });
+    expect(insert).toHaveBeenCalledWith({
+      ...relaxedBody,
+      levelKey: 'abc123def4567890',
     });
   });
 
