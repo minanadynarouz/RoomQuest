@@ -38,6 +38,8 @@ export const defaultDirectorChatFactory: DirectorChatFactory = {
       model: input.model,
       apiKey: input.apiKey,
       temperature: DIRECTOR_TEMPERATURE,
+      // LangChain's AsyncCaller defaults to 6 retries with backoff. The
+      // director owns the 7 s budget, so draft and repair must not retry.
       maxRetries: 0,
       thinkingConfig: { thinkingLevel: 'LOW' },
     });

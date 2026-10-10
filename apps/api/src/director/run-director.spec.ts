@@ -208,6 +208,25 @@ describe('runDirector', () => {
       expect(outcome.telemetry[0]?.outcome).toBe('error');
       expect(validatePlan(outcome.response.plan, request.graph).ok).toBe(true);
     });
+
+    it('invokes Gemini exactly once on a provider error (no hidden retries)', async () => {
+      let t = 0;
+      const primary = new ThrowingFakeListChatModel(new Error('gemini down'));
+      primary.onThrow = () => {
+        t = 400;
+      };
+      const outcome = await runDirector(request, {
+        primary: wrapChatModel(primary, 'google', 'gemini-3.8-flash'),
+        budgetMs: DIRECTOR_BUDGET_MS,
+        proceduralReserveMs: PROCEDURAL_RESERVE_MS,
+        now: () => t,
+        logger: silentLogger,
+      });
+      expect(primary.generateCalls).toBe(1);
+      expect(outcome.response.source).toBe('procedural');
+      expect(outcome.telemetry).toHaveLength(1);
+      expect(outcome.telemetry[0]?.outcome).toBe('error');
+    });
   });
 
   it('falls back to procedural after two invalid LLM plans', async () => {
