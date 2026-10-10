@@ -52,8 +52,10 @@ describe('director prompts', () => {
       'tier',
       'recentThemes',
       'variation',
+      'waivers',
       'graph',
     ]);
+    expect(Array.isArray(parsed.waivers)).toBe(true);
     const variation = parsed.variation as {
       themeWord: string;
       preferredStartSurface: string;
@@ -99,6 +101,7 @@ describe('director prompts', () => {
     expect(SYSTEM_PREFIX).toBe(SYSTEM_PREFIX);
     expect(SYSTEM_PREFIX).not.toContain('preferredStartSurface');
     expect(SYSTEM_PREFIX).not.toContain('themeWord');
+    expect(SYSTEM_PREFIX).not.toContain('waivers');
   });
 
   it('graphForPrompt is the toggleable compactGraphForPrompt wrapper', () => {

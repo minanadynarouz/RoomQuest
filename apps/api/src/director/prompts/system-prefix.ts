@@ -16,8 +16,8 @@ const RULES = `## Rules
 /**
  * Static system prefix. Do not interpolate request data here — that would
  * bust Gemini implicit caching. User content is `{seed, tier, recentThemes,
- * variation, graph}` with seed-derived variation next to the room graph
- * last, plus an optional repair follow-up.
+ * variation, waivers, graph}` with seed-derived variation and graph-capacity
+ * waiver lines next to the room graph last, plus an optional repair follow-up.
  */
 export const SYSTEM_PREFIX: string = [
   ROLE,
