@@ -60,6 +60,7 @@ describe('DirectorService', () => {
     const response = await director.plan(request);
     const parsed = LevelResponse.parse(response);
     expect(parsed.source).toBe('procedural');
+    expect(parsed.relaxed).toEqual([]);
     expect(validatePlan(parsed.plan, request.graph).ok).toBe(true);
     expect(parsed.plan.start).toBeTruthy();
     expect(request.graph.nodes.some((node) => node.id === parsed.plan.start)).toBe(

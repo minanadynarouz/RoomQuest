@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Server } from 'node:http';
 import type { INestApplication } from '@nestjs/common';
-import { SYNTHETIC_LIVING_ROOM } from '@roomquest/fixtures';
+import { IWER_GRAPHS, SYNTHETIC_LIVING_ROOM } from '@roomquest/fixtures';
 import { validatePlan } from '@roomquest/level-core';
 import {
   LevelRequest,
@@ -114,6 +114,7 @@ describe('API contract (B-02)', () => {
       expect(parsed.source).toBe('procedural');
       expect(parsed.promptVersion).toBe(PROMPT_VERSION);
       expect(parsed.repairs).toEqual([]);
+      expect(parsed.relaxed).toEqual([]);
       expect(validatePlan(parsed.plan, validBody.graph).ok).toBe(true);
       expect(
         validBody.graph.nodes.some((node) => node.id === parsed.plan.start)
@@ -127,6 +128,62 @@ describe('API contract (B-02)', () => {
         .digest('hex')
         .slice(0, 16);
       expect(parsed.cacheKey).toBe(expectedKey);
+    });
+
+    it('echoes IWER living_room waiver ids on relaxed', async () => {
+      const body = LevelRequest.parse({
+        graph: IWER_GRAPHS.living_room,
+        date: '2026-10-14',
+        tier: 'easy',
+      });
+      const res = await levelsPost(app).send(body).expect(200);
+      const parsed = LevelResponse.parse(res.body as unknown);
+      expect(parsed.relaxed).toEqual(['hutTable', 'portalFov']);
+      expect(validatePlan(parsed.plan, body.graph).ok).toBe(true);
+    });
+
+    it('returns 422 ROOM_UNPLAYABLE instead of an invalid plan', async () => {
+      const unplayable = LevelRequest.parse({
+        graph: {
+          version: 1,
+          roomHash: 'unplayable01',
+          mode: 'scene',
+          floorY: 0,
+          nodes: [
+            {
+              id: 's1',
+              label: 'table',
+              kind: 'plane',
+              topHeight: 0.75,
+              centroid: [0, 0.75, 0],
+              size: [1, 1],
+              yaw: 0,
+              area: 1,
+              reach: 'hand',
+              angleFromForward: 0,
+            },
+            {
+              id: 's2',
+              label: 'table',
+              kind: 'plane',
+              topHeight: 0.95,
+              centroid: [0, 0.95, 0],
+              size: [1, 1],
+              yaw: 0,
+              area: 1,
+              reach: 'ray',
+              angleFromForward: 80,
+            },
+          ],
+          edges: [],
+        },
+        date: '2026-10-14',
+        tier: 'easy',
+      });
+      const res = await levelsPost(app).send(unplayable).expect(422);
+      const body = res.body as ErrorEnvelope;
+      expect(body.error.code).toBe('ROOM_UNPLAYABLE');
+      expect(typeof body.error.message).toBe('string');
     });
 
     it('returns 400 INVALID_REQUEST for a bad body', async () => {

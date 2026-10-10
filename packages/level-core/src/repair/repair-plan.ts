@@ -4,6 +4,7 @@ import {
   LevelPlan,
   PAR_TIME_MIN_MS,
   type Placement,
+  type RelaxedRule,
   type SurfaceGraph,
   type SurfaceNode,
 } from '@roomquest/schema';
@@ -18,17 +19,20 @@ import {
   isPlayerReachable,
   pairMetrics,
 } from '../validate/graph-utils';
+import { relaxedRulesFor } from '../validate/relaxed-rules';
 import type { IssueCode, ValidationResult } from '../validate/types';
 import { validatePlan } from '../validate/validate-plan';
 
 /**
  * Result of {@link repairPlan}. `repairs` is copied into
- * `LevelResponse.repairs` by the director API.
+ * `LevelResponse.repairs` by the director API. `relaxed` is the same
+ * waiver list as `result.relaxed`.
  */
 export interface RepairResult {
   plan: LevelPlan;
   repairs: string[];
   result: ValidationResult;
+  relaxed: RelaxedRule[];
 }
 
 const DROP_CODES: ReadonlySet<IssueCode> = new Set([
@@ -69,10 +73,12 @@ export function repairPlan(plan: LevelPlan, graph: SurfaceGraph): RepairResult {
     return repairPlanInner(plan, graph);
   } catch {
     const fallback = emptyPlan();
+    const result = safeValidate(fallback, graph);
     return {
       plan: fallback,
       repairs: ['gave up on unrecoverable input'],
-      result: safeValidate(fallback, graph),
+      result,
+      relaxed: result.relaxed,
     };
   }
 }
@@ -89,7 +95,7 @@ function repairPlanInner(plan: LevelPlan, graph: SurfaceGraph): RepairResult {
   next = pruneRefs(next);
 
   const result = safeValidate(next, graph);
-  return { plan: next, repairs, result };
+  return { plan: next, repairs, result, relaxed: result.relaxed };
 }
 
 function safeValidate(plan: LevelPlan, graph: SurfaceGraph): ValidationResult {
@@ -104,7 +110,16 @@ function safeValidate(plan: LevelPlan, graph: SurfaceGraph): ValidationResult {
           message: 'validatePlan threw on repaired input',
         },
       ],
+      relaxed: relaxedForGraph(graph),
     };
+  }
+}
+
+function relaxedForGraph(graph: SurfaceGraph): RelaxedRule[] {
+  try {
+    return relaxedRulesFor(graph);
+  } catch {
+    return [];
   }
 }
 

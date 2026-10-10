@@ -1,3 +1,5 @@
+import type { RelaxedRule } from '@roomquest/schema';
+
 /**
  * Typed issues returned by {@link validatePlan}.
  *
@@ -55,10 +57,12 @@ export interface Issue {
 
 /**
  * Result of {@link validatePlan}. `ok` is true iff `issues` is empty.
+ * `relaxed` lists graph-aware waivers that were applied, in canonical order.
  */
 export interface ValidationResult {
   ok: boolean;
   issues: Issue[];
+  relaxed: RelaxedRule[];
 }
 
 export function issue(

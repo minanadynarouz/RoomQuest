@@ -22,7 +22,7 @@ JSON only. Request body ≤ **16 KB**.
 | Method & path                              | Request                                                                           | Success                                     | Errors                                                                                                                       |
 | ------------------------------------------ | --------------------------------------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `GET /api/health`                          | none                                                                              | `200 {status:"ok", version, db, llm, time}` | none (always 200 if the process is up)                                                                                       |
-| `POST /api/v1/levels`                      | Headers `X-Device-Id` (UUID v4), `X-Client-Version` (semver). Body `LevelRequest` | `200 LevelResponse`                         | `400 {error:{code:"INVALID_REQUEST", message, issues}}` · `413` oversized body (see below) · `429 {error:{code:"RATE_LIMITED", retryAfterS}}` · `500 {error:{code:"INTERNAL"}}` |
+| `POST /api/v1/levels`                      | Headers `X-Device-Id` (UUID v4), `X-Client-Version` (semver). Body `LevelRequest` | `200 LevelResponse`                         | `400 {error:{code:"INVALID_REQUEST", message, issues}}` · `413` oversized body (see below) · `422 {error:{code:"ROOM_UNPLAYABLE"}}` · `429 {error:{code:"RATE_LIMITED", retryAfterS}}` · `500 {error:{code:"INTERNAL"}}` |
 | `POST /api/v1/levels/:cacheKey/result`     | Path `:cacheKey` (16-hex cache hash **or** `proc:<seed>:<tier>`). Body `ResultRequest` | `201 {id}` · `202 {stored:false}` (no DB)   | `400 {error:{code:"INVALID_REQUEST", message, issues}}` (bad body, malformed `proc:` key, or `proc:` + non-`procedural` `planSource`) · `404 {error:{code:"UNKNOWN_LEVEL"}}` (director cache key missing) · `413` · `429 {error:{code:"RATE_LIMITED", retryAfterS}}` |
 
 Out of scope here: `POST /api/v1/levels/:cacheKey/adapt` (post-MVP).
@@ -100,10 +100,11 @@ Architecture server semantics:
    4. Still invalid, out of time, or a Gemini provider error: `generatePlan(graph, seed, tier)` with `source:"procedural"`.
    5. HTTP 429 or `RESOURCE_EXHAUSTED` opens a process-wide quota breaker for `Retry-After` / `retryDelay` if present, otherwise `LLM_QUOTA_COOLDOWN_S` (default 600 s). While it is open, later misses skip Gemini and return `source:"procedural"` with `fallbackReason:"llm-quota"`. Cache lookup still runs first. Quota fallbacks are not written to `LevelCache` under the LLM key. The breaker logs one warn on open and one info on close, not once per request.
 6. After a successful director/procedural result (except `fallbackReason:"llm-quota"`), the plan is upserted into `LevelCache`. The write is bounded (~200 ms or whatever remains of the 7 s budget) so it cannot push the response past the wall; if the wait elapses the insert continues in the background.
-7. `source` is `"cache"` | `"llm"` | `"llm_repaired"` | `"procedural"`. Optional `fallbackReason` is `"llm-quota"` when the quota breaker skipped Gemini. `model` is set for LLM sources (and echoed from the cached row on a hit). `repairs` lists local repair actions (and `"llm-repair"` when the second call ran); cache hits return `repairs: []`.
+7. `source` is `"cache"` | `"llm"` | `"llm_repaired"` | `"procedural"`. Optional `fallbackReason` is `"llm-quota"` when the quota breaker skipped Gemini. `model` is set for LLM sources (and echoed from the cached row on a hit). `repairs` lists local repair actions (and `"llm-repair"` when the second call ran); cache hits return `repairs: []`. Optional `relaxed` is `RelaxedRule[]` (`minPath` | `hutTable` | `portalFov`) — the graph-aware waivers applied while validating the plan, next to `source` / `fallbackReason`. Empty when none. Not part of `LevelPlanLLM`. Stored on `LevelCache.metadata` and accepted on `POST .../result` as optional `relaxed`.
 8. `latencyMs` is server handling time in milliseconds.
-9. If `DIRECTOR_MODE=live` but `GOOGLE_API_KEY` is unset, the API logs a warning and serves a procedural plan so it still starts. CI and local mock runs need no key.
-10. If `DATABASE_URL` is unset or Postgres is unreachable, `/levels` still returns 200 (director/procedural only, no cache) and logs a warning. Do not create Neon/Render resources for local or CI — use Docker Postgres 17 or the GitHub Actions postgres service.
+9. If even relaxed `generatePlan` / `repairPlan` cannot produce a plan that `validatePlan` accepts, the API returns **422** `{error:{code:"ROOM_UNPLAYABLE"}}` instead of an invalid plan. The client may report `fallbackReason: "room-unplayable"`. Quota / timeout still degrade to a procedural plan when that plan is valid.
+10. If `DIRECTOR_MODE=live` but `GOOGLE_API_KEY` is unset, the API logs a warning and serves a procedural plan so it still starts. CI and local mock runs need no key.
+11. If `DATABASE_URL` is unset or Postgres is unreachable, `/levels` still returns 200 (director/procedural only, no cache) and logs a warning. Do not create Neon/Render resources for local or CI — use Docker Postgres 17 or the GitHub Actions postgres service.
 
 **Mock plan vs request graph:** mock and procedural plans are generated against the incoming `SurfaceGraph` (then validated and repaired). The client still re-validates with `level-core` as a defense in depth.
 
@@ -145,7 +146,8 @@ Stored row: `SessionResult.levelKey` is always the posted key. `SessionResult.ca
   "gems": 2,
   "timeMs": 180000,
   "completed": true,
-  "planSource": "procedural"
+  "planSource": "procedural",
+  "relaxed": ["hutTable"]
 }
 ```
 
@@ -157,6 +159,7 @@ Stored row: `SessionResult.levelKey` is always the posted key. `SessionResult.ca
 | `timeMs`     | Positive integer, max `3600000` (1 hour).                                                     |
 | `completed`  | Boolean.                                                                                      |
 | `planSource` | Same enum as `LevelResponse.source`: `"cache"` \| `"llm"` \| `"llm_repaired"` \| `"procedural"`. |
+| `relaxed`    | Optional. Same `RelaxedRule[]` as `LevelResponse.relaxed`. Omitted or `[]` when no waivers applied. |
 
 ### Success
 
@@ -215,6 +218,21 @@ JSON bodies larger than 16 KB are rejected **before** zod parsing:
 ```
 
 Architecture §6 lists 400 / 429 / 500. 413 is the HTTP status for payload too large; the envelope still uses `INVALID_REQUEST`.
+
+### 422 Room unplayable
+
+Returned by `POST /api/v1/levels` when the request graph is schema-valid but even relaxed generate/repair cannot produce a plan that `validatePlan` accepts. The response is **not** a `LevelResponse` and is not written to `LevelCache`.
+
+```json
+{
+  "error": {
+    "code": "ROOM_UNPLAYABLE",
+    "message": "Room cannot produce a valid plan even with relaxed rules"
+  }
+}
+```
+
+The client may surface this as `fallbackReason: "room-unplayable"`.
 
 ### 404 Unknown level
 
@@ -316,7 +334,7 @@ No extra env knobs for rate limits: 60/h per IP and 10 cache-misses/h per device
 
 `pnpm --filter api eval` calls the LangChain director module **directly** (no HTTP, no Postgres cache, no rate limits) over every available room fixture (up to 5; `IWER_GRAPHS` from `@roomquest/fixtures`, then extra `packages/fixtures/rooms/*.json`, otherwise `synthetic_living_room`) × 4 seed dates × 2 tiers.
 
-It writes `docs/eval/<YYYY-MM-DD>.md` and `docs/eval/<YYYY-MM-DD>.json`, prints a summary, and reports whether the bar is met (≥ 90% valid after repair **and** p95 ≤ 7 s). The process exits non-zero only on harness errors — a missed bar is still exit 0.
+It writes `docs/eval/<YYYY-MM-DD>.md` and `docs/eval/<YYYY-MM-DD>.json`, prints a summary, and reports whether the bar is met (≥ 90% valid after repair **and** p95 ≤ 7 s). The report includes `% of runs` per `RelaxedRule` (`minPath`, `hutTable`, `portalFov`). The process exits non-zero only on harness errors — a missed bar is still exit 0.
 
 | Flag                        | Meaning                                                                                            |
 | --------------------------- | -------------------------------------------------------------------------------------------------- |
