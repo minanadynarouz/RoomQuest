@@ -1,5 +1,5 @@
 import { createSystem, Vector3, type Entity, type Object3D } from '@iwsdk/core';
-import { explorerPath } from '@roomquest/level-core';
+import { explorerPath, type ExplorerPath } from '@roomquest/level-core';
 import type { LevelPlan, SurfaceGraph } from '@roomquest/schema';
 import type { GameStore } from '../../game/index.js';
 import {
@@ -74,11 +74,43 @@ export class ExplorerSystem
     const path = explorerPath(plan, graph);
     this.gemHideCursor = 0;
     this.movementFrozen = false;
+    this.walker.stopWander();
     if (this.store) {
       this.walker.begin(path, plan, this.store);
     }
     this.started = true;
     this.syncModel(0);
+  }
+
+  /** Room-reading: sit Pip on a surface before the first sniff hop. */
+  placeAt(x: number, y: number, z: number, yaw: number): void {
+    if (this.started && this.store?.phase === 'playing') {
+      return;
+    }
+    this.walker.setPose(x, y, z, yaw);
+    this.syncModel(0);
+  }
+
+  /** Room-reading: walk an adjacent-only path using the play hopper. */
+  beginWander(path: ExplorerPath): void {
+    if (this.started && this.store?.phase === 'playing') {
+      return;
+    }
+    this.walker.beginWander(path);
+    this.syncModel(0);
+  }
+
+  /** Room-reading: face an unreachable highlight and sniff in place. */
+  faceToward(x: number, z: number): void {
+    if (this.started && this.store?.phase === 'playing') {
+      return;
+    }
+    this.walker.faceToward(x, z);
+    this.syncModel(0);
+  }
+
+  stopWander(): void {
+    this.walker.stopWander();
   }
 
   /** F-07: stop walking without resetting pose or path. */
@@ -119,6 +151,13 @@ export class ExplorerSystem
   }
 
   update(delta: number, time: number): void {
+    if (this.walker.isWandering) {
+      if (!this.movementFrozen) {
+        this.walker.update(delta, time);
+      }
+      this.syncModel(time);
+      return;
+    }
     if (!this.started || !this.store) return;
     if (this.movementFrozen || this.store.phase === 'paused') {
       this.syncModel(time);

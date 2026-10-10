@@ -12,6 +12,7 @@ export default defineConfig({
         'src/generate/**/*.ts',
         'src/interact/**/*.ts',
         'src/prompt/**/*.ts',
+        'src/room-reading/**/*.ts',
       ],
       exclude: [
         'src/validate/**/*.spec.ts',
@@ -21,6 +22,7 @@ export default defineConfig({
         'src/generate/test-graphs.ts',
         'src/interact/**/*.spec.ts',
         'src/prompt/**/*.spec.ts',
+        'src/room-reading/**/*.spec.ts',
       ],
       thresholds: {
         lines: 90,

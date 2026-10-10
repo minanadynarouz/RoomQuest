@@ -22,6 +22,7 @@ import type { GateLeverDebugApi } from '../systems/GateLeverSystem.js';
 import type { VillageAnchorDebugApi } from '../systems/VillageAnchorSystem.js';
 import type { PlatformDebugApi } from '../systems/PlatformRailSystem.js';
 import type { SlimeDebugApi } from '../systems/SlimeSystem.js';
+import type { RoomReadingDebugApi } from '../systems/RoomReadingSystem.js';
 import type { RqPerfStats } from './stats.js';
 
 export interface RqHudDebug {
@@ -77,6 +78,8 @@ export interface RqHooks {
   villageAnchor?: VillageAnchorDebugApi;
   gateLever?: GateLeverDebugApi | null;
   slime?: SlimeDebugApi | null;
+  /** In-flight surface sweep while the director request is open. */
+  roomReading?: RoomReadingDebugApi | null;
 }
 
 /** X-05 walker debug surface. `getWorldPosition` matches F-06's ExplorerTarget. */

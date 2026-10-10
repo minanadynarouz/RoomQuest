@@ -392,5 +392,6 @@ jobs:
             docs/img/x08/
             docs/img/x09/
             docs/img/x07/
+            docs/img/room-reading/
             /tmp/client-dev.log
           if-no-files-found: ignore

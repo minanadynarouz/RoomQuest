@@ -5,7 +5,7 @@ import {
   SYNTHETIC_PLATFORM_PORTAL_PLAN,
   SYNTHETIC_SLIME_PLAN,
 } from '@roomquest/fixtures';
-import { explorerPath } from '@roomquest/level-core';
+import { explorerPath, wanderPath } from '@roomquest/level-core';
 import type { LevelPlan } from '@roomquest/schema';
 import { createGameStore } from '../../game/index.js';
 import { pullLever } from '../lever/activate.js';
@@ -290,5 +290,42 @@ describe('ExplorerWalker blockers', () => {
     expect(['teleporting', 'walking', 'celebrating', 'idle']).toContain(
       walker.state
     );
+  });
+});
+
+describe('ExplorerWalker room-reading wander', () => {
+  it('walks an adjacent wander path then sniffs', () => {
+    const walker = new ExplorerWalker();
+    walker.setPose(0, 0, -1, 0);
+    const path = wanderPath(GRAPH, 's5', 's4');
+    expect(path).not.toBeNull();
+    if (!path) return;
+    walker.beginWander(path);
+    expect(walker.isWandering).toBe(true);
+    for (let i = 0; i < 80; i += 1) {
+      walker.update(0.25, i * 0.25);
+    }
+    expect(walker.state).toBe('sniffing');
+    expect(walker.pose.z).toBeCloseTo(path.waypoints[2]?.pose.position[2] ?? 0, 1);
+  });
+
+  it('faces an unreachable surface without walking', () => {
+    const walker = new ExplorerWalker();
+    walker.setPose(0, 0, -1, 0);
+    const before = { ...walker.pose };
+    walker.faceToward(1.2, -2.4);
+    walker.update(0.25, 0.25);
+    expect(walker.state).toBe('sniffing');
+    expect(walker.pose.x).toBe(before.x);
+    expect(walker.pose.z).toBe(before.z);
+    expect(walker.pose.yaw).not.toBe(before.yaw);
+  });
+
+  it('stops wandering when the play path begins', () => {
+    const { store, walker } = playing();
+    walker.faceToward(1, -1);
+    expect(walker.isWandering).toBe(true);
+    walker.begin(explorerPath(PLAN, GRAPH), PLAN, store);
+    expect(walker.isWandering).toBe(false);
   });
 });
