@@ -13,3 +13,16 @@ export * from './prompt';
 export * from './room-reading';
 export { snapPlacementsToSlots } from './repair';
 export type { SnapChange, SnapResult } from './repair';
+export {
+  hintedSlotIds,
+  PlacementSlotId,
+  resolveSlotIds,
+} from './prompt';
+export type {
+  CompactHintedSlot,
+  LevelPlanWithSlots,
+  ResolveSlotIdsResult,
+  SlotResolveIssue,
+  SlotResolveIssueCode,
+  SlotResolveOptions,
+} from './prompt';

@@ -110,6 +110,20 @@ export function snapPlacementsToSlots(
       reason
     );
     if (!moved) {
+      if (reason === 'u/v out of bounds' || reason === 'non-finite u/v') {
+        const [u, v] = quantizeUv(current.u, current.v);
+        const clamped: Placement = { ...current, u, v };
+        applyPlacement(next, clamped);
+        byId.set(clamped.id, clamped);
+        accepted.push(toOccupied(clamped));
+        changes.push({
+          id: current.id,
+          from: poseOf(current),
+          to: poseOf(clamped),
+          reason,
+        });
+        continue;
+      }
       accepted.push(toOccupied(current));
       continue;
     }
@@ -205,7 +219,7 @@ function invalidReason(
   if (placement.piece === 'crystal_shrine' && placement.surface !== plan.goal) {
     return 'shrine not on goal';
   }
-  if (!pieceFitsSurface(placement.piece, surface)) {
+  if (!pieceFitsSurface(placement.piece, surface, graph)) {
     return 'surface does not fit piece';
   }
   if (
@@ -465,9 +479,13 @@ function clampFinite(value: number): number {
 
 function isUsableSurface(
   piece: PieceId,
-  node: SurfaceNode
+  node: SurfaceNode,
+  graph: SurfaceGraph
 ): boolean {
-  return pieceFitsSurface(piece, node) && orientedFootprint(node, piece) !== null;
+  return (
+    pieceFitsSurface(piece, node, graph) &&
+    orientedFootprint(node, piece) !== null
+  );
 }
 
 function candidateSurfaces(
@@ -478,7 +496,7 @@ function candidateSurfaces(
 ): SurfaceNode[] {
   const usable = (id: string): SurfaceNode | undefined => {
     const node = nodes.get(id);
-    if (!node || !isUsableSurface(placement.piece, node)) {
+    if (!node || !isUsableSurface(placement.piece, node, graph)) {
       return undefined;
     }
     return node;
@@ -490,7 +508,7 @@ function candidateSurfaces(
       return [start];
     }
     return graph.nodes
-      .filter((node) => isUsableSurface(placement.piece, node))
+      .filter((node) => isUsableSurface(placement.piece, node, graph))
       .sort((a, b) => a.id.localeCompare(b.id));
   }
 
@@ -501,7 +519,8 @@ function candidateSurfaces(
     }
     return graph.nodes
       .filter(
-        (node) => node.id !== plan.start && isUsableSurface(placement.piece, node)
+        (node) =>
+          node.id !== plan.start && isUsableSurface(placement.piece, node, graph)
       )
       .sort((a, b) => a.id.localeCompare(b.id));
   }
@@ -526,7 +545,7 @@ function candidateSurfaces(
   const current = usable(placement.surface);
   const rest = graph.nodes
     .filter((node) => node.id !== placement.surface)
-    .filter((node) => isUsableSurface(placement.piece, node))
+    .filter((node) => isUsableSurface(placement.piece, node, graph))
     .sort((a, b) => a.id.localeCompare(b.id));
   return current ? [current, ...rest] : rest;
 }
@@ -542,7 +561,7 @@ function connectorSurfaces(
   const matching: SurfaceNode[] = [];
   const other: SurfaceNode[] = [];
   for (const node of graph.nodes) {
-    if (!isUsableSurface(placement.piece, node)) {
+    if (!isUsableSurface(placement.piece, node, graph)) {
       continue;
     }
     if (toId && toId !== node.id) {
@@ -569,6 +588,12 @@ function connectorSurfaces(
   };
   matching.sort(rank);
   other.sort(rank);
+  const goalLinks = matching.filter((node) =>
+    connectsGoal(node.id, toId, reachable, plan.goal)
+  );
+  if (goalLinks.length > 0) {
+    return goalLinks;
+  }
   const helpful = matching.filter((node) => helpsReach(node.id, toId, reachable));
   if (helpful.length > 0) {
     return helpful;
@@ -614,6 +639,26 @@ function helpsReach(
     return 0;
   }
   return toId && (fromR || toR) ? 1 : 0;
+}
+
+function connectsGoal(
+  fromId: string,
+  toId: string | undefined,
+  reachable: ReadonlySet<string>,
+  goalId: string
+): boolean {
+  if (!toId) {
+    return false;
+  }
+  const fromR = reachable.has(fromId);
+  const toR = reachable.has(toId);
+  if (fromR && !toR && toId === goalId) {
+    return true;
+  }
+  if (toR && !fromR && fromId === goalId) {
+    return true;
+  }
+  return false;
 }
 
 function onPathIds(
