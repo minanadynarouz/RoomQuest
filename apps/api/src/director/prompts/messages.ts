@@ -1,5 +1,6 @@
 import type { SurfaceGraph, Theme, Tier } from '@roomquest/schema';
 import { graphForPrompt } from './graph-for-prompt';
+import { graphWaiverLines } from './graph-waivers';
 import { buildPromptVariation } from './variation';
 
 export function buildUserMessage(input: {
@@ -9,12 +10,14 @@ export function buildUserMessage(input: {
   recentThemes?: Theme[];
 }): string {
   // Graph last so the static prefix (system + seed/tier/themes) can cache.
-  // Seed-derived variation sits next to the graph, after that static prefix.
+  // Seed-derived variation and #60 graph waivers sit next to the graph,
+  // after that static prefix — they must not touch SYSTEM_PREFIX.
   return JSON.stringify({
     seed: input.seed,
     tier: input.tier,
     recentThemes: input.recentThemes ?? [],
     variation: buildPromptVariation(input.seed, input.graph),
+    waivers: graphWaiverLines(input.graph),
     graph: graphForPrompt(input.graph),
   });
 }

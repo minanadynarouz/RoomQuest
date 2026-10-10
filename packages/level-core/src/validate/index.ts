@@ -12,3 +12,8 @@ export { ISSUE_CODES } from './types';
 export type { Issue, IssueCode, ValidationResult } from './types';
 export { bfsPath, bfsReachable, explorerAdjacency } from './graph-utils';
 export { pairFitsPiece, pieceFitsSurface } from './piece-fits';
+export {
+  graphCanSeparateHutAndShrine,
+  graphHasCatalogHut,
+  graphHasPlayableView,
+} from './graph-capacity';
