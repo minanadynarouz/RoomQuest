@@ -3,7 +3,11 @@
  * Callers pass search string, storage, and fetch from the browser layer.
  */
 
-import { generatePlan, validatePlan } from '@roomquest/level-core';
+import {
+  generatePlan,
+  snapPlacementsToSlots,
+  validatePlan,
+} from '@roomquest/level-core';
 import { getOrCreateDeviceId } from './device-id.js';
 import { createDirectorClient } from './client.js';
 import { parseDirectorFlags } from './flags.js';
@@ -50,6 +54,10 @@ export function createDirectorClientFromEnv(env: DirectorEnv): DirectorClient {
     generate: env.generate ?? generatePlan,
     validate: env.validate ?? validatePlan,
     repair: env.repair,
+    snap: snapPlacementsToSlots,
+    allowFixtureFallback:
+      Boolean(new URLSearchParams(env.search).get('fixture')) ||
+      import.meta.env.DEV,
     directorMode: flags.director,
     date: flags.date,
     seed: flags.seed,

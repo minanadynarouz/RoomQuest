@@ -17,6 +17,8 @@ describe('debug overlay format', () => {
       validationIssues: 0,
       directorStatus: 'resolved',
       requestId: 'req-abc',
+      repairedBy: 'snap',
+      relaxed: ['PATH_DISTANCE_TOO_SHORT'],
     });
     expect(block).toContain('PERF');
     expect(block).toContain('fps      60');
@@ -27,6 +29,8 @@ describe('debug overlay format', () => {
     expect(block).toContain('fallback -');
     expect(block).toContain('director resolved');
     expect(block).toContain('reqId    req-abc');
+    expect(block).toContain('repaired snap');
+    expect(block).toContain('relaxed  PATH_DISTANCE_TOO_SHORT');
     expect(formatLatency(null)).toBe('-');
     expect(formatDebugLines(EMPTY_PERF_STATS).map((line) => line.id)).toEqual([
       'debug-fps',
@@ -40,6 +44,8 @@ describe('debug overlay format', () => {
       'debug-issues',
       'debug-director',
       'debug-reqid',
+      'debug-repaired',
+      'debug-relaxed',
     ]);
   });
 });

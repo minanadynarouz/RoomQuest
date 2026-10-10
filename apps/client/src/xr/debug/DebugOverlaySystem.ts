@@ -107,6 +107,8 @@ export class DebugOverlaySystem extends createSystem({}) {
     this.scratch.validationIssues = store?.validationIssues.length ?? 0;
     this.scratch.directorStatus = store?.directorRequest.value.status ?? 'idle';
     this.scratch.requestId = store?.directorRequest.value.requestId ?? null;
+    this.scratch.repairedBy = store?.directorRequest.value.repairedBy ?? null;
+    this.scratch.relaxed = store?.directorRequest.value.relaxed ?? [];
     writeLatestPerfStats(this.scratch);
 
     const signature = perfSignature(this.scratch);

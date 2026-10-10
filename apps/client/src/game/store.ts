@@ -9,6 +9,10 @@ import { clampParTimeMs, type Issue } from '@roomquest/level-core';
 import type { ErrorCode, LevelPlan, PlanSource, Tier } from '@roomquest/schema';
 import type { FallbackReason } from './director/types.js';
 import { DEFAULT_TIER } from './director/types.js';
+import {
+  ROOM_UNPLAYABLE,
+  type RelaxedRule,
+} from './director/schema-pending.js';
 import type {
   GamePhase,
   GameEvent,
@@ -45,13 +49,14 @@ export class TransitionError extends Error {
  */
 const VALID_TRANSITIONS: Record<GamePhase, GamePhase[]> = {
   landing: ['requesting', 'error'],
-  requesting: ['surveying', 'noSurfaces', 'error'],
-  surveying: ['building', 'noSurfaces', 'error'],
-  building: ['playing', 'error', 'landing'],
+  requesting: ['surveying', 'noSurfaces', 'roomUnplayable', 'error'],
+  surveying: ['building', 'noSurfaces', 'roomUnplayable', 'error'],
+  building: ['playing', 'error', 'landing', 'roomUnplayable'],
   playing: ['paused', 'won', 'error', 'landing'],
   paused: ['playing', 'building', 'landing', 'error'],
   won: ['building', 'landing'],
   noSurfaces: ['surveying', 'landing'],
+  roomUnplayable: ['surveying', 'landing'],
   error: ['landing'],
 };
 
@@ -323,7 +328,10 @@ export function createGameStore(options: GameStoreOptions = {}) {
         fallbackReason?: string;
         durationMs: number;
         requestId?: string;
+        repairedBy?: 'snap' | 'repairPlan';
+        relaxed?: RelaxedRule[];
       }
+    | { type: 'roomUnplayable' }
     | {
         type: 'beatCompleted';
         beatIndex: number;
@@ -429,6 +437,30 @@ export function createGameStore(options: GameStoreOptions = {}) {
 
     noSurfaces() {
       transition('noSurfaces');
+    },
+
+    markRoomUnplayable(info?: {
+      issues?: Issue[];
+      relaxed?: RelaxedRule[];
+      requestId?: string;
+      latencyMs?: number;
+    }) {
+      plan.value = null;
+      fallbackReason.value = ROOM_UNPLAYABLE;
+      validationIssues.value = info?.issues ?? [];
+      if (info?.latencyMs !== undefined) {
+        directorLatencyMs.value = info.latencyMs;
+      }
+      directorRequest.value = {
+        ...directorRequest.value,
+        status: 'fallback',
+        source: 'procedural',
+        fallbackReason: ROOM_UNPLAYABLE,
+        requestId: info?.requestId ?? directorRequest.value.requestId,
+        relaxed: info?.relaxed,
+      };
+      emitEvent({ type: 'roomUnplayable' });
+      transition('roomUnplayable');
     },
 
     startBuilding(levelPlan: LevelPlan, options?: StartBuildingOptions) {
@@ -546,6 +578,8 @@ export function createGameStore(options: GameStoreOptions = {}) {
       source: DirectorRequestSource;
       fallbackReason?: string;
       requestId?: string;
+      repairedBy?: 'snap' | 'repairPlan';
+      relaxed?: RelaxedRule[];
     }) {
       const now = clock.now();
       const startedAt =
@@ -559,6 +593,8 @@ export function createGameStore(options: GameStoreOptions = {}) {
         source: info.source,
         fallbackReason: info.fallbackReason,
         requestId: info.requestId,
+        repairedBy: info.repairedBy,
+        relaxed: info.relaxed,
       };
       emitEvent({
         type: 'directorRequestEnded',
@@ -566,6 +602,8 @@ export function createGameStore(options: GameStoreOptions = {}) {
         fallbackReason: info.fallbackReason,
         durationMs,
         requestId: info.requestId,
+        repairedBy: info.repairedBy,
+        relaxed: info.relaxed,
       });
     },
 

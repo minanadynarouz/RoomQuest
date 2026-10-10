@@ -233,6 +233,33 @@ describe('directorRequest transitions', () => {
     });
   });
 
+  it('records repairedBy on a locally repaired API plan', async () => {
+    const dirty = generatePlan(GRAPH, 'f1a2b3c4d5e6-2026-10-09', 'normal');
+    dirty.placements.push({
+      id: 'p-slime',
+      piece: 'slime',
+      surface: GRAPH.nodes.find((node) => node.label === 'floor')?.id ?? 's5',
+      u: 0.5,
+      v: 0.5,
+      playerBuilt: false,
+      links: [],
+    });
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve(
+        jsonResponse({
+          ...apiPayload(),
+          plan: dirty,
+        })
+      )
+    );
+    const { store, director } = wired(fetchFn);
+    const result = await director.requestPlan(GRAPH);
+    expect(
+      result.repairedBy === 'snap' || result.repairedBy === 'repairPlan'
+    ).toBe(true);
+    expect(store.directorRequest.value.repairedBy).toBe(result.repairedBy);
+  });
+
   it('director=off skips the requesting phase', async () => {
     const fetchFn = vi.fn<FetchLike>(() =>
       Promise.resolve(jsonResponse(apiPayload()))

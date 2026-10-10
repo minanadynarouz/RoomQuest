@@ -7,6 +7,7 @@ import type {
   GeneratePlanOptions,
   Issue,
   RepairResult,
+  SnapResult,
   ValidationResult,
 } from '@roomquest/level-core';
 import type {
@@ -17,6 +18,10 @@ import type {
   Theme,
   Tier,
 } from '@roomquest/schema';
+import type {
+  RelaxedRule,
+  RoomUnplayableReason,
+} from './schema-pending.js';
 
 /** Client budget for accepting an API plan (Architecture §6). */
 export const DIRECTOR_BUDGET_MS = 8000;
@@ -52,7 +57,8 @@ export type FallbackReason =
   | 'http-error'
   | 'rate-limited'
   | 'director-off'
-  | 'director-mock';
+  | 'director-mock'
+  | RoomUnplayableReason;
 
 export interface DirectorFlags {
   director: DirectorMode;
@@ -84,6 +90,15 @@ export type RepairFn = (
   graph: SurfaceGraph
 ) => RepairResult | Promise<RepairResult>;
 
+export type SnapFn = (
+  plan: LevelPlan,
+  graph: SurfaceGraph
+) => SnapResult | Promise<SnapResult>;
+
+export type RepairedBy = 'snap' | 'repairPlan';
+
+export type { RelaxedRule, RoomUnplayableReason } from './schema-pending.js';
+
 /**
  * Narrow fetch contract so tests can mock without a full Request polyfill.
  */
@@ -110,6 +125,8 @@ export interface DirectorRequestEndInfo {
   source: 'llm' | 'procedural';
   fallbackReason?: FallbackReason;
   requestId?: string;
+  repairedBy?: RepairedBy;
+  relaxed?: RelaxedRule[];
 }
 
 export interface DirectorClientOptions {
@@ -120,6 +137,12 @@ export interface DirectorClientOptions {
   generate?: GenerateFn;
   validate?: ValidateFn;
   repair?: RepairFn;
+  snap?: SnapFn;
+  /**
+   * Use the synthetic fixture plan when snap + repair still fail.
+   * Production keeps this off except `?fixture=`. Dev may enable it.
+   */
+  allowFixtureFallback?: boolean;
   directorMode?: DirectorMode;
   date?: string;
   seed?: string;
@@ -165,6 +188,10 @@ export interface DirectorResult {
   tier?: Tier;
   /** `X-Request-Id` when the response header is readable. */
   requestId?: string;
+  /** Which local step made the played plan validate, if any. */
+  repairedBy?: RepairedBy;
+  /** Relaxed validation rule ids, when the plan or validator reports them. */
+  relaxed?: RelaxedRule[];
 }
 
 export interface DirectorClient {

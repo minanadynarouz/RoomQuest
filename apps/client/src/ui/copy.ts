@@ -12,6 +12,8 @@ export const HUD_COPY = {
   noSurfacesTitle: 'Need more space',
   noSurfacesBody: 'Set up your space in settings, then Retry.',
   retry: 'Retry',
+  rescanTitle: 'Show me more of your room!',
+  rescan: 'Rescan',
   pauseTitle: 'Paused',
   resume: 'Resume',
   restart: 'Restart',

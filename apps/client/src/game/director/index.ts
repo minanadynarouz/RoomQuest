@@ -22,6 +22,9 @@ export type {
   FallbackReason,
   FetchLike,
   FetchHeadersLike,
+  RepairedBy,
+  RelaxedRule,
+  SnapFn,
   GenerateFn,
   RepairFn,
   ValidateFn,
@@ -43,3 +46,11 @@ export { createDirectorClient, snapshotSurfaceGraph } from './client.js';
 export { createDirectorClientFromEnv } from './factory.js';
 export type { DirectorEnv } from './factory.js';
 export { applyDirectorResult } from './apply.js';
+export { recoverPlan } from './recover.js';
+export type { RecoveredPlan, RecoverPlanOptions } from './recover.js';
+export {
+  ROOM_UNPLAYABLE,
+  mergeRelaxed,
+  readRelaxed,
+} from './schema-pending.js';
+export type { RoomUnplayableReason } from './schema-pending.js';

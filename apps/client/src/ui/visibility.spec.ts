@@ -86,6 +86,7 @@ function storeAt(
     | 'paused'
     | 'won'
     | 'noSurfaces'
+    | 'roomUnplayable'
     | 'error'
 ) {
   const clock = createClock();
@@ -109,6 +110,12 @@ function storeAt(
   if (phase === 'noSurfaces') {
     store.startSurveying();
     store.noSurfaces();
+    return { store, clock, plan, today: new Date(2026, 9, 9) };
+  }
+
+  if (phase === 'roomUnplayable') {
+    store.startSurveying();
+    store.markRoomUnplayable();
     return { store, clock, plan, today: new Date(2026, 9, 9) };
   }
 
@@ -228,6 +235,18 @@ describe('store-to-panel visibility mapping', () => {
     expect(view.noSurfaces.body).not.toMatch(/quest/i);
   });
 
+  it('shows a friendly Rescan card when the room is unplayable', () => {
+    const view = viewFor('roomUnplayable');
+    expect(visiblePanelIds(view)).toEqual(['noSurfaces']);
+    expect(view.noSurfaces.title).toBe(HUD_COPY.rescanTitle);
+    expect(view.noSurfaces.title).toBe('Show me more of your room!');
+    expect(view.noSurfaces.retryLabel).toBe('Rescan');
+    expect(view.noSurfaces.body).toBe('');
+    expect(view.surveying.visible).toBe(false);
+    expect(view.pause.visible).toBe(false);
+    expect(view.win.visible).toBe(false);
+  });
+
   it('hides HUD panels in the error phase', () => {
     expect(visiblePanelIds(viewFor('error'))).toEqual([]);
   });
@@ -239,6 +258,7 @@ describe('store-to-panel visibility mapping', () => {
       'paused',
       'won',
       'noSurfaces',
+      'roomUnplayable',
     ] as const) {
       const ids = visiblePanelIds(viewFor(phase));
       const modals = ids.filter((id) =>
