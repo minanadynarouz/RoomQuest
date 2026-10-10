@@ -121,6 +121,8 @@ const statsGetter = createStatsGetter(() =>
     validationIssues: gameStore.validationIssues.length,
     directorStatus: gameStore.directorRequest.value.status,
     requestId: gameStore.directorRequest.value.requestId ?? null,
+    repairedBy: gameStore.directorRequest.value.repairedBy ?? null,
+    relaxed: gameStore.directorRequest.value.relaxed ?? [],
   })
 );
 
@@ -149,6 +151,9 @@ function ensureSessionController(): SessionController {
     },
     deviceId,
     showLanding: showLandingPage,
+    rescanRoom: () => {
+      worldInstance?.getSystem(SurfaceGraphSystem)?.rescan();
+    },
   });
   bindHudActions(sessionController);
   return sessionController;
@@ -339,7 +344,11 @@ function playSyntheticLevel(): boolean {
   if (!world || !builder) return false;
   const phase = gameStore.phase;
   if (phase === 'playing') return true;
-  if (phase === 'noSurfaces' || phase === 'requesting') {
+  if (
+    phase === 'noSurfaces' ||
+    phase === 'requesting' ||
+    phase === 'roomUnplayable'
+  ) {
     gameStore.startSurveying();
   }
   if (gameStore.phase === 'surveying') {
@@ -399,6 +408,19 @@ async function startPlayableLevel(
     return;
   }
   applyDirectorResult(gameStore, result);
+  if (
+    result.fallbackReason === 'room-unplayable' ||
+    gameStore.phase === 'roomUnplayable'
+  ) {
+    exposeHooks(
+      postedGraph,
+      null,
+      builder.getSnapTargets(),
+      worldInstance ? countDrawCalls(worldInstance.scene) : 0,
+      placement.debugApi()
+    );
+    return;
+  }
   builder.build(result.plan, postedGraph);
   worldInstance?.getSystem(ExplorerSystem)?.begin(result.plan, postedGraph);
   worldInstance?.getSystem(PlatformRailSystem)?.bindGraph(postedGraph);

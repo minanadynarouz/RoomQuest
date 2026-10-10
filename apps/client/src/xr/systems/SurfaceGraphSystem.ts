@@ -355,6 +355,15 @@ export class SurfaceGraphSystem extends createSystem(
     return this.graph;
   }
 
+  /** Clear the captured graph and scan again (Rescan). */
+  public rescan(): void {
+    this.graph = null;
+    this.stabilized = false;
+    this.captureAttempted = false;
+    this.inFlight = false;
+    this.startTime = performance.now();
+  }
+
   public addEventListener(
     type: 'graphReady' | 'noSurfaces',
     listener: EventListener

@@ -40,6 +40,7 @@ export interface SessionDeps {
   postResult: (input: PostLevelResultInput) => void;
   deviceId: string;
   showLanding: () => void;
+  rescanRoom?: () => void;
 }
 
 export interface SessionController extends HudActions {
@@ -141,6 +142,13 @@ export function createSessionController(deps: SessionDeps): SessionController {
     }
   }
 
+  function rescan(): void {
+    if (store.phase === 'roomUnplayable' || store.phase === 'noSurfaces') {
+      store.startSurveying();
+    }
+    deps.rescanRoom?.();
+  }
+
   function exit(): void {
     if (store.phase === 'playing' || store.phase === 'paused') {
       fire(false);
@@ -171,6 +179,7 @@ export function createSessionController(deps: SessionDeps): SessionController {
     resume,
     replay,
     exit,
+    rescan,
     forceWin,
     onVisibilityState,
     dispose: () => {
