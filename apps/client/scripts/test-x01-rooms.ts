@@ -29,7 +29,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLIENT_ROOT = path.resolve(__dirname, '..');
 const REPO_ROOT = path.resolve(CLIENT_ROOT, '../..');
 const OUT_DIR = path.join(REPO_ROOT, 'packages/fixtures/src/graphs');
-const EVAL_ROOMS_DIR = path.join(REPO_ROOT, 'packages/fixtures/rooms');
 const SHOT_DIR = '/tmp/iwer-graphs';
 const DEFAULT_PORT = 5173;
 
@@ -197,9 +196,11 @@ async function captureRoom(
   }
 
   const fileName = `iwer-${room}.json`;
-  const payload = `${JSON.stringify(graph, null, 2)}\n`;
-  await writeFile(path.join(OUT_DIR, fileName), payload, 'utf8');
-  await writeFile(path.join(EVAL_ROOMS_DIR, fileName), payload, 'utf8');
+  await writeFile(
+    path.join(OUT_DIR, fileName),
+    `${JSON.stringify(graph, null, 2)}\n`,
+    'utf8'
+  );
 
   const labels = [...new Set(graph.nodes.map((node) => node.label))].sort();
   const fullBytes = promptGraphJsonBytes(graph);
@@ -234,7 +235,6 @@ function formatTable(rows: RoomCaptureRow[]): string {
 
 async function main(): Promise<void> {
   await mkdir(OUT_DIR, { recursive: true });
-  await mkdir(EVAL_ROOMS_DIR, { recursive: true });
   await mkdir(SHOT_DIR, { recursive: true });
   let stop = (): void => undefined;
   let browser: Browser | null = null;
