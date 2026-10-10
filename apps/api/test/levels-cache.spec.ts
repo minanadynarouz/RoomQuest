@@ -2,10 +2,11 @@ import './cache-env';
 import type { Server } from 'node:http';
 import type { INestApplication } from '@nestjs/common';
 import { SYNTHETIC_LIVING_ROOM } from '@roomquest/fixtures';
-import { generatePlan } from '@roomquest/level-core';
+import { generatePlan, validatePlan } from '@roomquest/level-core';
 import {
   LevelRequest,
   LevelResponse,
+  type LevelPlan,
   type SurfaceGraph,
 } from '@roomquest/schema';
 import request from 'supertest';
@@ -41,17 +42,29 @@ function levelsPost(app: INestApplication) {
 }
 
 /**
- * Same roomHash (same cache key). Relabel node ids so the cached plan's
- * placements miss every surface — an all-floor mutation is still valid
- * under degraded hut rules when the graph has no table/desk.
+ * Same roomHash (same cache key). Drop the surfaces the cached plan uses
+ * so validatePlan reports UNKNOWN_SURFACE. Node ids stay in s1..s12;
+ * an all-floor mutation is still valid under degraded hut rules.
  */
-function invalidateSurfaces(graph: SurfaceGraph): SurfaceGraph {
+function graphMissingPlanSurfaces(
+  graph: SurfaceGraph,
+  plan: LevelPlan
+): SurfaceGraph {
+  const used = new Set<string>([
+    plan.start,
+    plan.goal,
+    ...plan.placements.map((placement) => placement.surface),
+  ]);
+  const unused = graph.nodes.filter((node) => !used.has(node.id));
+  const keep =
+    unused.length >= 2
+      ? unused.slice(0, 2)
+      : graph.nodes.filter((node) => node.id !== plan.start).slice(0, 2);
+  const ids = new Set(keep.map((node) => node.id));
   return {
     ...graph,
-    nodes: graph.nodes.map((node) => ({
-      ...node,
-      id: `gone-${node.id}`,
-    })),
+    nodes: keep,
+    edges: graph.edges.filter((edge) => ids.has(edge.a) && ids.has(edge.b)),
   };
 }
 
@@ -112,12 +125,17 @@ describe.skipIf(dbUrl === undefined && process.env.CI !== 'true')(
         tier: 'easy',
       });
       const first = await levelsPost(app).send(original).expect(200);
-      expect(LevelResponse.parse(first.body as unknown).source).toBe(
-        'procedural'
+      const firstParsed = LevelResponse.parse(first.body as unknown);
+      expect(firstParsed.source).toBe('procedural');
+
+      const reduced = graphMissingPlanSurfaces(
+        SYNTHETIC_LIVING_ROOM,
+        firstParsed.plan
       );
+      expect(validatePlan(firstParsed.plan, reduced).ok).toBe(false);
 
       const changed = LevelRequest.parse({
-        graph: invalidateSurfaces(SYNTHETIC_LIVING_ROOM),
+        graph: reduced,
         date: DATE,
         tier: 'easy',
       });
