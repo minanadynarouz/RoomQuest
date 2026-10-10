@@ -1,7 +1,7 @@
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { BaseMessageLike } from '@langchain/core/messages';
-import { LevelPlanLLM } from '@roomquest/schema';
+import { LevelPlanLLMGeminiSchema } from '@roomquest/schema';
 import { DIRECTOR_TEMPERATURE } from './director.constants';
 import { raceAbort } from './errors';
 import { type StructuredChat, unwrapStructured } from './structured-chat';
@@ -55,8 +55,10 @@ export function wrapChatModel(
     provider,
     model: modelId,
     async invokeStructured(messages, signal) {
-      const structured = model.withStructuredOutput(LevelPlanLLM, {
+      const structured = model.withStructuredOutput(LevelPlanLLMGeminiSchema, {
         includeRaw: true,
+        method: 'jsonSchema',
+        name: 'LevelPlanLLM',
       });
       const result: unknown = await raceAbort(
         structured.invoke(messages, { signal }) as Promise<unknown>,
