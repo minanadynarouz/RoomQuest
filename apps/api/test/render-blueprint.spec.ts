@@ -12,7 +12,7 @@ describe('render.yaml (B-10)', () => {
     expect(yaml).toContain('name: roomquest-api-staging');
     expect(yaml).toContain('name: roomquest-api-prod');
     expect(yaml).toContain('runtime: node');
-    expect(yaml).toContain('region: oregon');
+    expect(yaml).toContain('region: frankfurt');
     expect(yaml).toContain('autoDeploy: false');
     expect(yaml).toContain('healthCheckPath: /api/health');
     expect(yaml).toContain(
