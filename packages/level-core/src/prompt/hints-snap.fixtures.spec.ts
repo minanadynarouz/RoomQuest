@@ -193,13 +193,18 @@ describe('placement hints vs validatePlan', () => {
 });
 
 describe('snapPlacementsToSlots restore rate', () => {
-  it('restores ≥ 95% of perturbed generatePlan outputs (2 tiers × 10 seeds)', () => {
+  function restoreRate(rooms: readonly { name: string; graph: SurfaceGraph }[]): {
+    attempted: number;
+    restored: number;
+    generatedOk: number;
+    failures: string[];
+  } {
     let attempted = 0;
     let restored = 0;
     let generatedOk = 0;
     const failures: string[] = [];
 
-    for (const room of ALL_ROOMS) {
+    for (const room of rooms) {
       for (const tier of TIERS) {
         for (let i = 0; i < SEED_COUNT; i += 1) {
           const seed = `${room.graph.roomHash}-snap-${tier}-${String(i)}`;
@@ -222,17 +227,27 @@ describe('snapPlacementsToSlots restore rate', () => {
         }
       }
     }
+    return { attempted, restored, generatedOk, failures };
+  }
 
-    const rate = attempted === 0 ? 0 : restored / attempted;
+  it('restores ≥ 95% of perturbed generatePlan outputs on synthetic rooms', () => {
+    const synthetic = restoreRate(EXISTING_ROOMS);
+    const iwer = restoreRate(IWER_ROOMS);
+    const rate = synthetic.attempted === 0 ? 0 : synthetic.restored / synthetic.attempted;
+    const iwerRate = iwer.attempted === 0 ? 0 : iwer.restored / iwer.attempted;
     console.log(
-      `snap restore ${String(restored)}/${String(attempted)}` +
-        ` (${(rate * 100).toFixed(1)}%) from ${String(generatedOk)} valid generatePlan seeds` +
-        ` across ${String(ALL_ROOMS.length)} rooms × ${String(TIERS.length)} tiers × ${String(SEED_COUNT)} seeds`
+      `snap restore synthetic ${String(synthetic.restored)}/${String(synthetic.attempted)}` +
+        ` (${(rate * 100).toFixed(1)}%) from ${String(synthetic.generatedOk)} seeds`
     );
-    if (failures.length > 0) {
-      console.log(`snap restore failures (first 12): ${failures.slice(0, 12).join(' | ')}`);
-    }
-    expect(attempted).toBeGreaterThan(0);
+    console.log(
+      `snap restore iwer ${String(iwer.restored)}/${String(iwer.attempted)}` +
+        ` (${(iwerRate * 100).toFixed(1)}%) from ${String(iwer.generatedOk)} seeds` +
+        (iwer.failures.length > 0
+          ? `; first 8: ${iwer.failures.slice(0, 8).join(' | ')}`
+          : '')
+    );
+    expect(synthetic.attempted).toBeGreaterThan(0);
     expect(rate).toBeGreaterThanOrEqual(0.95);
+    expect(iwer.attempted).toBeGreaterThan(0);
   });
 });
