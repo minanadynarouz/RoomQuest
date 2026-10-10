@@ -55,10 +55,6 @@ export class DirectorService {
     }
 
     const directorModel = this.config.get('DIRECTOR_MODEL', { infer: true });
-    const fallbackModel = this.config.get('FALLBACK_MODEL', { infer: true });
-    const anthropicKey = this.config.get('ANTHROPIC_API_KEY', {
-      infer: true,
-    });
 
     const primary = wrapChatModel(
       this.factory.createPrimary({
@@ -69,25 +65,11 @@ export class DirectorService {
       directorModel
     );
 
-    const fallback =
-      anthropicKey === undefined
-        ? undefined
-        : wrapChatModel(
-            this.factory.createFallback({
-              model: fallbackModel,
-              apiKey: anthropicKey,
-            }),
-            'anthropic',
-            fallbackModel
-          );
-
     return runDirector(request, {
       primary,
-      fallback,
       promptVersion,
       logger: this.logger,
       budgetMs: this.runtime?.budgetMs,
-      fallbackMinRemainingMs: this.runtime?.fallbackMinRemainingMs,
       llmRepairMinRemainingMs: this.runtime?.llmRepairMinRemainingMs,
       proceduralReserveMs: this.runtime?.proceduralReserveMs,
       now,

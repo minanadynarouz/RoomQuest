@@ -17,7 +17,6 @@ import { configureApp } from '../src/create-app';
 import {
   DIRECTOR_BUDGET_MS,
   DIRECTOR_LLM_WINDOW_MS,
-  FALLBACK_MIN_REMAINING_MS,
 } from '../src/director/director.constants';
 import {
   DIRECTOR_CHAT_FACTORY,
@@ -142,7 +141,6 @@ describe('POST /api/v1/levels director contract (B-05 live)', () => {
     const fake = new FakeListChatModel({ responses: [validJson] });
     const parsed = await expectValid200({
       createPrimary: () => fake,
-      createFallback: () => new FakeListChatModel({ responses: ['{}'] }),
     });
     expect(parsed.source).toBe('llm');
     expect(parsed.model).toBe('gemini-3.8-flash');
@@ -154,7 +152,6 @@ describe('POST /api/v1/levels director contract (B-05 live)', () => {
     });
     const parsed = await expectValid200({
       createPrimary: () => fake,
-      createFallback: () => new FakeListChatModel({ responses: ['{}'] }),
     });
     expect(parsed.source).toBe('llm_repaired');
     expect(parsed.repairs.length).toBeGreaterThan(0);
@@ -166,7 +163,6 @@ describe('POST /api/v1/levels director contract (B-05 live)', () => {
     });
     const parsed = await expectValid200({
       createPrimary: () => fake,
-      createFallback: () => new FakeListChatModel({ responses: ['{}'] }),
     });
     expect(parsed.source).toBe('llm_repaired');
     expect(parsed.repairs).toContain('llm-repair');
@@ -175,7 +171,6 @@ describe('POST /api/v1/levels director contract (B-05 live)', () => {
   it('timeout → 200 source procedural', async () => {
     const parsed = await expectValid200WithFakeTime({
       createPrimary: () => new HangingFakeListChatModel(),
-      createFallback: () => new FakeListChatModel({ responses: ['{}'] }),
     });
     expect(parsed.source).toBe('procedural');
     expect(parsed.model).toBeUndefined();
@@ -184,35 +179,24 @@ describe('POST /api/v1/levels director contract (B-05 live)', () => {
     expect(parsed.latencyMs).toBeLessThan(DIRECTOR_BUDGET_MS);
   });
 
-  it('provider error → fallback model → 200 source llm', async () => {
-    const parsed = await expectValid200({
-      createPrimary: () =>
-        new ThrowingFakeListChatModel(new Error('gemini down')),
-      createFallback: () => new FakeListChatModel({ responses: [validJson] }),
-    });
-    expect(parsed.source).toBe('llm');
-    expect(parsed.model).toBe('claude-haiku-4-5');
-  });
-
-  it('provider error with < 3 s left → 200 source procedural', async () => {
+  it('provider error → 200 source procedural within the budget', async () => {
     let t = 0;
     const throwing = new ThrowingFakeListChatModel(new Error('gemini down'));
     throwing.onThrow = () => {
-      t = DIRECTOR_LLM_WINDOW_MS - FALLBACK_MIN_REMAINING_MS + 1;
+      t = 400;
     };
     const parsed = await expectValid200(
       {
         createPrimary: () => throwing,
-        createFallback: () => new FakeListChatModel({ responses: [validJson] }),
       },
       {
         budgetMs: DIRECTOR_BUDGET_MS,
-        fallbackMinRemainingMs: FALLBACK_MIN_REMAINING_MS,
         now: () => t,
       }
     );
     expect(parsed.source).toBe('procedural');
     expect(parsed.model).toBeUndefined();
+    expect(parsed.latencyMs).toBeLessThan(DIRECTOR_BUDGET_MS);
   });
 
   it('invalid twice → 200 source procedural', async () => {
@@ -221,7 +205,6 @@ describe('POST /api/v1/levels director contract (B-05 live)', () => {
     });
     const parsed = await expectValid200({
       createPrimary: () => fake,
-      createFallback: () => new FakeListChatModel({ responses: ['{}'] }),
     });
     expect(parsed.source).toBe('procedural');
     expect(parsed.plan.title).not.toBe('The Living Room Quest');
@@ -234,7 +217,6 @@ describe('POST /api/v1/levels director contract (B-05 live)', () => {
     });
     const parsed = await expectValid200WithFakeTime({
       createPrimary: () => fake,
-      createFallback: () => new FakeListChatModel({ responses: ['{}'] }),
     });
     expect(parsed.source).toBe('procedural');
     expect(parsed.model).toBeUndefined();

@@ -27,7 +27,6 @@ describe('eval harness', () => {
       now,
       write: false,
       googleApiKey: undefined,
-      anthropicApiKey: undefined,
     });
 
     expect(result.status).toBe('ok');
@@ -76,7 +75,6 @@ describe('eval harness', () => {
     const result = await runEvalHarness({
       mock: false,
       googleApiKey: undefined,
-      anthropicApiKey: undefined,
       write: false,
     });
     expect(result.status).toBe('skipped');

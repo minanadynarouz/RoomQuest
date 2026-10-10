@@ -6,9 +6,6 @@
  *   https://ai.google.dev/gemini-api/docs/pricing — introductory
  *   $0.75 input / $3.75 output through 31 Dec 2026 (standard paid tier;
  *   output includes thinking tokens). Architecture §1.3.
- * - `claude-haiku-4-5`: Anthropic API pricing
- *   https://platform.claude.com/docs/en/about-claude/pricing —
- *   $1.00 input / $5.00 output (standard, not Batch).
  *
  * Estimates ignore cache reads/writes and Batch discounts. Unknown model
  * ids and missing usage metadata contribute $0 and are counted separately.
@@ -23,10 +20,6 @@ export const MODEL_PRICES_USD_PER_MILLION: Record<string, ModelTokenPrice> = {
   'gemini-3.8-flash': {
     inputUsdPerMillion: 0.75,
     outputUsdPerMillion: 3.75,
-  },
-  'claude-haiku-4-5': {
-    inputUsdPerMillion: 1.0,
-    outputUsdPerMillion: 5.0,
   },
 };
 

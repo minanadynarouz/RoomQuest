@@ -24,13 +24,9 @@ services:
         sync: false
       - key: GOOGLE_API_KEY
         sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
       - key: DIRECTOR_MODE
         sync: false
       - key: DIRECTOR_MODEL
-        sync: false
-      - key: FALLBACK_MODEL
         sync: false
       - key: CORS_ORIGINS
         sync: false
@@ -58,13 +54,9 @@ services:
         sync: false
       - key: GOOGLE_API_KEY
         sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
       - key: DIRECTOR_MODE
         sync: false
       - key: DIRECTOR_MODEL
-        sync: false
-      - key: FALLBACK_MODEL
         sync: false
       - key: CORS_ORIGINS
         sync: false

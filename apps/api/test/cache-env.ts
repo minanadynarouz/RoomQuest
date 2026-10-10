@@ -12,5 +12,4 @@ if (url !== undefined) {
 }
 process.env.DIRECTOR_MODE = 'live';
 delete process.env.GOOGLE_API_KEY;
-delete process.env.ANTHROPIC_API_KEY;
 process.env.NODE_ENV = 'test';

@@ -35,7 +35,7 @@ All team-approved; MVP scope for Oct 11 is unchanged.
    - Render is git-driven with no Docker needed, has deploy hooks, rollbacks and health checks, and costs nothing during the sprint.
    - Render's free Postgres expires after 30 days ([render.com/docs/free](https://render.com/docs/free)), so the database lives on Neon, whose Free plan is permanent with no card ([neon.com/pricing](https://neon.com/pricing)).
    - Render free instances sleep after 15 min idle and take about 1 min to wake ([render.com/docs/free](https://render.com/docs/free)). The **prod API moves to Render Starter ($7/mo, [render.com/pricing](https://render.com/pricing)) before Nov 1** and stays there through the Dec 11 winner announcement. The game never needs the API to be awake (procedural fallback).
-3. **LLM:** primary is **Google Gemini `gemini-3.8-flash`** via `@langchain/google-genai`. It's GA, supports structured outputs and is priced at $0.75/$3.75 per 1M tokens through Dec 31, 2026 ([ai.google.dev](https://ai.google.dev/gemini-api/docs/latest-model)), so ~2k in / 600 out ≈ **$0.004 per level**. Fallback is **Anthropic `claude-haiku-4-5`** via `@langchain/anthropic` ([docs](https://platform.claude.com/docs/en/models/haiku-4-5/overview)), which covers a provider outage. Its retirement is "not sooner than Oct 15, 2026", so the model id is an env var; swap it to `claude-sonnet-5` if Haiku 4.5 is retired. If Gemini p95 latency exceeds 6 s in the eval, `DIRECTOR_MODEL` switches to `gemini-3.5-flash-lite` (low-latency GA model).
+3. **LLM:** **Google Gemini `gemini-3.8-flash`** via `@langchain/google-genai`. It's GA, supports structured outputs and is priced at $0.75/$3.75 per 1M tokens through Dec 31, 2026 ([ai.google.dev](https://ai.google.dev/gemini-api/docs/latest-model)), so ~2k in / 600 out ≈ **$0.004 per level**. A Gemini failure or timeout degrades to the local procedural generator. If Gemini p95 latency exceeds 6 s in the eval, `DIRECTOR_MODEL` switches to `gemini-3.5-flash-lite` (low-latency GA model).
 4. **The validator, solvability check and procedural generator are shared code** (`packages/level-core`). The API uses them to verify and repair LLM output; the client uses the same code to re-verify and to run the fallback generator in parallel. Consequence: the game is fully playable with the API down (the "take it away" test).
 5. **Scope for 2 weeks:** the 10 ★ pieces, the core loop and the AI director with cache. The following are **cut to post-MVP**:
    - the "adapt" stuck-player agent (post-MVP priority #3, see §10 "After Oct 11")
@@ -63,8 +63,8 @@ All team-approved; MVP scope for Oct 11 is unchanged.
 | Landing / 2D shell | **Vanilla TS + Tailwind CSS 4** (`@tailwindcss/vite`) inside the same Vite app | Landing JS < 50 KB gz; FE's preferred styling; no React or Next runtime in the XR page. |
 | Bundler / dev server | **Vite 7** (whatever `npm create @iwsdk@1.0.0-rc.2` scaffolds; IWSDK plugins require `^7`) | Official IWSDK toolchain, HTTPS dev server, emulator injection. |
 | Backend | **NestJS 11** (`@nestjs/*` 11.x) on Express | BE's comfort zone and the design doc's choice. Nest 12 is days old and ecosystem packages (e.g. `nestjs-zod`) still peer on ≤ 11. |
-| AI orchestration | **LangChain JS 1.x** (`langchain` 1.x, `@langchain/core` 1.x, `@langchain/google-genai` 2.x, `@langchain/anthropic` 1.x) | `withStructuredOutput(zodSchema)` gives typed plans; provider swap is one line; `FakeListChatModel` for tests. |
-| LLM | **`gemini-3.8-flash`** (primary), **`claude-haiku-4-5`** (fallback), both env-configurable | See §1.3: fast, cheap, structured output; cross-provider fallback. |
+| AI orchestration | **LangChain JS 1.x** (`langchain` 1.x, `@langchain/core` 1.x, `@langchain/google-genai` 2.x) | `withStructuredOutput(zodSchema)` gives typed plans; `FakeListChatModel` for tests. |
+| LLM | **`gemini-3.8-flash`** (env-configurable via `DIRECTOR_MODEL`) | See §1.3: fast, cheap, structured output; Gemini failure falls through to procedural. |
 | Schema / validation | **zod 4** (`^4`) | One source of truth for `SurfaceGraph`, `LevelPlan` and API DTOs; supported by `@langchain/core` (`^3.25.76 \|\| ^4`). |
 | ORM / DB | **Prisma 7** (`prisma@7`, `@prisma/client@7`, Neon driver adapter) + **Postgres 17 on Neon** | BE's comfort zone and the design doc's choice. Prisma 8 is still RC; 7 is the latest stable major. |
 | API extras | `@nestjs/config` + zod env schema, `@nestjs/throttler` (per-IP guard) + a small custom per-device cache-miss limiter in the levels service, `helmet`, `nestjs-pino` | Validated config, rate limits, security headers, structured logs. |
@@ -382,7 +382,7 @@ Format: **ID · title**: target day · deps. Each ticket is one PR. Tickets with
   - Description: repair (drop invalid pieces, clamp u/v, insert a plank where a gap fits); seeded PRNG (mulberry32); generator per design doc §6 step 6 using only the 10 MVP pieces; dialogue template bank for 4 themes.
   - AC: deterministic for (graph, seed, tier); 5 rooms × 50 seeds → 100% valid and solvable; runs < 20 ms in the browser.
 - **B-05 · LangChain director**: D5 · deps: B-02, B-04, M-07.
-  - Description: `ChatGoogleGenerativeAI({model: env.DIRECTOR_MODEL ?? "gemini-3.8-flash", temperature: 0.7})` (thinking level low where the integration supports it) `.withStructuredOutput(LevelPlanLLM)`; static system prompt with kit catalog + 2 few-shots; 7 s budget via AbortSignal; one repair call with the issue list; provider-error fallback to `claude-haiku-4-5` if ≥ 3 s remain; else procedural. `PROMPT_VERSION`. `LevelPlanLLM` uses no tuples, regex or unions (Gemini structured-output limits). The prompt builder, model factory and repair loop are separate, reusable modules (the post-MVP adapt endpoint reuses them).
+  - Description: `ChatGoogleGenerativeAI({model: env.DIRECTOR_MODEL ?? "gemini-3.8-flash", temperature: 0.7})` (thinking level low where the integration supports it) `.withStructuredOutput(LevelPlanLLM)`; static system prompt with kit catalog + 2 few-shots; 7 s budget via AbortSignal; one repair call with the issue list; Gemini provider-error or timeout → procedural. `PROMPT_VERSION`. `LevelPlanLLM` uses no tuples, regex or unions (Gemini structured-output limits). The prompt builder, model factory and repair loop are separate, reusable modules (the post-MVP adapt endpoint reuses them).
   - AC: tests with `FakeListChatModel` cover valid, repaired, timeout, provider-error and invalid-twice paths; `DIRECTOR_MODE=live` works on staging.
 - **B-06 · Prisma cache, daily seed, rate limits**: D6 · deps: B-05, B-10.
   - Description: models `LevelCache(key PK, roomHash, date, tier, promptVersion, plan Json, source, model, createdAt)` and `SessionResult(id, cacheKey FK, deviceId, stars, gems, timeMs, completed, planSource, createdAt)`; migration; cache lookup/insert; every cache hit re-runs `level-core.validate` against the incoming graph and a failure counts as a miss; a small custom limiter in the levels service for the cache-miss budget (10/h per device) plus the `@nestjs/throttler` per-IP guard (60/h).
@@ -484,7 +484,7 @@ Format: **ID · title**: target day · deps. Each ticket is one PR. Tickets with
 | M-04 | Mon Sep 28 | Create GitHub machine account `roomquest-bot` (a new email alias), invite it as *Write* collaborator, create its fine-grained PAT (this repo only; Contents + Pull requests + Workflows read/write; expiry Dec 31, 2026) and hand the token to the agent platform's secret store (never to the repo or chat). | 15 min |
 | M-05 | Mon Sep 28 | **Quest 3S (recommended plan):** check price and delivery time to Cairo from 1–2 sellers. **Backup:** message 2–3 people (friends, local Quest owners, Start community forum) about borrowing a Quest 3/3S for Thu Oct 8 and Sun Oct 11 mornings. | 15 min |
 | M-06 | Mon Sep 28 | Create accounts (sign in with GitHub where possible): **Vercel** (Hobby), **Render** (Hobby), **Neon** (Free). | 20 min |
-| M-07 | Mon Sep 28 | **Google AI Studio** → create a Gemini API key (set a billing budget alert at $10 if billing is enabled). **Anthropic Console** → buy $5 credits, create an API key, set a monthly limit of $10. | 15 min |
+| M-07 | Mon Sep 28 | **Google AI Studio** → create a Gemini API key (set a billing budget alert at $10 if billing is enabled). | 15 min |
 | M-08 | Tue Sep 29 | Add the secrets listed in §13.5 (GitHub Actions + Render env vars). | 15 min |
 | M-09 | Tue Sep 29 | After CI has run once: add required checks `lint`, `typecheck`, `test`, `build` to the branch protection. | 5 min |
 | M-10 | Tue Sep 29 | Vercel: import the repo (root `apps/client`), set Production Branch = `release`, turn off Vercel Authentication for previews, create a token. Render: New → Blueprint → select the repo (`render.yaml`), copy both deploy-hook URLs. Neon: create project `roomquest` (AWS us-west-2), create branch `staging`, copy the pooled and direct connection strings. | 20 min |
@@ -519,9 +519,9 @@ Format: **ID · title**: target day · deps. Each ticket is one PR. Tickets with
      - **Environment `staging`:** `RENDER_DEPLOY_HOOK_STAGING`, `DIRECT_URL_STAGING`.
      - **Environment `production`:** `RENDER_DEPLOY_HOOK_PROD`, `DIRECT_URL_PROD`.
    - **Repository variables:** `API_URL_STAGING`, `API_URL_PROD`.
-   - **Render env vars** (per service): `DATABASE_URL` (Neon pooled), `DIRECT_URL`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `DIRECTOR_MODE=live`, `DIRECTOR_MODEL=gemini-3.8-flash`, `FALLBACK_MODEL=claude-haiku-4-5`, `CORS_ORIGINS`, `NODE_ENV=production`.
+   - **Render env vars** (per service): `DATABASE_URL` (Neon pooled), `DIRECT_URL`, `GOOGLE_API_KEY`, `DIRECTOR_MODE=live`, `DIRECTOR_MODEL=gemini-3.8-flash`, `CORS_ORIGINS`, `NODE_ENV=production`.
    - **Vercel env:** `VITE_API_BASE_URL` (Preview → staging API, Production → prod API).
-6. **Accounts to create:** GitHub machine user `roomquest-bot`; Vercel (Hobby); Render (Hobby workspace); Neon (Free); Google AI Studio (Gemini key); Anthropic Console (fallback key, $5 credit); Meta account with Developer Access + **Start program application**; Devpost. Later (buffer weeks): YouTube or Vimeo for the public video.
+6. **Accounts to create:** GitHub machine user `roomquest-bot`; Vercel (Hobby); Render (Hobby workspace); Neon (Free); Google AI Studio (Gemini key); Meta account with Developer Access + **Start program application**; Devpost. Later (buffer weeks): YouTube or Vimeo for the public video.
 7. **Pages:** Settings → Pages → Source: **GitHub Actions** (used by `pages.yml` from Oct 7).
 
 ## 14. Budget (through the Dec 11 winner announcement)
@@ -531,7 +531,6 @@ Format: **ID · title**: target day · deps. Each ticket is one PR. Tickets with
 | GitHub (public), Vercel Hobby, Neon Free, Render free staging | $0 |
 | Render Starter for the prod API, ~Nov 1 → Dec 11 | ~$7–14 |
 | Gemini 3.8 Flash usage (≈ $0.004/level, a few thousand levels max) | < $10 (alert at $10) |
-| Anthropic fallback credits | $5 prepaid |
 | Meta Quest 3S (recommended; order by Sep 30) | one-off hardware cost at local retail price |
 | **Total** | **≈ $15–30** hosting and AI + the Quest 3S |
 

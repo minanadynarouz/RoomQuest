@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import {
-  DEFAULT_DIRECTOR_MODEL,
-  DEFAULT_FALLBACK_MODEL,
-} from '../director/director.constants';
-import { validateEnv } from './env';
+import { Logger } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AppModule } from '../app.module';
+import { DEFAULT_DIRECTOR_MODEL } from '../director/director.constants';
+import { isLlmConfigured, validateEnv } from './env';
 
 describe('validateEnv', () => {
   it('accepts a missing DATABASE_URL and DIRECT_URL', () => {
@@ -22,28 +22,23 @@ describe('validateEnv', () => {
     expect(env.DIRECT_URL).toBeUndefined();
   });
 
-  it('defaults DIRECTOR_MODEL and FALLBACK_MODEL when unset or blank', () => {
+  it('defaults DIRECTOR_MODEL when unset or blank', () => {
     const unset = validateEnv({ NODE_ENV: 'test' });
     expect(unset.DIRECTOR_MODEL).toBe(DEFAULT_DIRECTOR_MODEL);
-    expect(unset.FALLBACK_MODEL).toBe(DEFAULT_FALLBACK_MODEL);
 
     const blank = validateEnv({
       NODE_ENV: 'test',
       DIRECTOR_MODEL: '  ',
-      FALLBACK_MODEL: '',
     });
     expect(blank.DIRECTOR_MODEL).toBe(DEFAULT_DIRECTOR_MODEL);
-    expect(blank.FALLBACK_MODEL).toBe(DEFAULT_FALLBACK_MODEL);
   });
 
-  it('keeps explicit DIRECTOR_MODEL and FALLBACK_MODEL', () => {
+  it('keeps explicit DIRECTOR_MODEL', () => {
     const env = validateEnv({
       NODE_ENV: 'test',
       DIRECTOR_MODEL: 'gemini-3.5-flash-lite',
-      FALLBACK_MODEL: 'claude-sonnet-5',
     });
     expect(env.DIRECTOR_MODEL).toBe('gemini-3.5-flash-lite');
-    expect(env.FALLBACK_MODEL).toBe('claude-sonnet-5');
   });
 
   it('keeps a non-empty DATABASE_URL', () => {
@@ -55,5 +50,60 @@ describe('validateEnv', () => {
     });
     expect(env.DATABASE_URL).toBe(url);
     expect(env.DIRECT_URL).toBe(url);
+  });
+
+  it('treats LLM as configured only when GOOGLE_API_KEY is present', () => {
+    expect(isLlmConfigured(validateEnv({ NODE_ENV: 'test' }))).toBe(false);
+    expect(
+      isLlmConfigured(
+        validateEnv({ NODE_ENV: 'test', GOOGLE_API_KEY: 'test-google-key' })
+      )
+    ).toBe(true);
+  });
+});
+
+describe('leftover ANTHROPIC_API_KEY', () => {
+  const previous = process.env.ANTHROPIC_API_KEY;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    if (previous === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = previous;
+    }
+  });
+
+  it('startup with ANTHROPIC_API_KEY set and unset produces no warning logs', async () => {
+    const warnings: string[] = [];
+    const capture = (message: unknown): void => {
+      warnings.push(typeof message === 'string' ? message : String(message));
+    };
+    vi.spyOn(console, 'warn').mockImplementation(capture);
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(capture);
+
+    for (const leftover of [undefined, 'leftover-anthropic-key'] as const) {
+      if (leftover === undefined) {
+        delete process.env.ANTHROPIC_API_KEY;
+      } else {
+        process.env.ANTHROPIC_API_KEY = leftover;
+      }
+
+      const env = validateEnv({
+        NODE_ENV: 'test',
+        ANTHROPIC_API_KEY: leftover,
+      });
+      expect(env).not.toHaveProperty('ANTHROPIC_API_KEY');
+      expect(isLlmConfigured(env)).toBe(false);
+
+      const moduleRef = await Test.createTestingModule({
+        imports: [AppModule],
+      }).compile();
+      const app = moduleRef.createNestApplication();
+      await app.init();
+      await app.close();
+    }
+
+    expect(warnings).toEqual([]);
   });
 });

@@ -13,10 +13,7 @@ import {
 import { makeCacheKey } from '../levels/cache-key';
 import { makeDailySeed } from '../levels/daily-seed';
 import { createDirectorDeadline } from './deadline';
-import {
-  FALLBACK_MIN_REMAINING_MS,
-  LLM_REPAIR_MIN_REMAINING_MS,
-} from './director.constants';
+import { LLM_REPAIR_MIN_REMAINING_MS } from './director.constants';
 import { isTimeoutError } from './errors';
 import { tryParseLlmPlan } from './parse-plan';
 import {
@@ -41,9 +38,7 @@ export interface DirectorOutcome {
 
 export interface RunDirectorOptions {
   primary: StructuredChat;
-  fallback?: StructuredChat;
   budgetMs?: number;
-  fallbackMinRemainingMs?: number;
   llmRepairMinRemainingMs?: number;
   proceduralReserveMs?: number;
   now?: () => number;
@@ -126,7 +121,10 @@ function llmOutcome(
   };
 }
 
-function repairAsPlan(raw: unknown, fallback: LevelPlan | undefined): LevelPlan {
+function repairAsPlan(
+  raw: unknown,
+  fallback: LevelPlan | undefined
+): LevelPlan {
   if (fallback !== undefined) {
     return fallback;
   }
@@ -134,7 +132,7 @@ function repairAsPlan(raw: unknown, fallback: LevelPlan | undefined): LevelPlan 
 }
 
 /**
- * Live director loop: LLM → validate → local repair → one LLM repair →
+ * Live director loop: Gemini → validate → local repair → one Gemini repair →
  * procedural. Never throws for provider/timeout/invalid output.
  */
 export async function runDirector(
@@ -143,8 +141,6 @@ export async function runDirector(
 ): Promise<DirectorOutcome> {
   const now = options.now ?? (() => Date.now());
   const startedMs = options.startedMs ?? now();
-  const fallbackMin =
-    options.fallbackMinRemainingMs ?? FALLBACK_MIN_REMAINING_MS;
   const repairMin =
     options.llmRepairMinRemainingMs ?? LLM_REPAIR_MIN_REMAINING_MS;
   const promptVersion = options.promptVersion ?? PROMPT_VERSION;
@@ -256,16 +252,8 @@ export async function runDirector(
       ),
     ];
 
-    let chat = options.primary;
-    let draft = await attempt(chat, draftMessages, 'draft');
-
-    if (draft.kind === 'error') {
-      const fallback = options.fallback;
-      if (fallback !== undefined && deadline.canStartLlm(fallbackMin)) {
-        chat = fallback;
-        draft = await attempt(chat, draftMessages, 'draft');
-      }
-    }
+    const chat = options.primary;
+    const draft = await attempt(chat, draftMessages, 'draft');
 
     if (draft.kind !== 'plan') {
       return proceduralOutcome(
@@ -365,13 +353,7 @@ export async function runDirector(
       }
     }
 
-    return proceduralOutcome(
-      request,
-      startedMs,
-      telemetry,
-      promptVersion,
-      now
-    );
+    return proceduralOutcome(request, startedMs, telemetry, promptVersion, now);
   } finally {
     deadline.dispose();
   }

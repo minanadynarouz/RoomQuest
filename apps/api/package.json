@@ -20,7 +20,6 @@
     "db:migrate:deploy": "prisma migrate deploy"
   },
   "dependencies": {
-    "@langchain/anthropic": "^1.5.12",
     "@langchain/core": "^1.2.17",
     "@langchain/google-genai": "^2.3.2",
     "@neondatabase/serverless": "^1.2.0",

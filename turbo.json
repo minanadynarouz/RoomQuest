@@ -7,8 +7,7 @@
     "DIRECT_URL",
     "NODE_ENV",
     "DIRECTOR_MODE",
-    "GOOGLE_API_KEY",
-    "ANTHROPIC_API_KEY"
+    "GOOGLE_API_KEY"
   ],
   "tasks": {
     "build": {

@@ -1,8 +1,5 @@
 import { z } from 'zod';
-import {
-  DEFAULT_DIRECTOR_MODEL,
-  DEFAULT_FALLBACK_MODEL,
-} from '../director/director.constants';
+import { DEFAULT_DIRECTOR_MODEL } from '../director/director.constants';
 
 const optionalKey = z
   .string()
@@ -37,7 +34,6 @@ export const envSchema = z.object({
       return value.trim();
     }),
   GOOGLE_API_KEY: optionalKey,
-  ANTHROPIC_API_KEY: optionalKey,
   DATABASE_URL: optionalKey,
   DIRECT_URL: optionalKey,
   DIRECTOR_MODEL: z
@@ -46,15 +42,6 @@ export const envSchema = z.object({
     .transform((value) => {
       if (value === undefined || value.trim().length === 0) {
         return DEFAULT_DIRECTOR_MODEL;
-      }
-      return value.trim();
-    }),
-  FALLBACK_MODEL: z
-    .string()
-    .optional()
-    .transform((value) => {
-      if (value === undefined || value.trim().length === 0) {
-        return DEFAULT_FALLBACK_MODEL;
       }
       return value.trim();
     }),
@@ -73,10 +60,6 @@ export function validateEnv(config: Record<string, unknown>): Env {
   return parsed.data;
 }
 
-export function isLlmConfigured(
-  env: Pick<Env, 'GOOGLE_API_KEY' | 'ANTHROPIC_API_KEY'>
-): boolean {
-  return (
-    env.GOOGLE_API_KEY !== undefined || env.ANTHROPIC_API_KEY !== undefined
-  );
+export function isLlmConfigured(env: Pick<Env, 'GOOGLE_API_KEY'>): boolean {
+  return env.GOOGLE_API_KEY !== undefined;
 }

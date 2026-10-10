@@ -12,7 +12,5 @@ export interface EvalHarnessOptions {
   repoRoot?: string;
   logger?: DirectorLogger;
   googleApiKey?: string;
-  anthropicApiKey?: string;
   directorModel?: string;
-  fallbackModel?: string;
 }

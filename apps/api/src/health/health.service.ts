@@ -22,7 +22,6 @@ export class HealthService {
   async getHealth(): Promise<HealthResponse> {
     const env = {
       GOOGLE_API_KEY: this.config.get('GOOGLE_API_KEY', { infer: true }),
-      ANTHROPIC_API_KEY: this.config.get('ANTHROPIC_API_KEY', { infer: true }),
     };
 
     return {

@@ -3,20 +3,9 @@
   "mock": true,
   "promptVersion": "v1.0",
   "directorModel": "gemini-3.8-flash",
-  "fallbackModel": "claude-haiku-4-5",
-  "roomIds": [
-    "synthetic_living_room"
-  ],
-  "seedDates": [
-    "2026-10-01",
-    "2026-10-02",
-    "2026-10-03",
-    "2026-10-04"
-  ],
-  "tiers": [
-    "easy",
-    "normal"
-  ],
+  "roomIds": ["synthetic_living_room"],
+  "seedDates": ["2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04"],
+  "tiers": ["easy", "normal"],
   "bar": {
     "validAfterRepairMinPct": 90,
     "p95MaxMs": 7000,
@@ -33,8 +22,8 @@
     "models": {
       "gemini-3.8-flash": 8
     },
-    "p50LatencyMs": 1,
-    "p95LatencyMs": 3.6,
+    "p50LatencyMs": 0,
+    "p95LatencyMs": 0,
     "estimatedCostUsd": 0.001092,
     "inputTokens": 96,
     "outputTokens": 272,
@@ -53,7 +42,7 @@
       "validBeforeRepair": true,
       "validAfterRepair": true,
       "fallbackToProcedural": false,
-      "latencyMs": 5,
+      "latencyMs": 0,
       "repairs": [],
       "estimatedCostUsd": 0.0001365,
       "telemetry": [
@@ -62,7 +51,7 @@
           "model": "gemini-3.8-flash",
           "inputTokens": 12,
           "outputTokens": 34,
-          "latencyMs": 3,
+          "latencyMs": 0,
           "outcome": "ok"
         }
       ]
@@ -78,7 +67,7 @@
       "validBeforeRepair": true,
       "validAfterRepair": true,
       "fallbackToProcedural": false,
-      "latencyMs": 1,
+      "latencyMs": 0,
       "repairs": [],
       "estimatedCostUsd": 0.0001365,
       "telemetry": [
@@ -128,7 +117,7 @@
       "validBeforeRepair": true,
       "validAfterRepair": true,
       "fallbackToProcedural": false,
-      "latencyMs": 1,
+      "latencyMs": 0,
       "repairs": [],
       "estimatedCostUsd": 0.0001365,
       "telemetry": [
@@ -137,7 +126,7 @@
           "model": "gemini-3.8-flash",
           "inputTokens": 12,
           "outputTokens": 34,
-          "latencyMs": 1,
+          "latencyMs": 0,
           "outcome": "ok"
         }
       ]
@@ -153,7 +142,7 @@
       "validBeforeRepair": true,
       "validAfterRepair": true,
       "fallbackToProcedural": false,
-      "latencyMs": 1,
+      "latencyMs": 0,
       "repairs": [],
       "estimatedCostUsd": 0.0001365,
       "telemetry": [
@@ -178,7 +167,7 @@
       "validBeforeRepair": true,
       "validAfterRepair": true,
       "fallbackToProcedural": false,
-      "latencyMs": 1,
+      "latencyMs": 0,
       "repairs": [],
       "estimatedCostUsd": 0.0001365,
       "telemetry": [
@@ -187,7 +176,7 @@
           "model": "gemini-3.8-flash",
           "inputTokens": 12,
           "outputTokens": 34,
-          "latencyMs": 1,
+          "latencyMs": 0,
           "outcome": "ok"
         }
       ]
@@ -228,7 +217,7 @@
       "validBeforeRepair": true,
       "validAfterRepair": true,
       "fallbackToProcedural": false,
-      "latencyMs": 1,
+      "latencyMs": 0,
       "repairs": [],
       "estimatedCostUsd": 0.0001365,
       "telemetry": [
@@ -237,7 +226,7 @@
           "model": "gemini-3.8-flash",
           "inputTokens": 12,
           "outputTokens": 34,
-          "latencyMs": 1,
+          "latencyMs": 0,
           "outcome": "ok"
         }
       ]

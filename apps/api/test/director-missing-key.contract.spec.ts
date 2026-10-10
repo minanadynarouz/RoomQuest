@@ -30,9 +30,6 @@ describe('POST /api/v1/levels live mode without Google key', () => {
       createPrimary: () => {
         throw new Error('must not construct a model without a key');
       },
-      createFallback: () => {
-        throw new Error('must not construct a fallback without a key');
-      },
     };
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],

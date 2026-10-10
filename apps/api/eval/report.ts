@@ -4,7 +4,7 @@ import { EVAL_BAR_P95_MS, EVAL_BAR_VALID_AFTER_REPAIR_PCT } from './constants';
 import { priceForModel } from './prices';
 
 const LlmCallTelemetrySchema = z.object({
-  provider: z.enum(['google', 'anthropic']),
+  provider: z.enum(['google']),
   model: z.string(),
   inputTokens: z.number().nullable(),
   outputTokens: z.number().nullable(),
@@ -61,7 +61,6 @@ export const EvalReportSchema = z.object({
   mock: z.boolean(),
   promptVersion: z.string(),
   directorModel: z.string(),
-  fallbackModel: z.string(),
   roomIds: z.array(z.string()),
   seedDates: z.array(z.string()),
   tiers: z.array(Tier),
@@ -179,7 +178,7 @@ function formatMs(value: number): string {
 export function renderMarkdown(report: EvalReport): string {
   const modeLine = report.mock
     ? '**Mode:** mock (`FakeListChatModel`; not a live LLM run). Pipeline exercise only — do not treat the bar as a production quality signal.'
-    : '**Mode:** live (Gemini primary, Anthropic fallback when configured).';
+    : '**Mode:** live (Gemini only).';
 
   const barLine = report.bar.met
     ? `**Bar: MET** (≥ ${String(report.bar.validAfterRepairMinPct)}% valid after repair AND p95 ≤ ${String(report.bar.p95MaxMs)} ms)`
@@ -198,7 +197,7 @@ export function renderMarkdown(report: EvalReport): string {
     .join('\n');
 
   const mockBanner = report.mock
-    ? '\n> **MOCK RUN** — generated with LangChain `FakeListChatModel`, not Gemini or Anthropic. Keys were not required.\n'
+    ? '\n> **MOCK RUN** — generated with LangChain `FakeListChatModel`, not Gemini. Keys were not required.\n'
     : '';
 
   return `# Director eval — ${report.generatedAt.slice(0, 10)}
@@ -210,7 +209,6 @@ ${modeLine}
 | Generated at | ${report.generatedAt} |
 | Prompt version | ${report.promptVersion} |
 | Director model | ${report.directorModel} |
-| Fallback model | ${report.fallbackModel} |
 | Rooms | ${report.roomIds.join(', ')} |
 | Seeds (dates) | ${report.seedDates.join(', ')} |
 | Tiers | ${report.tiers.join(', ')} |

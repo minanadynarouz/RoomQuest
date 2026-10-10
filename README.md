@@ -59,7 +59,6 @@ For the API (see `apps/api/.env.example` for full details):
 - `DATABASE_URL` - PostgreSQL connection string (pooled). Optional; the API boots without it.
 - `DIRECT_URL` - Direct PostgreSQL connection (for migrations)
 - `GOOGLE_API_KEY` - Google AI API key for Gemini
-- `ANTHROPIC_API_KEY` - Anthropic API key (fallback)
 - `DIRECTOR_MODE` - `mock` (default for local dev) or `live`
 
 Optional local Postgres 17:
