@@ -45,6 +45,8 @@ export const envSchema = z.object({
       }
       return value.trim();
     }),
+  /** Seconds to skip Gemini after 429 / RESOURCE_EXHAUSTED when the error has no Retry-After. */
+  LLM_QUOTA_COOLDOWN_S: z.coerce.number().int().min(1).default(600),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -73,20 +73,22 @@ export class LevelsService {
       latencyMs: Math.max(0, now() - startedMs),
     });
 
-    await this.cache.persist(
-      {
-        key: cacheKey,
-        roomHash: request.graph.roomHash,
-        date: request.date,
-        tier: request.tier,
-        promptVersion,
-        plan: body.plan,
-        source: body.source,
-        model: body.model ?? null,
-      },
-      startedMs,
-      now()
-    );
+    if (body.fallbackReason !== 'llm-quota') {
+      await this.cache.persist(
+        {
+          key: cacheKey,
+          roomHash: request.graph.roomHash,
+          date: request.date,
+          tier: request.tier,
+          promptVersion,
+          plan: body.plan,
+          source: body.source,
+          model: body.model ?? null,
+        },
+        startedMs,
+        now()
+      );
+    }
 
     return body;
   }

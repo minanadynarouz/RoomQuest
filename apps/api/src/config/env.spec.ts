@@ -60,6 +60,20 @@ describe('validateEnv', () => {
       )
     ).toBe(true);
   });
+
+  it('defaults LLM_QUOTA_COOLDOWN_S to 600 and keeps an explicit value', () => {
+    expect(validateEnv({ NODE_ENV: 'test' }).LLM_QUOTA_COOLDOWN_S).toBe(600);
+    expect(
+      validateEnv({ NODE_ENV: 'test', LLM_QUOTA_COOLDOWN_S: '120' })
+        .LLM_QUOTA_COOLDOWN_S
+    ).toBe(120);
+  });
+
+  it('rejects a non-positive LLM_QUOTA_COOLDOWN_S', () => {
+    expect(() =>
+      validateEnv({ NODE_ENV: 'test', LLM_QUOTA_COOLDOWN_S: '0' })
+    ).toThrow(/Invalid environment/);
+  });
 });
 
 describe('leftover ANTHROPIC_API_KEY', () => {

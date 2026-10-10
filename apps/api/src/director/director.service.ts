@@ -12,6 +12,7 @@ import {
   type DirectorRuntime,
 } from './models';
 import { PROMPT_VERSION } from './prompts';
+import { LLM_QUOTA_BREAKER, type LlmQuotaBreaker } from './quota-breaker';
 import {
   proceduralOutcome,
   runDirector,
@@ -26,6 +27,9 @@ export class DirectorService {
     @Inject(ConfigService) private readonly config: ConfigService<Env, true>,
     @Inject(DIRECTOR_CHAT_FACTORY)
     private readonly factory: DirectorChatFactory,
+    @Optional()
+    @Inject(LLM_QUOTA_BREAKER)
+    private readonly quotaBreaker?: LlmQuotaBreaker,
     @Optional()
     @Inject(DIRECTOR_RUNTIME)
     private readonly runtime?: DirectorRuntime
@@ -54,6 +58,17 @@ export class DirectorService {
       return proceduralOutcome(request, startedMs, [], promptVersion, now);
     }
 
+    if (this.quotaBreaker?.isOpen()) {
+      return proceduralOutcome(
+        request,
+        startedMs,
+        [],
+        promptVersion,
+        now,
+        'llm-quota'
+      );
+    }
+
     const directorModel = this.config.get('DIRECTOR_MODEL', { infer: true });
 
     const primary = wrapChatModel(
@@ -74,6 +89,7 @@ export class DirectorService {
       proceduralReserveMs: this.runtime?.proceduralReserveMs,
       now,
       startedMs,
+      quotaBreaker: this.quotaBreaker,
     });
   }
 

@@ -3,6 +3,13 @@ import { SurfaceGraph } from './surface.js';
 import { LevelPlan, Theme, Tier, PlanSource } from './level.js';
 
 /**
+ * Why the API returned a procedural plan instead of Gemini.
+ * Response-only — never part of LevelPlanLLM (Gemini structured output).
+ */
+export const FallbackReason = z.enum(['llm-quota']);
+export type FallbackReason = z.infer<typeof FallbackReason>;
+
+/**
  * API request/response types
  * Architecture §6
  */
@@ -41,6 +48,8 @@ export const LevelResponse = z.object({
   latencyMs: z.number(),
   /** Validator repairs applied (if any) */
   repairs: z.array(z.string()),
+  /** Present when source is procedural because Gemini quota was exhausted. */
+  fallbackReason: FallbackReason.optional(),
 });
 export type LevelResponse = z.infer<typeof LevelResponse>;
 

@@ -2,34 +2,46 @@ import { Test } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { describe, expect, it, vi } from 'vitest';
 import { validateEnv } from '../config/env';
+import { LLM_QUOTA_BREAKER } from '../director/quota-breaker';
 import { PrismaService } from '../prisma/prisma.service';
-import { HealthService } from './health.service';
+import { HealthService, type HealthResponse } from './health.service';
 
-async function healthWithDb(
-  db: 'up' | 'down' | 'disabled',
-  gitSha?: string
-): Promise<{
+async function healthWith(options: {
   db: 'up' | 'down' | 'disabled';
-  status: 'ok';
-  version: string;
-}> {
+  gitSha?: string;
+  env?: Record<string, string>;
+  quotaOpen?: boolean;
+}): Promise<HealthResponse> {
   const moduleRef = await Test.createTestingModule({
     imports: [
       ConfigModule.forRoot({
         isGlobal: true,
         ignoreEnvFile: true,
         validate: (config: Record<string, unknown>) =>
-          validateEnv(
-            gitSha === undefined ? config : { ...config, GIT_SHA: gitSha }
-          ),
+          validateEnv({
+            ...config,
+            GOOGLE_API_KEY: '',
+            ...(options.gitSha === undefined
+              ? {}
+              : { GIT_SHA: options.gitSha }),
+            ...options.env,
+          }),
       }),
     ],
     providers: [
       HealthService,
       {
         provide: PrismaService,
-        useValue: { dbHealth: vi.fn(() => Promise.resolve(db)) },
+        useValue: { dbHealth: vi.fn(() => Promise.resolve(options.db)) },
       },
+      ...(options.quotaOpen === undefined
+        ? []
+        : [
+            {
+              provide: LLM_QUOTA_BREAKER,
+              useValue: { isOpen: () => options.quotaOpen },
+            },
+          ]),
     ],
   }).compile();
 
@@ -37,6 +49,13 @@ async function healthWithDb(
   const body = await health.getHealth();
   await moduleRef.close();
   return body;
+}
+
+async function healthWithDb(
+  db: 'up' | 'down' | 'disabled',
+  gitSha?: string
+): Promise<HealthResponse> {
+  return healthWith({ db, gitSha });
 }
 
 describe('HealthService', () => {
@@ -62,5 +81,28 @@ describe('HealthService', () => {
   it('reports GIT_SHA as version', async () => {
     const body = await healthWithDb('up', 'abc123deadbeef');
     expect(body.version).toBe('abc123deadbeef');
+  });
+
+  it("reports llm:'disabled' when GOOGLE_API_KEY is unset", async () => {
+    const body = await healthWith({ db: 'up' });
+    expect(body.llm).toBe('disabled');
+  });
+
+  it("reports llm:'up' when the Gemini key is set and the breaker is closed", async () => {
+    const body = await healthWith({
+      db: 'up',
+      env: { GOOGLE_API_KEY: 'test-google-key' },
+      quotaOpen: false,
+    });
+    expect(body.llm).toBe('up');
+  });
+
+  it("reports llm:'quota-cooldown' when the breaker is open", async () => {
+    const body = await healthWith({
+      db: 'up',
+      env: { GOOGLE_API_KEY: 'test-google-key' },
+      quotaOpen: true,
+    });
+    expect(body.llm).toBe('quota-cooldown');
   });
 });

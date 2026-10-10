@@ -25,7 +25,7 @@ const HealthBody = z.object({
   status: z.literal('ok'),
   version: z.string().min(1),
   db: z.enum(['up', 'down', 'disabled']),
-  llm: z.enum(['configured', 'missing']),
+  llm: z.enum(['up', 'quota-cooldown', 'disabled']),
   time: z.string().min(1),
 });
 
