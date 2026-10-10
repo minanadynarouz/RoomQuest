@@ -110,6 +110,22 @@ describe('per-piece KIT_CATALOG constraints', () => {
     expect(codesOf(result)).toContain('PATH_DISTANCE_TOO_SHORT');
   });
 
+  it('skips PATH_DISTANCE_TOO_SHORT when no graph pair is 0.8 m apart', () => {
+    const compact = {
+      ...GRAPH,
+      nodes: GRAPH.nodes.map((node, index) => ({
+        ...node,
+        centroid: [index * 0.05, node.centroid[1], 0] as [
+          number,
+          number,
+          number,
+        ],
+      })),
+    };
+    const result = validatePlan(PLAN, compact);
+    expect(codesOf(result)).not.toContain('PATH_DISTANCE_TOO_SHORT');
+  });
+
   it('TOO_MANY_OF_PIECE: two village_hut placements', () => {
     const result = validatePlan(
       extraPlacement({

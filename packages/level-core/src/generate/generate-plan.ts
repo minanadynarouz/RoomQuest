@@ -11,6 +11,7 @@ import {
   type Tier,
 } from '@roomquest/schema';
 import { clampParTimeMs } from '../validate/clamp-par';
+import { pickHutSurface } from '../validate/graph-capacity';
 import {
   horizontalDistance,
   MAX_VIEW_ANGLE_DEG,
@@ -44,7 +45,6 @@ const LABEL_WORD: Record<SurfaceLabel, string> = {
   other: 'far surface',
 };
 
-const HUT = KIT_CATALOG.village_hut;
 const SLIME = KIT_CATALOG.slime;
 const PLATFORM = KIT_CATALOG.moving_platform;
 
@@ -61,6 +61,12 @@ const PLATFORM = KIT_CATALOG.moving_platform;
  *
  * Tiny graphs (2 nodes) produce a hut, shrine, plank if the gap fits,
  * gems, and a gate/lever when a reachable lever surface exists.
+ *
+ * Minimum graph for a full-quality plan: ≥ 2 surfaces, ≥ 1 table/desk
+ * that meets village_hut catalog constraints, and ≥ 1 pair of surfaces
+ * 0.8 m apart. Below that (IWER `meeting_room` is 3 stacked surfaces
+ * 0.17 m apart; several IWER rooms have no in-cone table) this still
+ * returns a schema-valid degraded plan — never an invalid one.
  */
 export function generatePlan(
   graph: SurfaceGraph,
@@ -213,11 +219,7 @@ function generatePlanInner(
 }
 
 function pickStart(nodes: readonly SurfaceNode[]): SurfaceNode {
-  const first = nodes[0] ?? fallbackNode();
-  const valid = nodes.filter(isValidHut);
-  const pool = valid.length > 0 ? valid : [...nodes];
-  pool.sort((a, b) => b.area - a.area || a.id.localeCompare(b.id));
-  return pool[0] ?? first;
+  return pickHutSurface(nodes) ?? fallbackNode();
 }
 
 function fallbackNode(): SurfaceNode {
@@ -233,29 +235,6 @@ function fallbackNode(): SurfaceNode {
     reach: 'hand',
     angleFromForward: 0,
   };
-}
-
-function isValidHut(node: SurfaceNode): boolean {
-  const allowed = HUT.allowedSurfaces;
-  if (allowed && !allowed.includes(node.label)) {
-    return false;
-  }
-  if (HUT.minArea !== undefined && node.area < HUT.minArea) {
-    return false;
-  }
-  if (HUT.minHeight !== undefined && node.topHeight < HUT.minHeight) {
-    return false;
-  }
-  if (HUT.maxHeight !== undefined && node.topHeight > HUT.maxHeight) {
-    return false;
-  }
-  if (
-    HUT.maxAngleFromForward !== undefined &&
-    node.angleFromForward > HUT.maxAngleFromForward
-  ) {
-    return false;
-  }
-  return true;
 }
 
 function pickGoal(

@@ -4,6 +4,7 @@ import {
   SYNTHETIC_LIVING_ROOM,
   SYNTHETIC_LIVING_ROOM_PLAN,
 } from '@roomquest/fixtures';
+import { validatePlan } from '@roomquest/level-core';
 import { LevelRequest, LevelResponse } from '@roomquest/schema';
 import { FakeListChatModel } from '@langchain/core/utils/testing';
 import { describe, expect, it, vi } from 'vitest';
@@ -54,12 +55,16 @@ async function serviceWithEnv(
 }
 
 describe('DirectorService', () => {
-  it('serves the mock fixture when DIRECTOR_MODE=mock', async () => {
+  it('serves a graph-bound procedural plan when DIRECTOR_MODE=mock', async () => {
     const director = await serviceWithEnv({ DIRECTOR_MODE: 'mock' });
     const response = await director.plan(request);
     const parsed = LevelResponse.parse(response);
     expect(parsed.source).toBe('procedural');
-    expect(parsed.plan.title).toBe(SYNTHETIC_LIVING_ROOM_PLAN.title);
+    expect(validatePlan(parsed.plan, request.graph).ok).toBe(true);
+    expect(parsed.plan.start).toBeTruthy();
+    expect(request.graph.nodes.some((node) => node.id === parsed.plan.start)).toBe(
+      true
+    );
     expect(parsed.promptVersion).toBe(PROMPT_VERSION);
     expect(parsed.model).toBeUndefined();
   });

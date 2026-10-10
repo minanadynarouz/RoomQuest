@@ -65,6 +65,26 @@ interface AttemptFail {
 
 type Attempt = AttemptOk | AttemptFail;
 
+/**
+ * Bind a procedural plan to the request graph: generate, validate, repair,
+ * validate again. Matches the client director (`apps/client/src/game/director`).
+ */
+export function bindPlanToGraph(request: LevelRequest): {
+  plan: LevelPlan;
+  repairs: string[];
+} {
+  const seed = makeDailySeed(request.graph.roomHash, request.date);
+  const generated = generatePlan(request.graph, seed, request.tier, {
+    recentThemes: request.recentThemes,
+  });
+  const first = validatePlan(generated, request.graph);
+  if (first.ok) {
+    return { plan: generated, repairs: [] };
+  }
+  const repaired = repairPlan(generated, request.graph);
+  return { plan: repaired.plan, repairs: repaired.repairs };
+}
+
 export function proceduralOutcome(
   request: LevelRequest,
   startedMs: number,
@@ -73,13 +93,10 @@ export function proceduralOutcome(
   now: () => number,
   fallbackReason?: FallbackReason
 ): DirectorOutcome {
-  const seed = makeDailySeed(request.graph.roomHash, request.date);
-  const plan = generatePlan(request.graph, seed, request.tier, {
-    recentThemes: request.recentThemes,
-  });
+  const bound = bindPlanToGraph(request);
   return {
     response: LevelResponse.parse({
-      plan,
+      plan: bound.plan,
       source: 'procedural',
       cacheKey: makeCacheKey(
         request.graph.roomHash,
@@ -89,7 +106,7 @@ export function proceduralOutcome(
       ),
       promptVersion,
       latencyMs: Math.max(0, now() - startedMs),
-      repairs: [],
+      repairs: bound.repairs,
       ...(fallbackReason === undefined ? {} : { fallbackReason }),
     }),
     telemetry,

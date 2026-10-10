@@ -45,6 +45,24 @@ describe('path links', () => {
     expect(portalFits(s1, { ...s2, angleFromForward: 80 })).toBe(false);
   });
 
+  it('allows a portal on a capture with no in-view surfaces', () => {
+    const s1 = SYNTHETIC_LIVING_ROOM.nodes[0];
+    const s2 = SYNTHETIC_LIVING_ROOM.nodes[1];
+    expect(s1 && s2).toBeTruthy();
+    if (!s1 || !s2) {
+      return;
+    }
+    const blind = {
+      ...SYNTHETIC_LIVING_ROOM,
+      nodes: SYNTHETIC_LIVING_ROOM.nodes.map((node) => ({
+        ...node,
+        angleFromForward: 80,
+        reach: 'outOfView' as const,
+      })),
+    };
+    expect(portalFits(s1, { ...s2, angleFromForward: 80 }, blind)).toBe(true);
+  });
+
   it('plankFits matches catalog + geometric epsilon', () => {
     expect(plankFits(0.5, 0.2)).toBe(true);
     expect(plankFits(0.04, 0.1)).toBe(false);

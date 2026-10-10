@@ -3,6 +3,7 @@ import {
   type SurfaceGraph,
   type SurfaceNode,
 } from '@roomquest/schema';
+import { graphHasPlayableView } from '../validate/graph-capacity';
 import {
   findEdge,
   GEOM_EPS_M,
@@ -58,7 +59,7 @@ export function classifyPair(
   if (rampFits(from, to, gap, dh)) {
     return { a: from.id, b: to.id, kind: 'ramp', cost: 2 + dh };
   }
-  if (portalFits(from, to)) {
+  if (portalFits(from, to, graph)) {
     return { a: from.id, b: to.id, kind: 'portal', cost: 20 };
   }
   return null;
@@ -95,11 +96,18 @@ export function rampFits(
   return run >= 2 * dh;
 }
 
-export function portalFits(from: SurfaceNode, to: SurfaceNode): boolean {
-  return (
+export function portalFits(
+  from: SurfaceNode,
+  to: SurfaceNode,
+  graph?: SurfaceGraph
+): boolean {
+  if (
     from.angleFromForward <= MAX_VIEW_ANGLE_DEG &&
     to.angleFromForward <= MAX_VIEW_ANGLE_DEG
-  );
+  ) {
+    return true;
+  }
+  return graph !== undefined && !graphHasPlayableView(graph);
 }
 
 export function linkBetween(

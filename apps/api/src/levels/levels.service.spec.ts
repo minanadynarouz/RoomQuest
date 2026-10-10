@@ -137,24 +137,20 @@ describe('LevelsService cache + limiter', () => {
   });
 
   it('treats a cached plan that fails validatePlan as a miss and overwrites', async () => {
+    const stale: LevelPlan = {
+      ...SYNTHETIC_LIVING_ROOM_PLAN,
+      start: 'missing-start',
+      goal: 'missing-goal',
+      placements: SYNTHETIC_LIVING_ROOM_PLAN.placements.map((placement) => ({
+        ...placement,
+        surface: `gone-${placement.surface}`,
+      })),
+    };
     const { service, persist, directorPlan } = await serviceWith({
-      cached: cachedRow(SYNTHETIC_LIVING_ROOM_PLAN),
+      cached: cachedRow(stale),
       plan: validPlan,
     });
-    const changedGraph = LevelRequest.parse({
-      ...request,
-      graph: {
-        ...SYNTHETIC_LIVING_ROOM,
-        nodes: SYNTHETIC_LIVING_ROOM.nodes.map((node) => ({
-          ...node,
-          label: 'floor' as const,
-          topHeight: 0,
-          area: 0.05,
-          size: [0.2, 0.2] as [number, number],
-        })),
-      },
-    });
-    const response = await service.create(changedGraph, 'device-1');
+    const response = await service.create(request, 'device-1');
     expect(response.source).not.toBe('cache');
     expect(directorPlan).toHaveBeenCalledOnce();
     expect(persist).toHaveBeenCalledOnce();

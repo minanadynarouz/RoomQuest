@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  IWER_LIVING_ROOM,
   SYNTHETIC_LIVING_ROOM,
   SYNTHETIC_LIVING_ROOM_PLAN,
 } from '@roomquest/fixtures';
@@ -158,6 +159,73 @@ describe('repairPlan', () => {
     const result = repairPlan(hopeless, GRAPH);
     expect(result.result.ok).toBe(false);
     expect(result.result.issues.length).toBeGreaterThan(0);
+  });
+
+  it('relocates a floor hut onto a table on a degraded IWER room', () => {
+    const dirty: LevelPlan = {
+      seed: 'iwer-floor-hut',
+      theme: 'forest',
+      title: 'Floor hut',
+      start: 's12',
+      goal: 's2',
+      placements: [
+        {
+          id: 'p1',
+          piece: 'village_hut',
+          surface: 's12',
+          u: 0.5,
+          v: 0.5,
+          playerBuilt: false,
+          links: [],
+        },
+        {
+          id: 'p2',
+          piece: 'crystal_shrine',
+          surface: 's2',
+          u: 0.5,
+          v: 0.5,
+          playerBuilt: false,
+          links: [],
+        },
+        {
+          id: 'p3',
+          piece: 'gem',
+          surface: 's12',
+          u: 0.2,
+          v: 0.2,
+          playerBuilt: false,
+          links: [],
+        },
+        {
+          id: 'p4',
+          piece: 'gem',
+          surface: 's2',
+          u: 0.8,
+          v: 0.8,
+          playerBuilt: false,
+          links: [],
+        },
+      ],
+      beats: [
+        { goal: 'Collect a spark', uses: ['p3'] },
+        { goal: 'Reach the shrine', uses: ['p2'] },
+      ],
+      dialogue: [],
+      parTimeMs: PAR_TIME_MIN_MS,
+    };
+    const result = repairPlan(dirty, IWER_LIVING_ROOM);
+    const repairedHut = result.plan.placements.find(
+      (item) => item.piece === 'village_hut'
+    );
+    expect(repairedHut?.surface).not.toBe('s12');
+    expect(repairedHut?.surface).toBe(result.plan.start);
+    expect(
+      IWER_LIVING_ROOM.nodes.find((node) => node.id === repairedHut?.surface)
+        ?.label
+    ).toBe('table');
+    expect(result.repairs.some((line) => line.includes('village_hut'))).toBe(
+      true
+    );
   });
 
   it('drops a second village_hut as extra', () => {
