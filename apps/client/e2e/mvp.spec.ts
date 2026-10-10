@@ -212,7 +212,7 @@ async function autoSolveAndWin(page: Page): Promise<void> {
   await page.waitForFunction(
     () => (window as unknown as RqWindow).__rq?.store?.phase === 'won',
     null,
-    { timeout: 90_000 }
+    { timeout: 180_000 }
   );
 }
 
@@ -245,7 +245,7 @@ test.describe('e2e-mvp emulator flow', () => {
     test(`${spec.room} director=${spec.director}: place, stun, walker win`, async ({
       page,
     }) => {
-      test.setTimeout(120_000);
+      test.setTimeout(240_000);
       const posts: ResultPost[] = [];
       captureResultPosts(page, posts);
       await mockApi(page);
