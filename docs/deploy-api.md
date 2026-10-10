@@ -1,6 +1,6 @@
 # Deploy the Roomquest API (Render + Neon)
 
-The Nest API is **meant** to run on **Render** (Oregon, Node 22) with Postgres on **Neon Free** (AWS us-west-2). This ticket (B-10) only ships the blueprint, Prisma config, and local Docker Postgres 17.
+The Nest API is **meant** to run on **Render** (Frankfurt, Node 22) with Postgres on **Neon Free** (AWS us-west-2). This ticket (B-10) only ships the blueprint, Prisma config, and local Docker Postgres 17.
 
 **Out of scope here:** do not create Render or Neon accounts, projects, services, or branches. Do not call the Render/Neon APIs or CLIs. Mina / the Lead create those later (M-10, L-03, L-04). Local verification is Docker only.
 
@@ -8,7 +8,7 @@ The complete API env-var list (name, required/optional, default, example, enviro
 
 ## 1. Neon project and branches (later — do not run in B-10)
 
-1. Create a Neon project named `roomquest` in **AWS us-west-2** (closest to Render Oregon).
+1. Create a Neon project named `roomquest` in **AWS us-west-2** (closest to Render Frankfurt).
 2. The default branch is **`main`** — use this for production.
 3. Create a second branch named **`staging`**.
 4. For each branch, copy both connection strings from **Connect**:

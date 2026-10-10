@@ -8,7 +8,7 @@ services:
   - type: web
     name: roomquest-api-staging
     runtime: node
-    region: oregon
+    region: frankfurt
     plan: free
     branch: revision_branch
     autoDeploy: false
@@ -42,7 +42,7 @@ services:
   - type: web
     name: roomquest-api-prod
     runtime: node
-    region: oregon
+    region: frankfurt
     plan: free
     branch: revision_branch
     autoDeploy: false
