@@ -45,3 +45,10 @@ model SessionResult {
 
   @@index([levelKey])
 }
+
+/// UTC daily counter of live Gemini calls. Incremented atomically before
+/// each live invoke; cache hits do not write a row.
+model LlmDailyUsage {
+  day   DateTime @id @db.Date
+  count Int
+}

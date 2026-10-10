@@ -47,6 +47,8 @@ export const envSchema = z.object({
     }),
   /** Seconds to skip Gemini after 429 / RESOURCE_EXHAUSTED when the error has no Retry-After. */
   LLM_QUOTA_COOLDOWN_S: z.coerce.number().int().min(1).default(600),
+  /** Global UTC daily cap on live Gemini calls. Cache hits do not count. */
+  LLM_DAILY_MAX: z.coerce.number().int().min(1).default(150),
 });
 
 export type Env = z.infer<typeof envSchema>;

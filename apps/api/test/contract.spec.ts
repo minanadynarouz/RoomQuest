@@ -31,6 +31,7 @@ interface HealthBody {
   version: string;
   db: string;
   llm: string;
+  llmToday: { used: number; max: number };
   time: string;
 }
 
@@ -57,6 +58,8 @@ describe('API contract (B-02)', () => {
   beforeAll(async () => {
     delete process.env.DATABASE_URL;
     delete process.env.DIRECT_URL;
+    delete process.env.GOOGLE_API_KEY;
+    delete process.env.LLM_DAILY_MAX;
     app = await createApp();
     await app.init();
   });
@@ -79,6 +82,7 @@ describe('API contract (B-02)', () => {
           body.llm === 'quota-cooldown' ||
           body.llm === 'disabled'
       ).toBe(true);
+      expect(body.llmToday).toEqual({ used: 0, max: 150 });
       expect(typeof body.time).toBe('string');
       expect(Number.isNaN(Date.parse(body.time))).toBe(false);
     });

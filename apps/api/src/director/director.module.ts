@@ -1,11 +1,14 @@
 import { Logger, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env';
+import { PrismaService } from '../prisma/prisma.service';
+import { LLM_DAILY_USAGE, LlmDailyUsage } from './daily-usage';
 import { DirectorService } from './director.service';
 import {
   defaultDirectorChatFactory,
   DIRECTOR_CHAT_FACTORY,
   DIRECTOR_RUNTIME,
+  type DirectorRuntime,
 } from './models';
 import { LLM_QUOTA_BREAKER, LlmQuotaBreaker } from './quota-breaker';
 
@@ -29,6 +32,21 @@ import { LLM_QUOTA_BREAKER, LlmQuotaBreaker } from './quota-breaker';
           logger: new Logger('LlmQuotaBreaker'),
         }),
     },
+    {
+      provide: LLM_DAILY_USAGE,
+      inject: [PrismaService, ConfigService, DIRECTOR_RUNTIME],
+      useFactory: (
+        prisma: PrismaService,
+        config: ConfigService<Env, true>,
+        runtime: DirectorRuntime
+      ): LlmDailyUsage =>
+        new LlmDailyUsage({
+          prisma,
+          max: config.get('LLM_DAILY_MAX', { infer: true }),
+          now: () => runtime.now?.() ?? Date.now(),
+          logger: new Logger('LlmDailyUsage'),
+        }),
+    },
     DirectorService,
   ],
   exports: [
@@ -36,6 +54,7 @@ import { LLM_QUOTA_BREAKER, LlmQuotaBreaker } from './quota-breaker';
     DIRECTOR_CHAT_FACTORY,
     DIRECTOR_RUNTIME,
     LLM_QUOTA_BREAKER,
+    LLM_DAILY_USAGE,
   ],
 })
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class

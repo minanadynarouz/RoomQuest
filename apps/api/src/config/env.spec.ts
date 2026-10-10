@@ -74,6 +74,19 @@ describe('validateEnv', () => {
       validateEnv({ NODE_ENV: 'test', LLM_QUOTA_COOLDOWN_S: '0' })
     ).toThrow(/Invalid environment/);
   });
+
+  it('defaults LLM_DAILY_MAX to 150 and keeps an explicit value', () => {
+    expect(validateEnv({ NODE_ENV: 'test' }).LLM_DAILY_MAX).toBe(150);
+    expect(
+      validateEnv({ NODE_ENV: 'test', LLM_DAILY_MAX: '20' }).LLM_DAILY_MAX
+    ).toBe(20);
+  });
+
+  it('rejects a non-positive LLM_DAILY_MAX', () => {
+    expect(() =>
+      validateEnv({ NODE_ENV: 'test', LLM_DAILY_MAX: '0' })
+    ).toThrow(/Invalid environment/);
+  });
 });
 
 describe('leftover ANTHROPIC_API_KEY', () => {

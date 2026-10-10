@@ -18,6 +18,7 @@ import {
   DIRECTOR_BUDGET_MS,
   DIRECTOR_LLM_WINDOW_MS,
 } from '../src/director/director.constants';
+import { LLM_DAILY_USAGE } from '../src/director/daily-usage';
 import {
   DIRECTOR_CHAT_FACTORY,
   DIRECTOR_RUNTIME,
@@ -34,6 +35,17 @@ import {
   SlowFakeListChatModel,
   ThrowingFakeListChatModel,
 } from '../src/director/test-fakes';
+
+const allowDailyUsage = {
+  consume: (): Promise<'ok'> => Promise.resolve('ok'),
+  snapshot: (): Promise<{
+    used: number;
+    max: number;
+    failClosed: boolean;
+  }> => Promise.resolve({ used: 0, max: 150, failClosed: false }),
+  today: (): Promise<{ used: number; max: number }> =>
+    Promise.resolve({ used: 0, max: 150 }),
+};
 
 const DEVICE_ID = '550e8400-e29b-41d4-a716-446655440000';
 const CLIENT_VERSION = '0.0.1';
@@ -83,6 +95,7 @@ async function bootLiveApp(options: {
 }): Promise<INestApplication> {
   const builder = Test.createTestingModule({ imports: [AppModule] });
   builder.overrideProvider(DIRECTOR_CHAT_FACTORY).useValue(options.factory);
+  builder.overrideProvider(LLM_DAILY_USAGE).useValue(allowDailyUsage);
   if (options.runtime !== undefined) {
     builder.overrideProvider(DIRECTOR_RUNTIME).useValue(options.runtime);
   }
