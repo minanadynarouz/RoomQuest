@@ -162,8 +162,9 @@ console.log(store.planSource, store.directorLatencyMs); // F-03
 Races `POST ${VITE_API_BASE_URL}/api/v1/levels` against `generatePlan` from
 `@roomquest/level-core`. Headers: `X-Device-Id` (UUID v4) and
 `X-Client-Version` (`0.1.0`). The API plan is used only if it arrives in
-≤ 8 s, parses as `LevelResponse`, **and** passes `validatePlan` against the
-scanned graph. If validation fails, `repairPlan` is tried first; only a
+≤ 8 s (or a one-time 20 s cold-start budget — `DIRECTOR_COLD_START_BUDGET_MS`
+— when landing's `GET /api/health` pre-warm has not answered yet), parses as
+`LevelResponse`, **and** passes `validatePlan` against the scanned graph. If validation fails, `repairPlan` is tried first; only a
 failed repair falls through to the racing `generatePlan`. API failures are
 invisible to the player.
 
@@ -187,6 +188,9 @@ plan bound to the player's graph (`generatePlan`).
 
 `{error:{code,message,issues}}` with `INVALID_REQUEST` or `INTERNAL` also
 falls back. The code is stored as `apiErrorCode` for the debug overlay.
+A first `/levels` abort while the health pre-warm is still pending is
+`cold-start-timeout`; later requests keep the 8 s `timeout`. Landing skips
+the pre-warm for `?director=off` and `?director=mock`.
 
 ## Result posting (F-07)
 
