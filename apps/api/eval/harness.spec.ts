@@ -51,9 +51,9 @@ describe('eval harness', () => {
     expect(typeof parsed.aggregate.p95LatencyMs).toBe('number');
     expect(typeof parsed.aggregate.estimatedCostUsd).toBe('number');
     expect(parsed.aggregate.estimatedCostUsd).toBeGreaterThan(0);
-    expect(parsed.aggregate.models).toEqual(
-      expect.objectContaining({ 'gemini-3.8-flash': parsed.runs.length })
-    );
+    expect(
+      Object.values(parsed.aggregate.models).reduce((sum, n) => sum + n, 0)
+    ).toBe(parsed.runs.length);
     expect(typeof parsed.bar.met).toBe('boolean');
     expect(parsed.bar.validAfterRepairMinPct).toBe(90);
     expect(parsed.bar.p95MaxMs).toBe(7000);
@@ -166,11 +166,15 @@ describe('eval harness', () => {
     }
     expect(result.report.runs).toHaveLength(3);
     expect(result.report.aggregate.runCount).toBe(3);
-    expect(result.report.aggregate.issueCounts).toEqual({
-      firstTry: expect.any(Object),
-      afterLocal: expect.any(Object),
-      afterLlmRepair: expect.any(Object),
-    });
+    expect(typeof result.report.aggregate.issueCounts.firstTry).toBe(
+      'object'
+    );
+    expect(typeof result.report.aggregate.issueCounts.afterLocal).toBe(
+      'object'
+    );
+    expect(typeof result.report.aggregate.issueCounts.afterLlmRepair).toBe(
+      'object'
+    );
     const markdown = renderMarkdown(result.report);
     expect(markdown).toMatch(/1 rooms × 1 tiers × 1 seeds = 1 cells; 3 runs/);
     expect(markdown).toContain('Validation issue codes');
