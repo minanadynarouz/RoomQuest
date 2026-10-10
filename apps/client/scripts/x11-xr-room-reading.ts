@@ -31,12 +31,6 @@ interface RqWindow {
   };
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
 async function startVite(): Promise<{ url: string; stop: () => void }> {
   const fromEnv = process.env.X05_BASE_URL ?? process.env.X11_BASE_URL;
   if (fromEnv) {
