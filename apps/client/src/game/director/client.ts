@@ -34,6 +34,10 @@ import {
   remainingRetryAfterS,
 } from './rate-limit.js';
 import {
+  DIRECTOR_COLD_START_BUDGET_MS,
+  shouldUseColdStartBudget,
+} from './health-prewarm.js';
+import {
   DEFAULT_CLIENT_VERSION,
   DEFAULT_TIER,
   DIRECTOR_BUDGET_MS,
@@ -130,7 +134,8 @@ async function postLevels(
   url: string,
   body: unknown,
   headers: Record<string, string>,
-  budgetMs: number
+  budgetMs: number,
+  timeoutReason: FallbackReason = 'timeout'
 ): Promise<{ ok: true; payload: unknown } | PostFailure> {
   const controller = new AbortController();
   const timer = setTimeout(() => {
@@ -171,7 +176,7 @@ async function postLevels(
     return { ok: true, payload };
   } catch (err) {
     if (isAbortError(err)) {
-      return { ok: false, reason: 'timeout' };
+      return { ok: false, reason: timeoutReason };
     }
     return { ok: false, reason: 'network' };
   } finally {
@@ -245,8 +250,13 @@ export function createDirectorClient(
   const defaultMode: DirectorMode = options.directorMode ?? 'live';
   const defaultTier = options.tier ?? DEFAULT_TIER;
   const budgetMs = options.budgetMs ?? DIRECTOR_BUDGET_MS;
+  const coldStartBudgetMs =
+    options.coldStartBudgetMs ?? DIRECTOR_COLD_START_BUDGET_MS;
+  const isHealthPrewarmPending =
+    options.isHealthPrewarmPending ?? shouldUseColdStartBudget;
   const nowMs = options.nowMs ?? (() => Date.now());
   let skipUntilMs: number | undefined;
+  let usedColdStartBudget = false;
 
   async function requestPlan(
     graph: SurfaceGraph,
@@ -320,6 +330,15 @@ export function createDirectorClient(
       requestBody.recentThemes = recentThemes;
     }
 
+    const useColdStart = !usedColdStartBudget && isHealthPrewarmPending();
+    if (useColdStart) {
+      usedColdStartBudget = true;
+    }
+    const requestBudgetMs = useColdStart ? coldStartBudgetMs : budgetMs;
+    const timeoutReason: FallbackReason = useColdStart
+      ? 'cold-start-timeout'
+      : 'timeout';
+
     const api = await postLevels(
       fetchFn,
       levelsUrl,
@@ -329,7 +348,8 @@ export function createDirectorClient(
         'X-Device-Id': deviceId,
         'X-Client-Version': clientVersion,
       },
-      budgetMs
+      requestBudgetMs,
+      timeoutReason
     );
 
     if (!api.ok) {
@@ -357,8 +377,8 @@ export function createDirectorClient(
       const repaired = await repair(parsed.data.plan, postedGraph);
       if (repaired.result.ok) {
         const latencyMs = nowMs() - started;
-        if (latencyMs > budgetMs) {
-          return useGenerator('timeout', { issues: local.issues });
+        if (latencyMs > requestBudgetMs) {
+          return useGenerator(timeoutReason, { issues: local.issues });
         }
         void genPromise.catch(() => undefined);
         const result = localResult(
@@ -384,8 +404,8 @@ export function createDirectorClient(
     }
 
     const latencyMs = nowMs() - started;
-    if (latencyMs > budgetMs) {
-      return useGenerator('timeout');
+    if (latencyMs > requestBudgetMs) {
+      return useGenerator(timeoutReason);
     }
 
     // Generator was already racing; ignore its result.

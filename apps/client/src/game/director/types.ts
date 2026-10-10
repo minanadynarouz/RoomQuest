@@ -21,6 +21,9 @@ import type {
 /** Client budget for accepting an API plan (Architecture §6). */
 export const DIRECTOR_BUDGET_MS = 8000;
 
+/** One-time first `/levels` budget while the health pre-warm is pending. */
+export { DIRECTOR_COLD_START_BUDGET_MS, HEALTH_PATH } from './health-prewarm.js';
+
 /** POST path for level generation. */
 export const LEVELS_PATH = '/api/v1/levels';
 
@@ -40,6 +43,7 @@ export type DirectorMode = 'live' | 'mock' | 'off';
 
 export type FallbackReason =
   | 'timeout'
+  | 'cold-start-timeout'
   | 'network'
   | 'invalid-plan'
   | 'graph-mismatch'
@@ -107,6 +111,10 @@ export interface DirectorClientOptions {
   tier?: Tier;
   recentThemes?: Theme[];
   budgetMs?: number;
+  /** Override for the one-time cold-start `/levels` budget (default 20 s). */
+  coldStartBudgetMs?: number;
+  /** True when landing fired a health GET that has not settled yet. */
+  isHealthPrewarmPending?: () => boolean;
   nowMs?: () => number;
 }
 

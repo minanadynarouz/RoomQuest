@@ -9,6 +9,10 @@ import type { LevelPlan, LevelResponse, SurfaceGraph } from '@roomquest/schema';
 import { createDirectorClient } from './client.js';
 import { createDirectorClientFromEnv } from './factory.js';
 import { applyDirectorResult } from './apply.js';
+import {
+  markHealthPrewarmStarted,
+  resetHealthPrewarmForTests,
+} from './health-prewarm.js';
 import { createGameStore } from '../store.js';
 import {
   createResultPoster,
@@ -291,6 +295,7 @@ describe('createDirectorClient', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    resetHealthPrewarmForTests();
   });
 
   function client(
@@ -514,6 +519,78 @@ describe('createDirectorClient', () => {
     expect(result.fallbackReason).toBe('timeout');
     expect(result.source).toBe('procedural');
     expect(elapsed).toBeLessThan(8000);
+  });
+
+  function abortingFetch(): FetchLike {
+    return (_url, init) =>
+      new Promise((_, reject) => {
+        init.signal.addEventListener('abort', () => {
+          const err = new Error('Aborted');
+          err.name = 'AbortError';
+          reject(err);
+        });
+      });
+  }
+
+  it('uses a one-time cold-start budget and records cold-start-timeout', async () => {
+    const fetchFn = vi.fn<FetchLike>(abortingFetch());
+    const director = client(fetchFn, {
+      budgetMs: 20,
+      coldStartBudgetMs: 40,
+      isHealthPrewarmPending: () => true,
+    });
+
+    const first = await director.requestPlan(GRAPH);
+    expect(first.usedFallback).toBe(true);
+    expect(first.fallbackReason).toBe('cold-start-timeout');
+    expect(first.source).toBe('procedural');
+
+    const second = await director.requestPlan(GRAPH);
+    expect(second.usedFallback).toBe(true);
+    expect(second.fallbackReason).toBe('timeout');
+    expect(second.source).toBe('procedural');
+  });
+
+  it('keeps the 8 s timeout when the health pre-warm has already answered', async () => {
+    const result = await client(abortingFetch(), {
+      budgetMs: 20,
+      coldStartBudgetMs: 80,
+      isHealthPrewarmPending: () => false,
+    }).requestPlan(GRAPH);
+
+    expect(result.fallbackReason).toBe('timeout');
+    expect(result.source).toBe('procedural');
+  });
+
+  it('accepts a late API plan within the cold-start budget', async () => {
+    const fetchFn = vi.fn<FetchLike>(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => {
+            resolve(jsonResponse(apiResponse()));
+          }, 30);
+        })
+    );
+
+    const result = await client(fetchFn, {
+      budgetMs: 15,
+      coldStartBudgetMs: 80,
+      isHealthPrewarmPending: () => true,
+    }).requestPlan(GRAPH);
+
+    expect(result.usedFallback).toBe(false);
+    expect(result.source).toBe('llm');
+    expect(result.plan.title).toBe('API Quest');
+  });
+
+  it('extends the first /levels timeout while landing pre-warm is pending', async () => {
+    markHealthPrewarmStarted();
+    const result = await client(abortingFetch(), {
+      budgetMs: 20,
+      coldStartBudgetMs: 40,
+    }).requestPlan(GRAPH);
+
+    expect(result.fallbackReason).toBe('cold-start-timeout');
   });
 
   it('falls back on network error', async () => {

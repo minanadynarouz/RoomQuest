@@ -14,6 +14,7 @@ import {
 } from './capability-check';
 import { loadEmulatorRuntime, waitForWebXRPolyfill } from './emulator-loader';
 import { getLandingUIElements, updateCapabilityUI } from './ui';
+import { scheduleHealthPrewarm } from './prewarm';
 import './styles.css';
 
 const flags = readClientFlags(window.location.search);
@@ -33,20 +34,6 @@ async function prefetchXRChunk(): Promise<void> {
     console.log('[Landing] XR chunk prefetched successfully');
   } catch (error) {
     console.error('[Landing] Failed to prefetch XR chunk:', error);
-  }
-}
-
-/**
- * Pre-warm the health check endpoint (fire and forget)
- */
-function prewarmHealthCheck(): void {
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
-  if (apiBaseUrl) {
-    fetch(`${apiBaseUrl}/api/health`, { method: 'GET' })
-      .then(() => console.log('[Landing] Health check pre-warmed'))
-      .catch(() => {
-        // Intentionally empty - fire and forget
-      });
   }
 }
 
@@ -77,6 +64,12 @@ async function launchXR(): Promise<void> {
  * Main landing page initialization
  */
 export async function initLanding(): Promise<void> {
+  scheduleHealthPrewarm({
+    apiBaseUrl: import.meta.env.VITE_API_BASE_URL ?? '',
+    search: window.location.search,
+    fetch: (input, init) => fetch(input, init),
+  });
+
   const ui = getLandingUIElements();
   
   updateCapabilityUI(ui, capabilityResult, xrChunkReady);
@@ -121,6 +114,4 @@ export async function initLanding(): Promise<void> {
       void launchXR();
     }
   });
-  
-  prewarmHealthCheck();
 }
