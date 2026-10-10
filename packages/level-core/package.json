@@ -22,7 +22,8 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@roomquest/schema": "workspace:*"
+    "@roomquest/schema": "workspace:*",
+    "zod": "^4.0.1"
   },
   "devDependencies": {
     "@roomquest/fixtures": "workspace:*",

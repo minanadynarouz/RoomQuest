@@ -5,7 +5,9 @@ import type {
   SurfaceLabel,
   SurfaceReach,
 } from '@roomquest/schema';
-import { surfaceHints } from '../placement/slots';
+import { hintedSurfaces, type CompactHintedSlot } from './slot-ids';
+
+export type { CompactHintedSlot } from './slot-ids';
 
 /**
  * Prompt-only surface node. Scan metadata (`kind`, `yaw`) is omitted;
@@ -24,13 +26,18 @@ export interface CompactPromptNode {
   fits?: PieceId[];
   /** Usable u/v box inset by the largest fitting footprint: `[u0,v0,u1,v1]`. */
   uv?: [number, number, number, number];
-  /** Up to 4 non-overlapping u/v slots, centimetre-rounded. */
-  slots?: [number, number][];
+  /** Up to 4 non-overlapping slots with graph-unique ids and u/v. */
+  slots?: CompactHintedSlot[];
 }
 
 /** Opt-in extras for {@link compactGraphForPrompt}. Default is unchanged. */
 export interface CompactGraphOptions {
   hints?: boolean;
+  /**
+   * When `hints` is true, shuffle per-surface slot candidates with this
+   * seed. Omit it for the #61 candidate order. Same seed → same slots/ids.
+   */
+  seed?: string;
 }
 
 /**
@@ -87,6 +94,10 @@ export function compactGraphForPrompt(
   graph: SurfaceGraph,
   opts?: CompactGraphOptions
 ): CompactPromptGraph {
+  const hinted =
+    opts?.hints === true
+      ? hintedSurfaces(graph, { seed: opts.seed })
+      : undefined;
   return {
     mode: graph.mode,
     nodes: graph.nodes.map((node) => {
@@ -104,11 +115,15 @@ export function compactGraphForPrompt(
         reach: node.reach,
         angleFromForward: deg(node.angleFromForward),
       };
-      if (opts?.hints === true) {
-        const hints = surfaceHints(node);
-        compact.fits = hints.fits;
-        compact.uv = hints.uv;
-        compact.slots = hints.slots;
+      const extra = hinted?.get(node.id);
+      if (extra) {
+        compact.fits = [...extra.fits];
+        compact.uv = extra.uv;
+        compact.slots = extra.slots.map((slot) => ({
+          id: slot.id,
+          u: slot.u,
+          v: slot.v,
+        }));
       }
       return compact;
     }),

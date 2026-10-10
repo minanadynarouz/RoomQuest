@@ -13,3 +13,21 @@ export type {
   CompactPromptGraph,
   CompactPromptNode,
 } from './compact-graph';
+export {
+  hintedSlotIds,
+  hintedSurfaces,
+  listHintedSlots,
+  PlacementSlotId,
+  resolveSlotIds,
+} from './slot-ids';
+export type {
+  CompactHintedSlot,
+  HintedSlotRecord,
+  HintedSurface,
+  LevelPlanWithSlots,
+  PlacementInput,
+  ResolveSlotIdsResult,
+  SlotResolveIssue,
+  SlotResolveIssueCode,
+  SlotResolveOptions,
+} from './slot-ids';

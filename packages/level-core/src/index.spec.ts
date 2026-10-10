@@ -17,6 +17,9 @@ import {
   graphHasPlayableView,
   promptGraphJsonBytes,
   snapPlacementsToSlots,
+  resolveSlotIds,
+  hintedSlotIds,
+  PlacementSlotId,
   orderSurfacesByArea,
   tickRoomReading,
   wanderPath,
@@ -83,6 +86,22 @@ describe('level-core', () => {
     expect(graphCanSeparateHutAndShrine).toBeTypeOf('function');
     expect(graphHasCatalogHut).toBeTypeOf('function');
     expect(graphHasPlayableView).toBeTypeOf('function');
+  });
+
+  it('exports resolveSlotIds, hintedSlotIds, and PlacementSlotId', () => {
+    expect(resolveSlotIds).toBeTypeOf('function');
+    expect(hintedSlotIds).toBeTypeOf('function');
+    expect(PlacementSlotId).toBeDefined();
+    expect(
+      PlacementSlotId.parse({
+        id: 'p1',
+        piece: 'gem',
+        slot: 's1',
+        to: null,
+        playerBuilt: false,
+        links: [],
+      }).slot
+    ).toBe('s1');
   });
 
   it('exports room-reading order, wander, and sequencer', () => {

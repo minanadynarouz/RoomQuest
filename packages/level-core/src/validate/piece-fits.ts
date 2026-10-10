@@ -5,6 +5,12 @@ import {
   type SurfaceNode,
 } from '@roomquest/schema';
 import {
+  graphHasCatalogHut,
+  graphHasPlayableView,
+  graphHasTableLike,
+  isTableLike,
+} from './graph-capacity';
+import {
   findEdge,
   GEOM_EPS_M,
   isPlayerReachable,
@@ -15,9 +21,27 @@ import {
 /**
  * True when `checkSurfaceFits` in constraints.ts would report no issue
  * for `piece` on `surface` (label, height, area, view-angle, lever reach).
+ *
+ * Pass `graph` so IWER-style degraded rooms reuse the same hut height/angle
+ * relaxation as `checkConstraints`. Omit it for the strict catalog path.
  */
-export function pieceFitsSurface(piece: PieceId, surface: SurfaceNode): boolean {
+export function pieceFitsSurface(
+  piece: PieceId,
+  surface: SurfaceNode,
+  graph?: SurfaceGraph
+): boolean {
   const catalog = KIT_CATALOG[piece];
+
+  if (
+    piece === 'village_hut' &&
+    graph !== undefined &&
+    !graphHasCatalogHut(graph)
+  ) {
+    if (graphHasTableLike(graph)) {
+      return isTableLike(surface);
+    }
+    return true;
+  }
 
   if (
     catalog.allowedSurfaces &&
@@ -79,7 +103,11 @@ export function pairFitsPiece(
   ) {
     return false;
   }
-  if (piece === 'portal' && to.angleFromForward > MAX_VIEW_ANGLE_DEG) {
+  if (
+    piece === 'portal' &&
+    graphHasPlayableView(graph) &&
+    to.angleFromForward > MAX_VIEW_ANGLE_DEG
+  ) {
     return false;
   }
   if (piece === 'ramp') {

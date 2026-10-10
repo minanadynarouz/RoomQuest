@@ -15,6 +15,10 @@ import { generatePlan } from '../generate/generate-plan';
 import { EXTRA_TEST_GRAPHS } from '../generate/test-graphs';
 import { createRng } from '../generate/prng';
 import { snapPlacementsToSlots } from '../repair/snap-slots';
+import {
+  graphCanSeparateHutAndShrine,
+  graphHasCatalogHut,
+} from '../validate/graph-capacity';
 import { pieceFitsSurface } from '../validate/piece-fits';
 import { validatePlan } from '../validate/validate-plan';
 import { compactGraphForPrompt, promptGraphJsonBytes } from './compact-graph';
@@ -81,14 +85,14 @@ function placePieceAt(
   host: LevelPlan,
   piece: PieceId,
   surfaceId: string,
-  slot: readonly [number, number]
+  slot: { u: number; v: number }
 ): { plan: LevelPlan; id: string } {
   const plan = clonePlan(host);
   const existing = plan.placements.find((item) => item.piece === piece);
   if (existing) {
     existing.surface = surfaceId;
-    existing.u = slot[0];
-    existing.v = slot[1];
+    existing.u = slot.u;
+    existing.v = slot.v;
     if (piece === 'village_hut') {
       plan.start = surfaceId;
     }
@@ -101,8 +105,8 @@ function placePieceAt(
   if (gem && plan.placements.length >= 14) {
     gem.piece = piece;
     gem.surface = surfaceId;
-    gem.u = slot[0];
-    gem.v = slot[1];
+    gem.u = slot.u;
+    gem.v = slot.v;
     gem.to = undefined;
     gem.links = [];
     return { plan, id: gem.id };
@@ -112,8 +116,8 @@ function placePieceAt(
     id,
     piece,
     surface: surfaceId,
-    u: slot[0],
-    v: slot[1],
+    u: slot.u,
+    v: slot.v,
     playerBuilt: false,
     links: [],
   });
@@ -131,7 +135,9 @@ describe('placement hints vs validatePlan', () => {
           continue;
         }
         expect(node.fits).toEqual(
-          PIECE_IDS.filter((piece) => pieceFitsSurface(piece, full))
+          PIECE_IDS.filter((piece) =>
+            pieceFitsSurface(piece, full, room.graph)
+          )
         );
       }
     }
@@ -155,7 +161,7 @@ describe('placement hints vs validatePlan', () => {
             );
             if (issues.length > 0) {
               failures.push(
-                `${room.name} ${node.id} ${piece} ${String(slot[0])},${String(slot[1])}: ${issues.map((item) => item.code).join(',')}`
+                `${room.name} ${node.id} ${piece} ${slot.id} ${String(slot.u)},${String(slot.v)}: ${issues.map((item) => item.code).join(',')}`
               );
             }
           }
@@ -192,17 +198,21 @@ describe('placement hints vs validatePlan', () => {
   });
 });
 
+function isFullQualityRoom(graph: SurfaceGraph): boolean {
+  return graphHasCatalogHut(graph) && graphCanSeparateHutAndShrine(graph);
+}
+
 describe('snapPlacementsToSlots restore rate', () => {
   it('restores ≥ 95% of perturbed generatePlan outputs (2 tiers × 10 seeds)', () => {
     let attempted = 0;
     let restored = 0;
     let generatedOk = 0;
+    let degradedAttempted = 0;
+    let degradedRestored = 0;
     const failures: string[] = [];
 
-    // EXISTING_ROOMS is the #61 envelope. After #60, generatePlan also
-    // succeeds on IWER captures; a 70% random surface hop there often
-    // moves the hut off start, which snap does not treat as restorable.
-    for (const room of EXISTING_ROOMS) {
+    for (const room of ALL_ROOMS) {
+      const fullQuality = isFullQualityRoom(room.graph);
       for (const tier of TIERS) {
         for (let i = 0; i < SEED_COUNT; i += 1) {
           const seed = `${room.graph.roomHash}-snap-${tier}-${String(i)}`;
@@ -213,24 +223,37 @@ describe('snapPlacementsToSlots restore rate', () => {
           generatedOk += 1;
           const dirty = perturbPlan(plan, room.graph, seed);
           const snapped = snapPlacementsToSlots(dirty, room.graph);
-          attempted += 1;
           const result = validatePlan(snapped.plan, room.graph);
-          if (result.ok) {
-            restored += 1;
+          if (fullQuality) {
+            attempted += 1;
+            if (result.ok) {
+              restored += 1;
+            } else {
+              failures.push(
+                `${room.name} ${tier} ${seed}: ${result.issues.map((item) => item.code).join(',')}`
+              );
+            }
           } else {
-            failures.push(
-              `${room.name} ${tier} ${seed}: ${result.issues.map((item) => item.code).join(',')}`
-            );
+            degradedAttempted += 1;
+            if (result.ok) {
+              degradedRestored += 1;
+            }
           }
         }
       }
     }
 
     const rate = attempted === 0 ? 0 : restored / attempted;
+    const degradedRate =
+      degradedAttempted === 0 ? 0 : degradedRestored / degradedAttempted;
     console.log(
       `snap restore ${String(restored)}/${String(attempted)}` +
         ` (${(rate * 100).toFixed(1)}%) from ${String(generatedOk)} valid generatePlan seeds` +
-        ` across ${String(EXISTING_ROOMS.length)} rooms × ${String(TIERS.length)} tiers × ${String(SEED_COUNT)} seeds`
+        ` across full-quality rooms (${String(ALL_ROOMS.length)} rooms × ${String(TIERS.length)} tiers × ${String(SEED_COUNT)} seeds)`
+    );
+    console.log(
+      `snap restore degraded IWER ${String(degradedRestored)}/${String(degradedAttempted)}` +
+        ` (${(degradedRate * 100).toFixed(1)}%)`
     );
     if (failures.length > 0) {
       console.log(`snap restore failures (first 12): ${failures.slice(0, 12).join(' | ')}`);

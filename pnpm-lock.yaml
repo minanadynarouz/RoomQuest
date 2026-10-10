@@ -290,6 +290,9 @@ importers:
       '@roomquest/schema':
         specifier: workspace:*
         version: link:../schema
+      zod:
+        specifier: ^4.0.1
+        version: 4.6.5
     devDependencies:
       '@roomquest/fixtures':
         specifier: workspace:*

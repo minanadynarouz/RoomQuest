@@ -1,4 +1,10 @@
-import { PIECE_IDS, type PieceId, type SurfaceNode } from '@roomquest/schema';
+import {
+  PIECE_IDS,
+  type PieceId,
+  type SurfaceGraph,
+  type SurfaceNode,
+} from '@roomquest/schema';
+import { createRng, type Rng } from '../generate/prng';
 import { pieceFitsSurface } from '../validate/piece-fits';
 import {
   footprintFitsSurface,
@@ -47,8 +53,13 @@ function clamp01(value: number): number {
 }
 
 /** Pieces whose KIT_CATALOG size / orientation rules accept `surface`. */
-export function fittingPieces(surface: SurfaceNode): PieceId[] {
-  return PIECE_IDS.filter((piece) => pieceFitsSurface(piece, surface));
+export function fittingPieces(
+  surface: SurfaceNode,
+  graph: SurfaceGraph
+): PieceId[] {
+  return PIECE_IDS.filter((piece) =>
+    pieceFitsSurface(piece, surface, graph)
+  );
 }
 
 /**
@@ -184,14 +195,32 @@ export function footprintsOverlap(
   return overlapU && overlapV;
 }
 
+function shufflePoints(points: [number, number][], rng: Rng): void {
+  for (let i = points.length - 1; i > 0; i -= 1) {
+    const j = rng.nextInt(i + 1);
+    const a = points[i];
+    const b = points[j];
+    if (a === undefined || b === undefined) {
+      continue;
+    }
+    points[i] = b;
+    points[j] = a;
+  }
+}
+
 function pickNonOverlapping(
   surface: SurfaceNode,
   range: readonly [number, number, number, number],
   footprint: PieceFootprint,
-  cap: number
+  cap: number,
+  rng?: Rng
 ): [number, number][] {
+  const points = candidatesInRange(range);
+  if (rng !== undefined && points.length > 1) {
+    shufflePoints(points, rng);
+  }
   const slots: [number, number][] = [];
-  for (const point of candidatesInRange(range)) {
+  for (const point of points) {
     if (slots.length >= cap) {
       break;
     }
@@ -216,7 +245,8 @@ function pickNonOverlapping(
 export function listSlots(
   surface: SurfaceNode,
   footprint: PieceFootprint,
-  cap = SLOT_CAP
+  cap = SLOT_CAP,
+  rng?: Rng
 ): [number, number][] {
   const range = uvRangeForFootprint(surface, footprint);
   if (!range) {
@@ -228,7 +258,7 @@ export function listSlots(
     quantize(range[2]),
     quantize(range[3]),
   ];
-  return pickNonOverlapping(surface, quantized, footprint, cap);
+  return pickNonOverlapping(surface, quantized, footprint, cap, rng);
 }
 
 export function listSlotsForPiece(
@@ -243,16 +273,30 @@ export function listSlotsForPiece(
   return listSlots(surface, oriented, cap);
 }
 
+export interface SurfaceHintOptions {
+  /** When set, shuffle candidate u/v points with a seeded PRNG. */
+  seed?: string;
+}
+
 /**
  * Per-surface director hints. `fits` follows {@link pieceFitsSurface};
  * `uv` / `slots` are inset by the largest geometrically fitting footprint.
+ * Omit `seed` for the #61 candidate order; pass it to rotate/jitter.
  */
-export function surfaceHints(surface: SurfaceNode): SurfaceHints {
-  const fits = fittingPieces(surface);
+export function surfaceHints(
+  surface: SurfaceNode,
+  graph: SurfaceGraph,
+  opts?: SurfaceHintOptions
+): SurfaceHints {
+  const fits = fittingPieces(surface, graph);
   const largest = largestFittingFootprint(
     surface,
     fits.filter((piece) => footprintFitsSurface(piece, surface))
   );
+  const rng =
+    opts?.seed !== undefined
+      ? createRng(`${opts.seed}|hint-slot|${surface.id}`)
+      : undefined;
   if (!largest) {
     return {
       fits,
@@ -270,7 +314,7 @@ export function surfaceHints(surface: SurfaceNode): SurfaceHints {
   return {
     fits,
     uv,
-    slots: listSlots(surface, largest, SLOT_CAP),
+    slots: listSlots(surface, largest, SLOT_CAP, rng),
   };
 }
 
