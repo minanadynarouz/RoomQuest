@@ -40,16 +40,17 @@ function levelsPost(app: INestApplication) {
     .set('X-Client-Version', CLIENT_VERSION);
 }
 
-/** Same roomHash/ids (same cache key) but placements from the original plan fail. */
+/**
+ * Same roomHash (same cache key). Relabel node ids so the cached plan's
+ * placements miss every surface — an all-floor mutation is still valid
+ * under degraded hut rules when the graph has no table/desk.
+ */
 function invalidateSurfaces(graph: SurfaceGraph): SurfaceGraph {
   return {
     ...graph,
     nodes: graph.nodes.map((node) => ({
       ...node,
-      label: 'floor',
-      topHeight: 0,
-      area: 0.05,
-      size: [0.2, 0.2] as [number, number],
+      id: `gone-${node.id}`,
     })),
   };
 }
