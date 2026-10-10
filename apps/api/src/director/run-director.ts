@@ -7,6 +7,7 @@ import {
 } from '@roomquest/level-core';
 import {
   LevelResponse,
+  type FallbackReason,
   type LevelPlan,
   type LevelRequest,
 } from '@roomquest/schema';
@@ -22,6 +23,7 @@ import {
   PROMPT_VERSION,
   SYSTEM_PREFIX,
 } from './prompts';
+import { isQuotaError, type LlmQuotaBreaker } from './quota-breaker';
 import { structuredCandidate, type StructuredChat } from './structured-chat';
 import {
   logLlmCall,
@@ -46,6 +48,7 @@ export interface RunDirectorOptions {
   startedMs?: number;
   promptVersion?: string;
   logger: DirectorLogger;
+  quotaBreaker?: LlmQuotaBreaker;
 }
 
 interface AttemptOk {
@@ -57,7 +60,7 @@ interface AttemptOk {
 }
 
 interface AttemptFail {
-  kind: 'timeout' | 'error';
+  kind: 'timeout' | 'error' | 'quota';
 }
 
 type Attempt = AttemptOk | AttemptFail;
@@ -67,7 +70,8 @@ export function proceduralOutcome(
   startedMs: number,
   telemetry: LlmCallTelemetry[],
   promptVersion: string,
-  now: () => number
+  now: () => number,
+  fallbackReason?: FallbackReason
 ): DirectorOutcome {
   const seed = makeDailySeed(request.graph.roomHash, request.date);
   const plan = generatePlan(request.graph, seed, request.tier, {
@@ -86,6 +90,7 @@ export function proceduralOutcome(
       promptVersion,
       latencyMs: Math.max(0, now() - startedMs),
       repairs: [],
+      ...(fallbackReason === undefined ? {} : { fallbackReason }),
     }),
     telemetry,
   };
@@ -145,6 +150,20 @@ export async function runDirector(
     options.llmRepairMinRemainingMs ?? LLM_REPAIR_MIN_REMAINING_MS;
   const promptVersion = options.promptVersion ?? PROMPT_VERSION;
   const telemetry: LlmCallTelemetry[] = [];
+  const quotaFallback = (): DirectorOutcome =>
+    proceduralOutcome(
+      request,
+      startedMs,
+      telemetry,
+      promptVersion,
+      now,
+      'llm-quota'
+    );
+
+  if (options.quotaBreaker?.isOpen()) {
+    return quotaFallback();
+  }
+
   const deadline = createDirectorDeadline({
     budgetMs: options.budgetMs,
     proceduralReserveMs: options.proceduralReserveMs,
@@ -224,6 +243,11 @@ export async function runDirector(
         ],
       };
     } catch (err) {
+      if (isQuotaError(err)) {
+        options.quotaBreaker?.trip(err);
+        record(chat, callStarted, 'error');
+        return { kind: 'quota' };
+      }
       if (isTimeoutError(err) || deadline.remainingForLlm() <= 0) {
         record(chat, callStarted, 'timeout');
         return { kind: 'timeout' };
@@ -252,6 +276,10 @@ export async function runDirector(
 
     const chat = options.primary;
     const draft = await attempt(chat, draftMessages, 'draft');
+
+    if (draft.kind === 'quota') {
+      return quotaFallback();
+    }
 
     if (draft.kind !== 'plan') {
       return proceduralOutcome(
@@ -316,6 +344,10 @@ export async function runDirector(
       new HumanMessage(buildRepairMessage(issuesForRepair, previous)),
     ];
     const repaired = await attempt(chat, repairMessages, 'repair');
+
+    if (repaired.kind === 'quota') {
+      return quotaFallback();
+    }
 
     if (repaired.kind === 'plan' && repaired.valid && repaired.plan) {
       return llmOutcome(

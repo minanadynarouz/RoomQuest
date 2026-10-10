@@ -36,7 +36,8 @@ const WARM_HIT_LOOKUP_MS = 12;
 
 function directorResponse(
   plan: LevelPlan,
-  source: 'procedural' | 'llm' = 'procedural'
+  source: 'procedural' | 'llm' = 'procedural',
+  fallbackReason?: 'llm-quota'
 ): LevelResponse {
   return LevelResponse.parse({
     plan,
@@ -50,6 +51,7 @@ function directorResponse(
     promptVersion: PROMPT_VERSION,
     latencyMs: 12,
     repairs: [],
+    ...(fallbackReason === undefined ? {} : { fallbackReason }),
   });
 }
 
@@ -190,5 +192,32 @@ describe('LevelsService cache + limiter', () => {
     nowMs += CACHE_MISS_WINDOW_MS;
     const afterWindow = await service.create(request, 'device-limit');
     expect(afterWindow.source).not.toBe('cache');
+  });
+
+  it('does not cache a procedural llm-quota fallback under the LLM key', async () => {
+    const persist = vi.fn(() => Promise.resolve(undefined));
+    const directorPlan = vi.fn(() =>
+      Promise.resolve(directorResponse(validPlan, 'procedural', 'llm-quota'))
+    );
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        LevelsService,
+        CacheMissLimiter,
+        { provide: DirectorService, useValue: { plan: directorPlan } },
+        {
+          provide: LevelCacheRepository,
+          useValue: {
+            lookup: vi.fn(() => Promise.resolve(null)),
+            persist,
+          },
+        },
+      ],
+    }).compile();
+    const service = moduleRef.get(LevelsService);
+    const response = await service.create(request, 'device-quota');
+    expect(response.source).toBe('procedural');
+    expect(response.fallbackReason).toBe('llm-quota');
+    expect(directorPlan).toHaveBeenCalledOnce();
+    expect(persist).not.toHaveBeenCalled();
   });
 });

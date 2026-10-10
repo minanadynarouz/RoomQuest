@@ -73,7 +73,11 @@ describe('API contract (B-02)', () => {
       expect(typeof body.version).toBe('string');
       expect(body.version.length).toBeGreaterThan(0);
       expect(body.db).toBe('disabled');
-      expect(body.llm === 'configured' || body.llm === 'missing').toBe(true);
+      expect(
+        body.llm === 'up' ||
+          body.llm === 'quota-cooldown' ||
+          body.llm === 'disabled'
+      ).toBe(true);
       expect(typeof body.time).toBe('string');
       expect(Number.isNaN(Date.parse(body.time))).toBe(false);
     });

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  FallbackReason,
   LevelRequest,
   LevelResponse,
   ResultRequest,
@@ -191,6 +192,27 @@ describe('API schemas', () => {
       };
       const result = LevelResponse.parse(withRepairs);
       expect(result.repairs).toHaveLength(2);
+    });
+
+    it('accepts optional fallbackReason llm-quota', () => {
+      const withReason = {
+        ...validResponse,
+        source: 'procedural' as const,
+        fallbackReason: 'llm-quota' as const,
+      };
+      const result = LevelResponse.parse(withReason);
+      expect(result.fallbackReason).toBe('llm-quota');
+      expect(LevelResponse.parse(validResponse).fallbackReason).toBeUndefined();
+      expect(() =>
+        LevelResponse.parse({ ...validResponse, fallbackReason: 'timeout' })
+      ).toThrow();
+    });
+  });
+
+  describe('FallbackReason', () => {
+    it('accepts llm-quota only', () => {
+      expect(FallbackReason.parse('llm-quota')).toBe('llm-quota');
+      expect(() => FallbackReason.parse('timeout')).toThrow();
     });
   });
 

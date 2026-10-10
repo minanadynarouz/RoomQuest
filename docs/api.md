@@ -40,7 +40,7 @@ Always **200** while the Node process is up. Used by the landing-page pre-warm a
   "status": "ok",
   "version": "dev",
   "db": "disabled",
-  "llm": "missing",
+  "llm": "disabled",
   "time": "2026-10-09T08:00:00.000Z"
 }
 ```
@@ -50,7 +50,7 @@ Always **200** while the Node process is up. Used by the landing-page pre-warm a
 | `status`  | Always `"ok"`.                                                                                                                             |
 | `version` | `GIT_SHA` env var. Local default `"dev"` when unset or empty. Staging/prod should set this to the git commit sha.                          |
 | `db`      | `"up"` \| `"down"` \| `"disabled"`. `"disabled"` when `DATABASE_URL` is unset; `"up"` when a bounded `SELECT 1` ping succeeds; `"down"` when the URL is set but Postgres is unreachable (the ping is capped at 2 s). The process still returns 200. |
-| `llm`     | `"configured"` if `GOOGLE_API_KEY` is a non-empty string, else `"missing"`. Keys are not required to start the API. |
+| `llm`     | `"up"` if `GOOGLE_API_KEY` is set and the Gemini quota breaker is closed; `"quota-cooldown"` if a 429 / `RESOURCE_EXHAUSTED` opened the breaker; `"disabled"` if the key is unset. Keys are not required to start the API. |
 | `time`    | ISO 8601 UTC timestamp (`Date.toISOString()`).                                                                                             |
 
 ---
@@ -98,8 +98,9 @@ Architecture server semantics:
    2. Parse `LevelPlanLLM` → `clampParTimeMs` → `LevelPlan.parse` → `validatePlan(plan, graph)`.
    3. If invalid: local `repairPlan` first. If still invalid: **one** LLM repair call that includes the issue messages (same static system prefix), **skipped** when fewer than **2 s** of the LLM window remain.
    4. Still invalid, out of time, or a Gemini provider error: `generatePlan(graph, seed, tier)` with `source:"procedural"`.
-6. After a successful director/procedural result, the plan is upserted into `LevelCache`. The write is bounded (~200 ms or whatever remains of the 7 s budget) so it cannot push the response past the wall; if the wait elapses the insert continues in the background.
-7. `source` is `"cache"` | `"llm"` | `"llm_repaired"` | `"procedural"`. `model` is set for LLM sources (and echoed from the cached row on a hit). `repairs` lists local repair actions (and `"llm-repair"` when the second call ran); cache hits return `repairs: []`.
+   5. HTTP 429 or `RESOURCE_EXHAUSTED` opens a process-wide quota breaker for `Retry-After` / `retryDelay` if present, otherwise `LLM_QUOTA_COOLDOWN_S` (default 600 s). While it is open, later misses skip Gemini and return `source:"procedural"` with `fallbackReason:"llm-quota"`. Cache lookup still runs first. Quota fallbacks are not written to `LevelCache` under the LLM key. The breaker logs one warn on open and one info on close, not once per request.
+6. After a successful director/procedural result (except `fallbackReason:"llm-quota"`), the plan is upserted into `LevelCache`. The write is bounded (~200 ms or whatever remains of the 7 s budget) so it cannot push the response past the wall; if the wait elapses the insert continues in the background.
+7. `source` is `"cache"` | `"llm"` | `"llm_repaired"` | `"procedural"`. Optional `fallbackReason` is `"llm-quota"` when the quota breaker skipped Gemini. `model` is set for LLM sources (and echoed from the cached row on a hit). `repairs` lists local repair actions (and `"llm-repair"` when the second call ran); cache hits return `repairs: []`.
 8. `latencyMs` is server handling time in milliseconds.
 9. If `DIRECTOR_MODE=live` but `GOOGLE_API_KEY` is unset, the API logs a warning and serves a procedural plan so it still starts. CI and local mock runs need no key.
 10. If `DATABASE_URL` is unset or Postgres is unreachable, `/levels` still returns 200 (director/procedural only, no cache) and logs a warning. Do not create Neon/Render resources for local or CI — use Docker Postgres 17 or the GitHub Actions postgres service.
@@ -300,7 +301,8 @@ None of these are required to start the API. CI sets `TEST_DATABASE_URL` on the 
 | `CORS_ORIGINS` | optional | `http://localhost:5173,https://localhost:5173` | `http://localhost:5173,https://localhost:5173,https://roomquest.vercel.app` | **all**. Comma-separated extra origins. Vercel preview hosts and `https://localhost:*` are hardcoded in CORS. |
 | `GIT_SHA` | optional | `dev` (empty/unset also becomes `dev`) | `9f8e7d6c5b4a3210` | **local** `dev`; **staging** / **prod** = deployed git sha (set by the deploy workflow). |
 | `DIRECTOR_MODEL` | optional | `gemini-3.8-flash` | `gemini-3.8-flash` | **staging** / **prod**; **local** only when exercising live director. |
-| `GOOGLE_API_KEY` | optional | unset | Gemini API key (never commit) | **staging** / **prod** when `DIRECTOR_MODE=live`; **local** live director / **eval** (`pnpm --filter api eval`). Also a **GitHub Actions repository secret** for `.github/workflows/eval.yml`. Blank → health `llm:"missing"`; live eval skips unless `--mock`. |
+| `GOOGLE_API_KEY` | optional | unset | Gemini API key (never commit) | **staging** / **prod** when `DIRECTOR_MODE=live`; **local** live director / **eval** (`pnpm --filter api eval`). Also a **GitHub Actions repository secret** for `.github/workflows/eval.yml`. Blank → health `llm:"disabled"`; live eval skips unless `--mock`. |
+| `LLM_QUOTA_COOLDOWN_S` | optional | `600` | `600` | **all**. Seconds to skip Gemini after HTTP 429 / `RESOURCE_EXHAUSTED` when the error has no `Retry-After` / `retryDelay`. Health reports `llm:"quota-cooldown"` while the breaker is open. |
 | `DATABASE_URL` | optional | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **local** Docker Postgres 17 (runtime / pooled). **staging** / **prod**: Neon pooled URL — declared in `render.yaml`, values set later (M-10). Unset → health `db:"disabled"`; unreachable → health `db:"down"`. `/levels` still serves without cache (warning logged); `/result` returns `202 {stored:false}`; process still 200. |
 | `DIRECT_URL` | optional | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **local** Docker (Prisma CLI / `pnpm --filter api db:migrate`). **staging** / **prod**: Neon unpooled URL for `migrate deploy` at the end of the Render build (`render.yaml`) and later in GitHub Environments (L-03 / L-04). |
 | `NODE_VERSION` | Render build only (not read by Nest) | `22` in `render.yaml` | `22` | **staging** / **prod** Render native runtime. **local** uses `.nvmrc` (`22`). |

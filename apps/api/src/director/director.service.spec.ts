@@ -11,6 +11,7 @@ import { validateEnv } from '../config/env';
 import { DirectorService } from './director.service';
 import { DIRECTOR_CHAT_FACTORY, type DirectorChatFactory } from './models';
 import { PROMPT_VERSION } from './prompts';
+import { LLM_QUOTA_BREAKER } from './quota-breaker';
 import { planToLlmJson } from './test-fakes';
 
 const request = LevelRequest.parse({
@@ -21,7 +22,8 @@ const request = LevelRequest.parse({
 
 async function serviceWithEnv(
   env: Record<string, string>,
-  factory?: DirectorChatFactory
+  factory?: DirectorChatFactory,
+  quotaOpen = false
 ): Promise<DirectorService> {
   const moduleRef = await Test.createTestingModule({
     imports: [
@@ -41,6 +43,10 @@ async function serviceWithEnv(
           ({
             createPrimary: vi.fn(),
           } satisfies DirectorChatFactory),
+      },
+      {
+        provide: LLM_QUOTA_BREAKER,
+        useValue: { isOpen: () => quotaOpen },
       },
     ],
   }).compile();
@@ -86,5 +92,21 @@ describe('DirectorService', () => {
     );
     const response = await director.plan(request);
     expect(LevelResponse.parse(response).source).toBe('llm');
+  });
+
+  it('skips Gemini and returns procedural llm-quota while the breaker is open', async () => {
+    const createPrimary = vi.fn(() => {
+      throw new Error('must not construct a live model during quota cooldown');
+    });
+    const director = await serviceWithEnv(
+      { DIRECTOR_MODE: 'live', GOOGLE_API_KEY: 'test-google-key' },
+      { createPrimary },
+      true
+    );
+    const response = await director.plan(request);
+    const parsed = LevelResponse.parse(response);
+    expect(parsed.source).toBe('procedural');
+    expect(parsed.fallbackReason).toBe('llm-quota');
+    expect(createPrimary).not.toHaveBeenCalled();
   });
 });
