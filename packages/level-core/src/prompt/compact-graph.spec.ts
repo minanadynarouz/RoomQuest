@@ -184,9 +184,9 @@ describe('compactGraphForPrompt', () => {
       expect(value).toBe(Number(value.toFixed(2)));
     }
     for (const slot of table?.slots ?? []) {
-      expect(slot).toHaveLength(2);
-      expect(slot[0]).toBe(Number(slot[0].toFixed(2)));
-      expect(slot[1]).toBe(Number(slot[1].toFixed(2)));
+      expect(slot.id).toMatch(/^s\d+$/);
+      expect(slot.u).toBe(Number(slot.u.toFixed(2)));
+      expect(slot.v).toBe(Number(slot.v.toFixed(2)));
     }
     const couch = hinted.nodes.find((node) => node.id === 's2');
     expect(couch?.fits).not.toContain('village_hut');
@@ -197,5 +197,17 @@ describe('compactGraphForPrompt', () => {
     const a = compactGraphForPrompt(SYNTHETIC_LIVING_ROOM, { hints: true });
     const b = compactGraphForPrompt(SYNTHETIC_LIVING_ROOM, { hints: true });
     expect(a).toEqual(b);
+  });
+
+  it('assigns unique s<n> slot ids that are stable across calls', () => {
+    const a = compactGraphForPrompt(SYNTHETIC_LIVING_ROOM, { hints: true });
+    const b = compactGraphForPrompt(SYNTHETIC_LIVING_ROOM, { hints: true });
+    const ids = a.nodes.flatMap((node) => (node.slots ?? []).map((slot) => slot.id));
+    expect(ids.length).toBeGreaterThan(0);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.every((id) => /^s\d+$/.test(id))).toBe(true);
+    expect(b.nodes.map((node) => node.slots)).toEqual(
+      a.nodes.map((node) => node.slots)
+    );
   });
 });
