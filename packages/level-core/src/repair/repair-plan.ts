@@ -413,7 +413,7 @@ function ensureHut(
     return plan;
   }
   const hut = plan.placements.find((placement) => placement.piece === 'village_hut');
-  if (hut && hut.surface === hutNode.id && plan.start === hutNode.id) {
+  if (hut?.surface === hutNode.id && plan.start === hutNode.id) {
     return plan;
   }
 

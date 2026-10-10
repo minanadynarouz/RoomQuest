@@ -1,29 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { IWER_GRAPHS, IWER_ROOM_IDS, type IwerRoomId } from '@roomquest/fixtures';
-import { KIT_CATALOG, type LevelPlan, type SurfaceGraph, type Tier } from '@roomquest/schema';
-import { validatePlan } from '../validate/validate-plan';
+import { describe, expect, it } from 'vitest';
+import { IWER_GRAPHS, IWER_ROOM_IDS } from '@roomquest/fixtures';
+import { KIT_CATALOG, type Tier } from '@roomquest/schema';
+import { repairPlan } from '../repair/repair-plan';
 import {
   horizontalDistance,
   MIN_PATH_DISTANCE_M,
 } from '../validate/graph-utils';
-import type { RepairResult } from '../repair/repair-plan';
-
-const { repairPlanMock, actualRepair } = vi.hoisted(() => {
-  const actualRepair = vi.fn();
-  const repairPlanMock = vi.fn(
-    (plan: LevelPlan, graph: SurfaceGraph): RepairResult =>
-      actualRepair(plan, graph) as RepairResult
-  );
-  return { repairPlanMock, actualRepair };
-});
-
-vi.mock('../repair/repair-plan', async (importOriginal) => {
-  const mod = await importOriginal<typeof import('../repair/repair-plan')>();
-  actualRepair.mockImplementation(mod.repairPlan);
-  return { ...mod, repairPlan: repairPlanMock };
-});
-
-import { repairPlan } from '../repair/repair-plan';
+import { validatePlan } from '../validate/validate-plan';
 import { generatePlan } from './generate-plan';
 
 const TIERS: readonly Tier[] = ['easy', 'normal'];
@@ -58,10 +41,6 @@ function hutFits(node: {
 }
 
 describe('IWER graph generatePlan', () => {
-  beforeEach(() => {
-    repairPlanMock.mockClear();
-  });
-
   it('summarizes each room’s hut surfaces and pair distance', () => {
     for (const room of IWER_ROOM_IDS) {
       const graph = IWER_GRAPHS[room];
@@ -99,11 +78,8 @@ describe('IWER graph generatePlan', () => {
 
         for (let i = 0; i < SEED_COUNT; i += 1) {
           const seed = `${graph.roomHash}-2026-10-${String(10 + (i % 20)).padStart(2, '0')}-${String(i)}`;
-          repairPlanMock.mockClear();
           const generated = generatePlan(graph, seed, tier);
-
-          const draft = repairPlanMock.mock.calls[0]?.[0] as LevelPlan | undefined;
-          const before = validatePlan(draft ?? generated, graph);
+          const before = validatePlan(generated, graph);
           if (before.ok) {
             validBefore += 1;
           } else {
