@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "roomHash": "bcb44a154835",
+  "mode": "scene",
+  "floorY": 0.04,
+  "nodes": [
+    {
+      "id": "s1",
+      "label": "table",
+      "kind": "plane",
+      "topHeight": 0.7000000000000001,
+      "centroid": [
+        0.07,
+        0.73,
+        -1.57
+      ],
+      "size": [
+        1.2387523651123047,
+        2.1452388763427734
+      ],
+      "yaw": -0.010694307111898876,
+      "area": 2.7,
+      "reach": "ray",
+      "angleFromForward": 29
+    },
+    {
+      "id": "s2",
+      "label": "table",
+      "kind": "plane",
+      "topHeight": 1.75,
+      "centroid": [
+        0.07,
+        1.8,
+        -1.57
+      ],
+      "size": [
+        1.2387523651123047,
+        0.7275047302246094
+      ],
+      "yaw": -4.751680347731764e-15,
+      "area": 0.9,
+      "reach": "ray",
+      "angleFromForward": 8
+    },
+    {
+      "id": "s3",
+      "label": "floor",
+      "kind": "plane",
+      "topHeight": 0,
+      "centroid": [
+        -0.05,
+        0.04,
+        -1.45
+      ],
+      "size": [
+        5.379026412963867,
+        4.075532913208008
+      ],
+      "yaw": -1.6097386820077282,
+      "area": 21.900000000000002,
+      "reach": "ray",
+      "angleFromForward": 47
+    }
+  ],
+  "edges": [
+    {
+      "a": "s1",
+      "b": "s2",
+      "gap": 0,
+      "dh": 1.05,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s1",
+      "b": "s3",
+      "gap": 0,
+      "dh": -0.7000000000000001,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s2",
+      "b": "s3",
+      "gap": 0,
+      "dh": -1.75,
+      "kind": "portalOnly"
+    }
+  ]
+}
