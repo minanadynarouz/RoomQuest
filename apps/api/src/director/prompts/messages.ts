@@ -1,5 +1,6 @@
-import { compactGraphForPrompt } from '@roomquest/level-core';
 import type { SurfaceGraph, Theme, Tier } from '@roomquest/schema';
+import { graphForPrompt } from './graph-for-prompt';
+import { buildPromptVariation } from './variation';
 
 export function buildUserMessage(input: {
   graph: SurfaceGraph;
@@ -7,11 +8,14 @@ export function buildUserMessage(input: {
   tier: Tier;
   recentThemes?: Theme[];
 }): string {
+  // Graph last so the static prefix (system + seed/tier/themes) can cache.
+  // Seed-derived variation sits next to the graph, after that static prefix.
   return JSON.stringify({
-    graph: compactGraphForPrompt(input.graph),
     seed: input.seed,
     tier: input.tier,
     recentThemes: input.recentThemes ?? [],
+    variation: buildPromptVariation(input.seed, input.graph),
+    graph: graphForPrompt(input.graph),
   });
 }
 
@@ -21,7 +25,7 @@ export function buildRepairMessage(
 ): string {
   const lines = issues.map((issue) => `- ${issue.code}: ${issue.message}`);
   return [
-    'The previous plan failed validation. Return a complete corrected LevelPlan that fixes every issue.',
+    'The previous plan failed validation. Return a complete corrected compact LevelPlan (th+pl) that fixes every issue.',
     'Issues:',
     lines.join('\n'),
     'Previous plan:',

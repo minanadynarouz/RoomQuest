@@ -1,5 +1,5 @@
 import type { Tier } from '@roomquest/schema';
-import { EVAL_TIERS } from './constants';
+import { EVAL_DEFAULT_RUNS, EVAL_TIERS } from './constants';
 import type { EvalHarnessOptions } from './options';
 
 function flagValue(argv: string[], name: string): string | undefined {
@@ -54,6 +54,7 @@ export function parseEvalArgs(argv: string[]): EvalHarnessOptions {
   const args = argv.filter((item) => item !== '--');
   const rooms = parsePositiveInt(flagValue(args, '--rooms'), '--rooms');
   const seeds = parsePositiveInt(flagValue(args, '--seeds'), '--seeds');
+  const runs = parsePositiveInt(flagValue(args, '--runs'), '--runs');
   return {
     mock: args.includes('--mock'),
     roomLimit: rooms,
@@ -61,5 +62,7 @@ export function parseEvalArgs(argv: string[]): EvalHarnessOptions {
     tiers: parseTiers(flagValue(args, '--tiers')),
     write: !args.includes('--no-write'),
     outDir: flagValue(args, '--out-dir'),
+    thinking: flagValue(args, '--thinking'),
+    runCount: runs ?? EVAL_DEFAULT_RUNS,
   };
 }

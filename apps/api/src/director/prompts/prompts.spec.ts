@@ -8,12 +8,13 @@ import { PROMPT_VERSION } from './version';
 import { SYSTEM_PREFIX } from './system-prefix';
 import { KIT_CATALOG_PROMPT } from './kit-catalog';
 import { FEW_SHOT_DESERT_JSON, FEW_SHOT_FOREST_JSON } from './few-shots';
+import { graphForPrompt } from './graph-for-prompt';
 import { buildRepairMessage, buildUserMessage } from './messages';
 import { SYNTHETIC_LIVING_ROOM } from '@roomquest/fixtures';
 
 describe('director prompts', () => {
   it('exports a prompt version used in the cache key', () => {
-    expect(PROMPT_VERSION).toBe('v1.0');
+    expect(PROMPT_VERSION).toBe('v1.1');
   });
 
   it('keeps a byte-stable system prefix (provider prompt caching)', () => {
@@ -21,12 +22,12 @@ describe('director prompts', () => {
     expect(Buffer.byteLength(SYSTEM_PREFIX, 'utf8')).toBe(
       Buffer.byteLength(SYSTEM_PREFIX, 'utf8')
     );
-    expect(SYSTEM_PREFIX).toContain('Roomquest game director');
+    expect(SYSTEM_PREFIX).toContain('Roomquest director');
     expect(SYSTEM_PREFIX).toContain(KIT_CATALOG_PROMPT);
     expect(SYSTEM_PREFIX).toContain(FEW_SHOT_FOREST_JSON);
     expect(SYSTEM_PREFIX).toContain(FEW_SHOT_DESERT_JSON);
-    expect(SYSTEM_PREFIX).toContain('"theme":"forest"');
-    expect(SYSTEM_PREFIX).toContain('"theme":"desert"');
+    expect(SYSTEM_PREFIX).toContain('"th":"forest"');
+    expect(SYSTEM_PREFIX).toContain('"th":"desert"');
   });
 
   it('lists every KIT_CATALOG piece with constraints', () => {
@@ -38,7 +39,7 @@ describe('director prompts', () => {
     );
   });
 
-  it('puts only graph/seed/tier/recentThemes in the user message', () => {
+  it('puts seed/tier/recentThemes first and the graph last', () => {
     const user = buildUserMessage({
       graph: SYNTHETIC_LIVING_ROOM,
       seed: 'f1a2b3c4d5e6-2026-10-14',
@@ -46,10 +47,69 @@ describe('director prompts', () => {
       recentThemes: ['forest'],
     });
     const parsed = JSON.parse(user) as Record<string, unknown>;
-    expect(Object.keys(parsed).sort()).toEqual(
-      ['graph', 'recentThemes', 'seed', 'tier'].sort()
+    expect(Object.keys(parsed)).toEqual([
+      'seed',
+      'tier',
+      'recentThemes',
+      'variation',
+      'graph',
+    ]);
+    const variation = parsed.variation as {
+      themeWord: string;
+      preferredStartSurface: string;
+      routeDirection: string;
+    };
+    expect(['forest', 'desert', 'snow', 'sky']).toContain(variation.themeWord);
+    expect(SYNTHETIC_LIVING_ROOM.nodes.map((n) => n.id)).toContain(
+      variation.preferredStartSurface
     );
-    expect(user).not.toContain('Roomquest game director');
+    expect([
+      'clockwise',
+      'counter-clockwise',
+      'low-to-high',
+      'high-to-low',
+    ]).toContain(variation.routeDirection);
+    expect(user).not.toContain('Roomquest director');
+  });
+
+  it('derives variation from the seed and keeps SYSTEM_PREFIX byte-identical', () => {
+    const a = JSON.parse(
+      buildUserMessage({
+        graph: SYNTHETIC_LIVING_ROOM,
+        seed: 'f1a2b3c4d5e6-2026-10-01',
+        tier: 'easy',
+      })
+    ) as { variation: unknown };
+    const again = JSON.parse(
+      buildUserMessage({
+        graph: SYNTHETIC_LIVING_ROOM,
+        seed: 'f1a2b3c4d5e6-2026-10-01',
+        tier: 'easy',
+      })
+    ) as { variation: unknown };
+    const b = JSON.parse(
+      buildUserMessage({
+        graph: SYNTHETIC_LIVING_ROOM,
+        seed: 'f1a2b3c4d5e6-2026-10-02',
+        tier: 'easy',
+      })
+    ) as { variation: unknown };
+    expect(a.variation).toEqual(again.variation);
+    expect(a.variation).not.toEqual(b.variation);
+    expect(SYSTEM_PREFIX).toBe(SYSTEM_PREFIX);
+    expect(SYSTEM_PREFIX).not.toContain('preferredStartSurface');
+    expect(SYSTEM_PREFIX).not.toContain('themeWord');
+  });
+
+  it('graphForPrompt is the toggleable compactGraphForPrompt wrapper', () => {
+    expect(graphForPrompt(SYNTHETIC_LIVING_ROOM)).toEqual(
+      compactGraphForPrompt(SYNTHETIC_LIVING_ROOM)
+    );
+    expect(graphForPrompt(SYNTHETIC_LIVING_ROOM)).not.toBe(
+      SYNTHETIC_LIVING_ROOM
+    );
+    expect(graphForPrompt(SYNTHETIC_LIVING_ROOM)).not.toHaveProperty('version');
+    expect(SYNTHETIC_LIVING_ROOM).toHaveProperty('version');
   });
 
   it('sends compactGraphForPrompt output, not the raw SurfaceGraph', () => {
