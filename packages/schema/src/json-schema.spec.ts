@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import {
+  geminiNumericEnum,
   toGeminiSchema,
   toJsonSchema,
   validateLLMSafeJsonSchema,
@@ -128,6 +129,25 @@ describe('toGeminiSchema', () => {
 
   it('matches the Gemini LevelPlanLLM schema snapshot', () => {
     expect(toGeminiSchema(LevelPlanLLM)).toMatchSnapshot();
+  });
+
+  it('maps numeric enums to string enums; zod converts the strings back', () => {
+    const Rank = geminiNumericEnum([1, 2, 3]);
+    const gemini = toGeminiSchema(z.object({ rank: Rank }));
+    const properties = gemini.properties as Record<string, unknown>;
+    expect(properties.rank).toEqual({ type: 'string', enum: ['1', '2', '3'] });
+    expect(collectGeminiViolations(gemini)).toEqual([]);
+
+    expect(Rank.parse('2')).toBe(2);
+    expect(Rank.parse(2)).toBe(2);
+    expect(() => Rank.parse('9')).toThrow();
+
+    const native = z.object({
+      n: z.enum({ A: 1, B: 2 }),
+    });
+    const nativeGemini = toGeminiSchema(native);
+    const nativeProps = nativeGemini.properties as Record<string, unknown>;
+    expect(nativeProps.n).toEqual({ type: 'string', enum: ['1', '2'] });
   });
 });
 

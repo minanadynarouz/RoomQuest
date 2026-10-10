@@ -22,7 +22,7 @@ import {
   PROMPT_VERSION,
   SYSTEM_PREFIX,
 } from './prompts';
-import type { StructuredChat } from './structured-chat';
+import { structuredCandidate, type StructuredChat } from './structured-chat';
 import {
   logLlmCall,
   tokensFromRaw,
@@ -182,11 +182,9 @@ export async function runDirector(
       return { kind: 'timeout' };
     }
     try {
-      const { parsed, raw } = await chat.invokeStructured(
-        messages,
-        deadline.signal
-      );
-      const parsedPlan = tryParseLlmPlan(parsed);
+      const call = await chat.invokeStructured(messages, deadline.signal);
+      const candidate = structuredCandidate(call);
+      const parsedPlan = tryParseLlmPlan(candidate);
       if (parsedPlan.plan !== undefined) {
         const validation = validatePlan(parsedPlan.plan, request.graph);
         if (validation.ok) {
@@ -194,30 +192,30 @@ export async function runDirector(
             chat,
             callStarted,
             phase === 'repair' ? 'repaired' : 'ok',
-            raw
+            call.raw
           );
           return {
             kind: 'plan',
             valid: true,
             plan: parsedPlan.plan,
-            raw: parsed,
+            raw: candidate,
             issues: [],
           };
         }
-        record(chat, callStarted, 'invalid', raw);
+        record(chat, callStarted, 'invalid', call.raw);
         return {
           kind: 'plan',
           valid: false,
           plan: parsedPlan.plan,
-          raw: parsed,
+          raw: candidate,
           issues: validation.issues,
         };
       }
-      record(chat, callStarted, 'invalid', raw);
+      record(chat, callStarted, 'invalid', call.raw);
       return {
         kind: 'plan',
         valid: false,
-        raw: parsed,
+        raw: candidate,
         issues: [
           {
             code: 'SCHEMA_INVALID',

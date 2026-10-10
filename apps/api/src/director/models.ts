@@ -55,6 +55,8 @@ export function wrapChatModel(
     provider,
     model: modelId,
     async invokeStructured(messages, signal) {
+      // Pass the converted JSON schema only — never zod LevelPlanLLM.
+      // LangChain's Zod path re-runs toJsonSchema and the bad keywords return.
       const structured = model.withStructuredOutput(LevelPlanLLMGeminiSchema, {
         includeRaw: true,
         method: 'jsonSchema',

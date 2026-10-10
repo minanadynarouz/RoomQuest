@@ -1,3 +1,4 @@
+import { AIMessage } from '@langchain/core/messages';
 import { FakeListChatModel } from '@langchain/core/utils/testing';
 import {
   SYNTHETIC_LIVING_ROOM,
@@ -13,6 +14,7 @@ import {
   PROCEDURAL_RESERVE_MS,
 } from './director.constants';
 import { wrapChatModel } from './models';
+import type { StructuredChat } from './structured-chat';
 import { PROMPT_VERSION } from './prompts';
 import { runDirector } from './run-director';
 import {
@@ -84,6 +86,34 @@ describe('runDirector', () => {
     expect(outcome.telemetry[0]?.outcome).toBe('ok');
     expect(outcome.telemetry[0]?.inputTokens).toBe(12);
     expect(outcome.telemetry[0]?.outputTokens).toBe(34);
+  });
+
+  it('feeds includeRaw text into local repair when structured parse fails', async () => {
+    let calls = 0;
+    const primary: StructuredChat = {
+      provider: 'google',
+      model: 'gemini-3.8-flash',
+      invokeStructured: () => {
+        calls += 1;
+        return Promise.resolve({
+          parsed: null,
+          raw: new AIMessage(dirtyLocalRepairJson()),
+        });
+      },
+    };
+    const outcome = await runDirector(request, {
+      primary,
+      logger: silentLogger,
+    });
+    expect(calls).toBe(1);
+    expect(outcome.response.source).toBe('llm_repaired');
+    expect(outcome.response.repairs.length).toBeGreaterThan(0);
+    expect(validatePlan(outcome.response.plan, request.graph).ok).toBe(true);
+    expect(outcome.telemetry).toHaveLength(1);
+    expect(outcome.telemetry[0]?.outcome).toBe('invalid');
+    expect(
+      outcome.response.plan.placements.some((p) => p.id === 'p-slime')
+    ).toBe(false);
   });
 
   it('locally repairs an invalid first plan without a second LLM call', async () => {

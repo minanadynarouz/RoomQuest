@@ -48,6 +48,62 @@ function asNumber(value: unknown): number | undefined {
     : undefined;
 }
 
+function stringifyEnumValue(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  return JSON.stringify(value);
+}
+
+/** Pull const/enum literals out of a Zod `anyOf`/`oneOf` union, if every branch is a literal. */
+function literalValuesFromUnion(union: unknown): unknown[] | undefined {
+  if (!Array.isArray(union) || union.length === 0) {
+    return undefined;
+  }
+  const values: unknown[] = [];
+  for (const item of union) {
+    if (!isRecord(item)) {
+      return undefined;
+    }
+    if ('const' in item) {
+      values.push(item.const);
+      continue;
+    }
+    if (Array.isArray(item.enum) && item.enum.length > 0) {
+      for (const entry of item.enum) {
+        values.push(entry);
+      }
+      continue;
+    }
+    return undefined;
+  }
+  return values;
+}
+
+/**
+ * Gemini only accepts string enums. Zod numeric enums (`z.enum({ A: 1 })`) and
+ * literal unions (`z.union([z.literal(1), …])`) must parse the string Gemini
+ * returns (`"1"`) back to the original number.
+ */
+export function geminiNumericEnum<T extends number>(
+  values: readonly [T, T, ...T[]]
+): z.ZodType<T> {
+  const asString = new Set(values.map(String));
+  const literals = values.map((value) => z.literal(value));
+  const inner = z.union(
+    literals as [z.ZodLiteral<T>, z.ZodLiteral<T>, ...z.ZodLiteral<T>[]]
+  );
+  return z.preprocess((value: unknown) => {
+    if (typeof value === 'string' && asString.has(value)) {
+      return Number(value);
+    }
+    return value;
+  }, inner);
+}
+
 /**
  * Gemini `responseSchema` rejects JSON Schema features that Zod / LangChain
  * emit by default: type unions like `["string","null"]` ("Proto field is not
@@ -77,12 +133,30 @@ function rewriteForGemini(value: unknown): unknown {
     return value;
   }
 
+  const literalEnum =
+    literalValuesFromUnion(value.anyOf) ?? literalValuesFromUnion(value.oneOf);
+
   const out: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value)) {
     if (GEMINI_STRIP_KEYS.has(key)) {
       continue;
     }
     out[key] = rewriteForGemini(child);
+  }
+
+  if (literalEnum !== undefined) {
+    out.enum = literalEnum.map(stringifyEnumValue);
+    out.type = 'string';
+  }
+
+  if (Array.isArray(out.enum)) {
+    const hasNonString = out.enum.some(
+      (item) => typeof item === 'number' || typeof item === 'boolean'
+    );
+    if (hasNonString) {
+      out.enum = out.enum.map(stringifyEnumValue);
+      out.type = 'string';
+    }
   }
 
   if (Array.isArray(out.type)) {
