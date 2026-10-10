@@ -112,6 +112,8 @@ function viewSignature(view: HudPanelContent): string {
     view.beatGoal.goal,
     view.beatGoal.beatLabel,
     view.noSurfaces.visible,
+    view.noSurfaces.title,
+    view.noSurfaces.retryLabel,
     view.pause.visible,
     view.win.visible,
     view.win.starsLabel,
@@ -342,6 +344,10 @@ export class HudSystem extends createSystem({}) {
     }
     if (id === 'noSurfaces') {
       click('no-surfaces-retry', () => {
+        if (store.phase === 'roomUnplayable' && hudActions?.rescan) {
+          hudActions.rescan();
+          return;
+        }
         store.startSurveying();
       });
     }
@@ -413,6 +419,11 @@ export class HudSystem extends createSystem({}) {
     if (none && view.noSurfaces.visible) {
       setText(none.asset, 'no-surfaces-title', view.noSurfaces.title);
       setText(none.asset, 'no-surfaces-body', view.noSurfaces.body);
+      setText(
+        none.asset,
+        'no-surfaces-retry-label',
+        view.noSurfaces.retryLabel
+      );
     }
 
     const pause = this.panels.get('pause');

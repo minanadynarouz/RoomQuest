@@ -4,17 +4,21 @@
  * Starts POST /api/v1/levels and the local generator together. Accepts the
  * API plan only if it arrives within the budget, parses as LevelResponse,
  * and passes local re-validation against the scanned graph. An invalid
- * server plan is offered to `repairPlan` first; only if repair fails does
- * the client keep the racing `generatePlan` result. HTTP 429 is a silent
- * `generatePlan` fallback (`fallbackReason: 'rate-limited'`); later live
- * requests in this session skip the network until `retryAfterS` expires.
- * The player never sees an API error.
+ * server plan is offered to `snapPlacementsToSlots`, then `repairPlan`;
+ * only if both fail does the client keep the racing `generatePlan` result.
+ * When snap + repair still fail — or the API returns 422 ROOM_UNPLAYABLE —
+ * the client does not play the fixture plan (`fallbackReason: 'room-unplayable'`).
+ * HTTP 429 is a silent `generatePlan` fallback (`fallbackReason: 'rate-limited'`);
+ * later live requests in this session skip the network until `retryAfterS`
+ * expires. The player never sees an API error.
  */
 
+import { SYNTHETIC_LIVING_ROOM_PLAN } from '@roomquest/fixtures';
 import {
   clampParTimeMs,
   generatePlan,
   repairPlan,
+  snapPlacementsToSlots,
   validatePlan,
   type Issue,
 } from '@roomquest/level-core';
@@ -51,8 +55,30 @@ import {
   type FallbackReason,
   type FetchHeadersLike,
   type FetchLike,
+  type RepairedBy,
   type RequestPlanOverrides,
 } from './types.js';
+import { recoverPlan } from './recover.js';
+import {
+  ROOM_UNPLAYABLE,
+  isRoomUnplayableResponse,
+  mergeRelaxed,
+  type RelaxedRule,
+} from './schema-pending.js';
+
+function unplayablePlaceholder(seed: string): LevelPlan {
+  return {
+    seed,
+    theme: 'forest',
+    title: 'Rescan',
+    start: 's1',
+    goal: 's2',
+    parTimeMs: 180000,
+    placements: [],
+    beats: [],
+    dialogue: [],
+  };
+}
 
 function clampPlanPar(plan: LevelPlan): LevelPlan {
   const parTimeMs = clampParTimeMs(plan.parTimeMs);
@@ -173,6 +199,10 @@ async function postLevels(
     const payload = await readJson(response);
     const requestId = readResponseHeader(response.headers, 'X-Request-Id');
 
+    if (isRoomUnplayableResponse(response.status, payload)) {
+      return { ok: false, reason: ROOM_UNPLAYABLE, requestId };
+    }
+
     if (response.status === 429) {
       const retryAfterS =
         parseRetryAfterHeader(
@@ -227,6 +257,8 @@ function localResult(
     promptVersion?: string;
     tier?: Tier;
     requestId?: string;
+    repairedBy?: RepairedBy;
+    relaxed?: RelaxedRule[];
   }
 ): DirectorResult {
   return {
@@ -244,6 +276,8 @@ function localResult(
     retryAfterS: extras?.retryAfterS,
     issues: extras?.issues ?? [],
     requestId: extras?.requestId,
+    repairedBy: extras?.repairedBy,
+    relaxed: extras?.relaxed,
   };
 }
 
@@ -257,8 +291,13 @@ function logDirectorResult(result: DirectorResult): void {
   const issueCodes = result.issues?.length
     ? ` issues=${issueCodesOf(result.issues).join(',')}`
     : '';
+  const repaired = result.repairedBy ? ` repairedBy=${result.repairedBy}` : '';
+  const relaxed =
+    result.relaxed && result.relaxed.length > 0
+      ? ` relaxed=${result.relaxed.join(',')}`
+      : '';
   console.info(
-    `[director] source=${result.source} latencyMs=${result.latencyMs}${reason}${code}${retry}${issueCodes}`
+    `[director] source=${result.source} latencyMs=${result.latencyMs}${reason}${code}${retry}${issueCodes}${repaired}${relaxed}`
   );
 }
 
@@ -276,6 +315,8 @@ export function createDirectorClient(
   const generate = options.generate ?? generatePlan;
   const validate = options.validate ?? validatePlan;
   const repair = options.repair ?? repairPlan;
+  const snap = options.snap ?? snapPlacementsToSlots;
+  const allowFixtureFallback = options.allowFixtureFallback === true;
   const defaultMode: DirectorMode = options.directorMode ?? 'live';
   const defaultTier = options.tier ?? DEFAULT_TIER;
   const budgetMs = options.budgetMs ?? DIRECTOR_BUDGET_MS;
@@ -293,6 +334,8 @@ export function createDirectorClient(
       source: result.usedFallback ? 'procedural' : 'llm',
       fallbackReason: result.fallbackReason,
       requestId: result.requestId,
+      repairedBy: result.repairedBy,
+      relaxed: result.relaxed,
     };
     options.onRequestEnd?.(info);
     return result;
@@ -317,6 +360,30 @@ export function createDirectorClient(
       generate(postedGraph, seed, tier, generateOptions)
     );
 
+    function unplayableResult(
+      extras?: {
+        issues?: Issue[];
+        requestId?: string;
+        relaxed?: RelaxedRule[];
+      }
+    ): DirectorResult {
+      const result = localResult(
+        unplayablePlaceholder(seed),
+        seed,
+        nowMs() - started,
+        'procedural',
+        ROOM_UNPLAYABLE,
+        {
+          ...extras,
+          tier,
+          issues: extras?.issues ?? [],
+          relaxed: extras?.relaxed,
+        }
+      );
+      logDirectorResult(result);
+      return finish(result);
+    }
+
     async function useGenerator(
       reason: FallbackReason,
       extras?: {
@@ -324,8 +391,14 @@ export function createDirectorClient(
         retryAfterS?: number;
         issues?: Issue[];
         requestId?: string;
+        relaxed?: RelaxedRule[];
       }
     ): Promise<DirectorResult> {
+      if (reason === ROOM_UNPLAYABLE) {
+        void genPromise.catch(() => undefined);
+        return unplayableResult(extras);
+      }
+
       let plan: LevelPlan;
       try {
         plan = await genPromise;
@@ -337,13 +410,50 @@ export function createDirectorClient(
         plan = generatePlan(postedGraph, seed, tier, generateOptions);
       }
 
+      const recovered = await recoverPlan(plan, postedGraph, {
+        validate,
+        snap,
+        repair,
+      });
+      const relaxed = mergeRelaxed(extras?.relaxed, recovered.relaxed);
+      if (!recovered.ok) {
+        if (allowFixtureFallback) {
+          const result = localResult(
+            SYNTHETIC_LIVING_ROOM_PLAN,
+            seed,
+            nowMs() - started,
+            'procedural',
+            reason,
+            {
+              ...extras,
+              tier,
+              issues: extras?.issues ?? recovered.issues,
+              relaxed,
+            }
+          );
+          logDirectorResult(result);
+          return finish(result);
+        }
+        return unplayableResult({
+          issues: extras?.issues ?? recovered.issues,
+          requestId: extras?.requestId,
+          relaxed,
+        });
+      }
       const result = localResult(
-        plan,
+        recovered.plan,
         seed,
         nowMs() - started,
         'procedural',
         reason,
-        { ...extras, tier }
+        {
+          ...extras,
+          tier,
+          repairedBy: recovered.repairedBy,
+          repairs: recovered.repairs,
+          issues: extras?.issues ?? recovered.issues,
+          relaxed,
+        }
       );
       logDirectorResult(result);
       return finish(result);
@@ -414,43 +524,49 @@ export function createDirectorClient(
     logGraphDrift(graph, postedGraph);
 
     // Re-validate against the POSTed snapshot, not a later rebuild of
-    // `graph`. B-02 mock plans still use fixture ids → UNKNOWN_SURFACE →
-    // repair, then generatePlan; that mismatch stays `graph-mismatch`.
-    const local = await validate(parsed.data.plan, postedGraph);
-    if (!local.ok) {
-      const repaired = await repair(parsed.data.plan, postedGraph);
-      if (repaired.result.ok) {
-        const latencyMs = nowMs() - started;
-        if (latencyMs > requestBudgetMs) {
-          return useGenerator(timeoutReason, {
-            issues: local.issues,
-            requestId: api.requestId,
-          });
-        }
-        void genPromise.catch(() => undefined);
-        const result = localResult(
-          repaired.plan,
-          seed,
-          latencyMs,
-          'llm_repaired',
-          'repaired',
-          {
-            issues: local.issues,
-            repairs: repaired.repairs,
-            cacheKey: parsed.data.cacheKey,
-            model: parsed.data.model,
-            promptVersion: parsed.data.promptVersion,
-            tier,
-            requestId: api.requestId,
-          }
-        );
-        logDirectorResult(result);
-        return finish(result);
+    // `graph`. Order: validate → snap → validate → repairPlan → validate.
+    // B-02 fixture ids still miss snap/repair → generatePlan (`graph-mismatch`).
+    const recovered = await recoverPlan(parsed.data.plan, postedGraph, {
+      validate,
+      snap,
+      repair,
+    });
+    if (recovered.ok && recovered.repairedBy) {
+      const latencyMs = nowMs() - started;
+      if (latencyMs > requestBudgetMs) {
+        return useGenerator(timeoutReason, {
+          issues: recovered.issues,
+          requestId: api.requestId,
+        });
       }
-      const reason = fallbackReasonFromIssues(local.issues);
+      void genPromise.catch(() => undefined);
+      const result = localResult(
+        recovered.plan,
+        seed,
+        latencyMs,
+        'llm_repaired',
+        'repaired',
+        {
+          issues: recovered.issues,
+          repairs: recovered.repairs,
+          cacheKey: parsed.data.cacheKey,
+          model: parsed.data.model,
+          promptVersion: parsed.data.promptVersion,
+          tier,
+          requestId: api.requestId,
+          repairedBy: recovered.repairedBy,
+          relaxed: recovered.relaxed,
+        }
+      );
+      logDirectorResult(result);
+      return finish(result);
+    }
+    if (!recovered.ok) {
+      const reason = fallbackReasonFromIssues(recovered.issues);
       return useGenerator(reason, {
-        issues: local.issues,
+        issues: recovered.issues,
         requestId: api.requestId,
+        relaxed: recovered.relaxed,
       });
     }
 
@@ -474,6 +590,7 @@ export function createDirectorClient(
       issues: [],
       tier,
       requestId: api.requestId,
+      relaxed: recovered.relaxed,
     };
     logDirectorResult(result);
     return finish(result);

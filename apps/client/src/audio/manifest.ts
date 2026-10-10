@@ -44,7 +44,9 @@ export interface SoundEntry {
 export type SoundKey =
   | Exclude<
       GameEvent['type'],
-      'directorRequestStarted' | 'directorRequestEnded'
+      | 'directorRequestStarted'
+      | 'directorRequestEnded'
+      | 'roomUnplayable'
     >
   | 'grab'
   | 'invalidPlace'

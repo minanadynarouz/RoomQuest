@@ -190,6 +190,31 @@ describe('createSessionController', () => {
     expect((posts[0] as { completed: boolean }).completed).toBe(true);
   });
 
+  it('rescan restarts surveying and the room scan', () => {
+    const rescanRoom = vi.fn();
+    const store = createGameStore({ clock: { now: () => now } });
+    store.requestLevel();
+    store.startSurveying();
+    store.markRoomUnplayable();
+    const session = createSessionController({
+      store,
+      getWorld: () => world,
+      getBuilder: () => builder,
+      getExplorer: () => explorer,
+      getGraph: () => GRAPH,
+      postResult: (input) => {
+        posts.push(input);
+      },
+      deviceId: DEVICE,
+      showLanding,
+      rescanRoom,
+    });
+    session.rescan?.();
+    expect(store.phase).toBe('surveying');
+    expect(rescanRoom).toHaveBeenCalledOnce();
+    session.dispose();
+  });
+
   it('forceWin reaches won from playing and from pause', () => {
     const { store, session } = playing();
     session.pause();

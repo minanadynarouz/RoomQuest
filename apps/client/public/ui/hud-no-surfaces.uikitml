@@ -56,6 +56,6 @@
     </div>
   </div>
   <Button id="no-surfaces-retry" class="button">
-    <ButtonLabel>Retry</ButtonLabel>
+    <ButtonLabel id="no-surfaces-retry-label">Retry</ButtonLabel>
   </Button>
 </Panel>

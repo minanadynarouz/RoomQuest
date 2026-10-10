@@ -19,7 +19,13 @@ import {
   resolveLevelKey,
 } from '../results/poster.js';
 import { LEVELS_PATH } from './types.js';
-import type { FetchLike, GenerateFn, KvStore, RepairFn } from './types.js';
+import type {
+  FetchLike,
+  GenerateFn,
+  KvStore,
+  RepairFn,
+  SnapFn,
+} from './types.js';
 
 /** Synthetic living-room graph — `validatePlan` accepts the fixture plan on this. */
 const GRAPH: SurfaceGraph = {
@@ -492,14 +498,16 @@ describe('createDirectorClient', () => {
     expect(result.source).toBe('llm_repaired');
     expect(result.fallbackReason).toBe('repaired');
     expect(result.usedFallback).toBe(true);
-    expect(result.plan.placements.some((p) => p.id === 'p-slime')).toBe(false);
-    expect(result.repairs.some((line) => line.includes('slime'))).toBe(true);
+    expect(result.repairedBy === 'snap' || result.repairedBy === 'repairPlan').toBe(
+      true
+    );
     expect(result.plan.start).toBe('s1');
     expect(result.cacheKey).toBe('abcd1234abcd1234');
     expect(console.warn).not.toHaveBeenCalled();
   });
 
-  it('falls back to generatePlan when repair cannot validate', async () => {
+  it('falls back to generatePlan when snap and repair cannot validate', async () => {
+    const snap: SnapFn = (plan) => ({ plan, changes: [] });
     const repair: RepairFn = (plan) => ({
       plan,
       repairs: ['gave up'],
@@ -514,12 +522,39 @@ describe('createDirectorClient', () => {
       )
     );
 
-    const result = await client(fetchFn, { repair }).requestPlan(GRAPH);
+    const result = await client(fetchFn, { snap, repair }).requestPlan(GRAPH);
 
     expect(result.usedFallback).toBe(true);
     expect(result.source).toBe('procedural');
     expect(result.fallbackReason).toBe('graph-mismatch');
     expect(result.plan.placements.some((p) => p.surface === 's1')).toBe(true);
+    expect(result.plan.title).not.toBe('The Living Room Quest');
+  });
+
+  it('treats 422 ROOM_UNPLAYABLE as room-unplayable without using generatePlan', async () => {
+    const generate = vi.fn<GenerateFn>(() => localPlan('must-not-play'));
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve(
+        jsonResponse(
+          {
+            error: {
+              code: 'ROOM_UNPLAYABLE',
+              message: 'graph cannot host a valid plan',
+            },
+          },
+          422
+        )
+      )
+    );
+
+    const result = await client(fetchFn, { generate }).requestPlan(GRAPH);
+
+    expect(result.usedFallback).toBe(true);
+    expect(result.fallbackReason).toBe('room-unplayable');
+    expect(result.source).toBe('procedural');
+    expect(result.plan.title).toBe('Rescan');
+    expect(result.plan.title).not.toBe('The Living Room Quest');
+    expect(result.plan.seed).not.toBe('must-not-play');
   });
 
   it('falls back when LevelResponse does not parse', async () => {
@@ -963,6 +998,33 @@ describe('createDirectorClientFromEnv', () => {
 });
 
 describe('applyDirectorResult', () => {
+  it('marks the room unplayable without starting a fixture plan', () => {
+    const store = createGameStore();
+    store.requestLevel();
+    store.startSurveying();
+    applyDirectorResult(store, {
+      plan: localPlan(),
+      source: 'procedural',
+      cacheKey: 'procedural:x',
+      promptVersion: 'local',
+      latencyMs: 12,
+      repairs: [],
+      usedFallback: true,
+      fallbackReason: 'room-unplayable',
+      issues: [{ code: 'GOAL_UNREACHABLE', message: 'no path' }],
+      relaxed: ['PATH_DISTANCE_TOO_SHORT'],
+    });
+    expect(store.phase).toBe('roomUnplayable');
+    expect(store.plan).toBeNull();
+    expect(store.fallbackReason).toBe('room-unplayable');
+    expect(store.events.some((event) => event.type === 'roomUnplayable')).toBe(
+      true
+    );
+    expect(store.directorRequest.value.relaxed).toEqual([
+      'PATH_DISTANCE_TOO_SHORT',
+    ]);
+  });
+
   it('surfaces source and latency on the game store', () => {
     const store = createGameStore();
     store.requestLevel();

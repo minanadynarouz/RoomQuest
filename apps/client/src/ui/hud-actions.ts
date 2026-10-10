@@ -7,4 +7,6 @@ export interface HudActions {
   resume: () => void;
   replay: () => void;
   exit: () => void;
+  /** Restart the room scan and director after room-unplayable. */
+  rescan?: () => void;
 }
