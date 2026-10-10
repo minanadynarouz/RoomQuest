@@ -1,9 +1,7 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { SYNTHETIC_LIVING_ROOM_PLAN } from '@roomquest/fixtures';
-import { LevelPlan, LevelResponse, type LevelRequest } from '@roomquest/schema';
+import { LevelResponse, type LevelRequest } from '@roomquest/schema';
 import type { Env } from '../config/env';
-import { makeCacheKey } from '../levels/cache-key';
 import {
   DIRECTOR_CHAT_FACTORY,
   DIRECTOR_RUNTIME,
@@ -47,7 +45,7 @@ export class DirectorService {
     const promptVersion = PROMPT_VERSION;
 
     if (mode === 'mock') {
-      return this.mockOutcome(request, startedMs, promptVersion, now);
+      return proceduralOutcome(request, startedMs, [], promptVersion, now);
     }
 
     const googleKey = this.config.get('GOOGLE_API_KEY', { infer: true });
@@ -91,30 +89,5 @@ export class DirectorService {
       startedMs,
       quotaBreaker: this.quotaBreaker,
     });
-  }
-
-  private mockOutcome(
-    request: LevelRequest,
-    startedMs: number,
-    promptVersion: string,
-    now: () => number
-  ): DirectorOutcome {
-    const plan = LevelPlan.parse(SYNTHETIC_LIVING_ROOM_PLAN);
-    return {
-      response: LevelResponse.parse({
-        plan,
-        source: 'procedural',
-        cacheKey: makeCacheKey(
-          request.graph.roomHash,
-          request.date,
-          request.tier,
-          promptVersion
-        ),
-        promptVersion,
-        latencyMs: Math.max(0, now() - startedMs),
-        repairs: [],
-      }),
-      telemetry: [],
-    };
   }
 }

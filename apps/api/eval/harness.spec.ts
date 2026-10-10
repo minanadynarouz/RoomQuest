@@ -37,7 +37,7 @@ describe('eval harness', () => {
     const parsed = EvalReportSchema.parse(result.report);
     expect(parsed.mock).toBe(true);
     expect(parsed.generatedAt).toBe(new Date(FIXED_NOW_MS).toISOString());
-    expect(parsed.roomIds).toEqual(['synthetic_living_room']);
+    expect(parsed.roomIds).toEqual(['living_room']);
     expect(parsed.seedDates).toHaveLength(1);
     expect(parsed.runs.length).toBe(
       parsed.seedDates.length * parsed.tiers.length
@@ -59,7 +59,7 @@ describe('eval harness', () => {
     expect(parsed.bar.p95MaxMs).toBe(7000);
 
     for (const run of parsed.runs) {
-      expect(run.roomId).toBe('synthetic_living_room');
+      expect(run.roomId).toBe('living_room');
       expect(typeof run.validBeforeRepair).toBe('boolean');
       expect(typeof run.validAfterRepair).toBe('boolean');
       expect(typeof run.fallbackToProcedural).toBe('boolean');

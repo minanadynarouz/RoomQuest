@@ -92,7 +92,7 @@ Architecture server semantics:
 1. Validate headers + body with zod (400 on failure).
 2. `seed = roomHash + "-" + date` (the request `date` field, `YYYY-MM-DD`). `generatePlan` is deterministic for a given seed; the next date therefore yields a different seed. `cacheKey = sha256(roomHash\|date\|tier\|promptVersion)` as **hex**, then the **first 16 hex characters**. `promptVersion` is `PROMPT_VERSION` (`v1.0`).
 3. **Cache** (when `DATABASE_URL` is set and Postgres is reachable): look up `LevelCache` by `cacheKey`. On a hit, **always** re-run `level-core.validatePlan` against the **incoming** graph (roomHash only covers the 6 largest surfaces). If valid, return `source:"cache"` (this does **not** count against the per-device cache-miss budget). If validation fails, treat it as a miss, regenerate, and overwrite the row.
-4. **Mock** (`DIRECTOR_MODE=mock`, the default): return the `synthetic_living_room` plan fixture from `@roomquest/fixtures`, parsed with `LevelPlan`. `source` is `"procedural"`. `model` is omitted. No LLM keys required.
+4. **Mock** (`DIRECTOR_MODE=mock`, the default): `generatePlan` → `validatePlan` → `repairPlan` → `validatePlan` against the **request graph** (same bind path as the client director and the live procedural fallback). `source` is `"procedural"`. `model` is omitted. No LLM keys required.
 5. **Live** (`DIRECTOR_MODE=live`): LangChain director with a **7 s whole-request** budget (the client aborts `/levels` at 8 s). One `AbortSignal` is shared by every step, measured from request arrival. LLM work is aborted **250 ms** before the 7 s wall so `generatePlan` and the HTTP response still finish in time.
    1. Primary: `ChatGoogleGenerativeAI` (`DIRECTOR_MODEL`, default `gemini-3.8-flash`), temperature 0.7, `thinkingConfig.thinkingLevel = LOW`, `.withStructuredOutput(LevelPlanLLMGeminiSchema)` then zod `LevelPlanLLM`.
    2. Parse `LevelPlanLLM` → `clampParTimeMs` → `LevelPlan.parse` → `validatePlan(plan, graph)`.
@@ -105,7 +105,7 @@ Architecture server semantics:
 9. If `DIRECTOR_MODE=live` but `GOOGLE_API_KEY` is unset, the API logs a warning and serves a procedural plan so it still starts. CI and local mock runs need no key.
 10. If `DATABASE_URL` is unset or Postgres is unreachable, `/levels` still returns 200 (director/procedural only, no cache) and logs a warning. Do not create Neon/Render resources for local or CI — use Docker Postgres 17 or the GitHub Actions postgres service.
 
-**Mock plan vs request graph:** the fixture plan’s surface ids (`s1`, `s2`, `s4`, …) belong to the synthetic living-room graph. They will **not** match an arbitrary client `SurfaceGraph`. The client must re-validate with `level-core` and fall back locally (architecture §6 client semantics). Live / procedural plans are validated against the request graph.
+**Mock plan vs request graph:** mock and procedural plans are generated against the incoming `SurfaceGraph` (then validated and repaired). The client still re-validates with `level-core` as a defense in depth.
 
 The API never returns 5xx for LLM problems (architecture §6.6): it degrades to the procedural plan with 200.
 
@@ -314,7 +314,7 @@ No extra env knobs for rate limits: 60/h per IP and 10 cache-misses/h per device
 
 ## Director eval (B-07)
 
-`pnpm --filter api eval` calls the LangChain director module **directly** (no HTTP, no Postgres cache, no rate limits) over every available room fixture (up to 5; `packages/fixtures/rooms/*.json` if present, otherwise `synthetic_living_room`) × 4 seed dates × 2 tiers.
+`pnpm --filter api eval` calls the LangChain director module **directly** (no HTTP, no Postgres cache, no rate limits) over every available room fixture (up to 5; `IWER_GRAPHS` from `@roomquest/fixtures`, then extra `packages/fixtures/rooms/*.json`, otherwise `synthetic_living_room`) × 4 seed dates × 2 tiers.
 
 It writes `docs/eval/<YYYY-MM-DD>.md` and `docs/eval/<YYYY-MM-DD>.json`, prints a summary, and reports whether the bar is met (≥ 90% valid after repair **and** p95 ≤ 7 s). The process exits non-zero only on harness errors — a missed bar is still exit 0.
 
