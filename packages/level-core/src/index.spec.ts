@@ -13,6 +13,9 @@ import {
   canExplorerPassSlime,
   compactGraphForPrompt,
   promptGraphJsonBytes,
+  orderSurfacesByArea,
+  tickRoomReading,
+  wanderPath,
 } from './index';
 import { findNearestSnapTarget, SNAP_RADIUS_M } from './snap';
 import {
@@ -66,6 +69,12 @@ describe('level-core', () => {
   it('exports compactGraphForPrompt for the director user message', () => {
     expect(compactGraphForPrompt).toBeTypeOf('function');
     expect(promptGraphJsonBytes).toBeTypeOf('function');
+  });
+
+  it('exports room-reading order, wander, and sequencer', () => {
+    expect(orderSurfacesByArea).toBeTypeOf('function');
+    expect(wanderPath).toBeTypeOf('function');
+    expect(tickRoomReading).toBeTypeOf('function');
   });
 });
 

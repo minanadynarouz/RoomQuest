@@ -189,4 +189,23 @@ describe('registerRqHook / installRqHooks', () => {
     expect(target.__rq?.drawCalls).toBe(3);
     expect(target.__rq?.villageAnchor).toBe(villageAnchor);
   });
+
+  it('lets room-reading register without dropping autoSolve', () => {
+    const autoSolve = async (): Promise<void> => {
+      /* X-05 */
+    };
+    const roomReading = {
+      visible: () => true,
+      phase: () => 'sweeping',
+      surfaceId: () => 's5',
+      intensity: () => 0.8,
+      mockInFlight: () => undefined,
+    };
+    registerRqHook('autoSolve', autoSolve, { ...debugOn, target });
+    registerRqHook('roomReading', roomReading, { ...debugOn, target });
+    installRqHooks({ drawCalls: 3 }, { ...debugOn, target });
+    expect(target.__rq?.autoSolve).toBe(autoSolve);
+    expect(target.__rq?.roomReading?.visible()).toBe(true);
+    expect(target.__rq?.roomReading?.surfaceId()).toBe('s5');
+  });
 });

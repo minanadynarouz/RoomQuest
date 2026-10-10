@@ -9,11 +9,19 @@ import type { GameStore } from '../../game/index.js';
 export const EXPLORER_SPEED_MPS = 0.15;
 export const BOB_AMPLITUDE_M = 0.008;
 export const BOB_FREQ_HZ = 1.4;
+const SNIFF_AMPLITUDE_M = 0.004;
+const SNIFF_FREQ_HZ = 2.2;
 const TELEPORT_S = 0.35;
 const ARRIVE_EPS = 1e-4;
 
 export type ExplorerStateName =
-  'idle' | 'walking' | 'blocked' | 'riding' | 'teleporting' | 'celebrating';
+  | 'idle'
+  | 'walking'
+  | 'blocked'
+  | 'riding'
+  | 'teleporting'
+  | 'celebrating'
+  | 'sniffing';
 
 export interface ExplorerPose {
   x: number;
@@ -50,6 +58,7 @@ export class ExplorerWalker {
   private emittedBlocker = false;
   private won = false;
   private placementsById = new Map<string, Placement>();
+  private wandering = false;
 
   constructor(speedMps = EXPLORER_SPEED_MPS) {
     this.speedMps = speedMps;
@@ -79,6 +88,7 @@ export class ExplorerWalker {
     this.lastOutOfView = false;
     this.emittedBlocker = false;
     this.won = false;
+    this.wandering = false;
     this.placementsById = new Map();
     for (const placement of plan.placements) {
       this.placementsById.set(placement.id, placement);
@@ -138,13 +148,71 @@ export class ExplorerWalker {
   }
 
   bobOffset(timeS: number): number {
+    if (this.stateName === 'sniffing') {
+      return Math.sin(timeS * SNIFF_FREQ_HZ * Math.PI * 2) * SNIFF_AMPLITUDE_M;
+    }
     if (this.stateName !== 'walking' && this.stateName !== 'riding') {
       return 0;
     }
     return Math.sin(timeS * BOB_FREQ_HZ * Math.PI * 2) * BOB_AMPLITUDE_M;
   }
 
+  get isWandering(): boolean {
+    return this.wandering;
+  }
+
+  /** Place Pip on a surface before the first wander hop. */
+  setPose(x: number, y: number, z: number, yaw: number): void {
+    this.x = x;
+    this.y = y;
+    this.z = z;
+    this.yaw = yaw;
+  }
+
+  /**
+   * Follow an adjacent-only {@link ExplorerPath} using the same hop
+   * interpolation as play. No plan/blockers.
+   */
+  beginWander(path: ExplorerPath): void {
+    this.wandering = true;
+    this.path = path;
+    this.segmentIndex = 0;
+    this.t = 0;
+    this.teleportAge = 0;
+    this.blockedReason = undefined;
+    this.emittedBlocker = false;
+    const first = path.waypoints[0];
+    if (first) {
+      first.pose.position[0] = this.x;
+      first.pose.position[1] = this.y;
+      first.pose.position[2] = this.z;
+      first.pose.yaw = this.yaw;
+    }
+    this.stateName = path.segments.length > 0 ? 'walking' : 'sniffing';
+  }
+
+  /** Turn in place when the highlighted surface is unreachable. */
+  faceToward(x: number, z: number): void {
+    this.wandering = true;
+    this.path = { waypoints: [], segments: [] };
+    this.segmentIndex = 0;
+    this.t = 0;
+    this.yaw = Math.atan2(x - this.x, z - this.z);
+    this.stateName = 'sniffing';
+  }
+
+  stopWander(): void {
+    this.wandering = false;
+    if (this.stateName === 'sniffing') {
+      this.stateName = 'idle';
+    }
+  }
+
   update(dt: number, _timeS: number): void {
+    if (this.wandering) {
+      this.stepWander(dt);
+      return;
+    }
     this.drainEvents();
     const store = this.store;
     if (!store) {
@@ -165,6 +233,21 @@ export class ExplorerWalker {
     this.step(dt);
     this.maybeAdvanceBeats();
     this.maybeWin();
+  }
+
+  private stepWander(dt: number): void {
+    if (this.path.segments.length === 0) {
+      this.stateName = 'sniffing';
+      return;
+    }
+    if (this.segmentIndex >= this.path.segments.length) {
+      this.stateName = 'sniffing';
+      return;
+    }
+    this.step(dt);
+    if (this.segmentIndex >= this.path.segments.length) {
+      this.stateName = 'sniffing';
+    }
   }
 
   checkOutOfView(outOfView: boolean): void {

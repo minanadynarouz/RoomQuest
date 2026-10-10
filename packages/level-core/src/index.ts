@@ -10,3 +10,4 @@ export * from './interact';
 export * from './platform';
 export * from './slime';
 export * from './prompt';
+export * from './room-reading';

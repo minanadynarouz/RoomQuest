@@ -20,6 +20,7 @@ export { PlatformRailSystem } from './systems/PlatformRailSystem.js';
 export { PortalSystem } from './systems/PortalSystem.js';
 export { SlimeSystem } from './systems/SlimeSystem.js';
 export { SurfaceGraphSystem } from './systems/SurfaceGraphSystem.js';
+export { RoomReadingSystem } from './systems/RoomReadingSystem.js';
 export { VillageAnchorSystem } from './systems/VillageAnchorSystem.js';
 export { mountGreyboxLevel } from './level/mount-level.js';
 export { countDrawCalls, countTriangles } from './level/draw-calls.js';

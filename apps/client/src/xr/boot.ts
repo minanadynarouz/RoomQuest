@@ -13,6 +13,7 @@
  * X-07: PlatformRailSystem + PortalSystem (rail clamp, portal pair)
  * X-08: SlimeSystem (patrol, poke / ray-tap stun, slimeStunned / slimeWoke)
  * X-10: shared materials, instancing, foveation, room budgets
+ * Room-reading: surface sweep + Pip sniff while directorRequest is in flight
  */
 
 import {
@@ -76,6 +77,7 @@ import {
 } from './systems/PlacementSystem.js';
 import { SurfaceGraphSystem } from './systems/SurfaceGraphSystem.js';
 import { VillageAnchorSystem } from './systems/VillageAnchorSystem.js';
+import { RoomReadingSystem } from './systems/RoomReadingSystem.js';
 import { countDrawCalls } from './level/draw-calls.js';
 import { applyInjectedEmulatorRoom } from './perf/apply-room.js';
 import { bindFixedFoveation } from './perf/foveation.js';
@@ -377,6 +379,13 @@ async function startPlayableLevel(
   if (!canBuildFromDirector(gameStore.phase)) {
     return;
   }
+  const roomReading = worldInstance?.getSystem(RoomReadingSystem);
+  if (roomReading) {
+    await roomReading.whenSettled();
+  }
+  if (!canBuildFromDirector(gameStore.phase)) {
+    return;
+  }
   applyDirectorResult(gameStore, result);
   builder.build(result.plan, postedGraph);
   worldInstance?.getSystem(ExplorerSystem)?.begin(result.plan, postedGraph);
@@ -536,6 +545,7 @@ export async function launchXR(): Promise<World> {
   worldInstance.registerSystem(VillageAnchorSystem, { priority: 6 });
   // X-08: after VillageAnchor (6); event-driven patrol, not on the grab hot path.
   worldInstance.registerSystem(SlimeSystem, { priority: 7 });
+  worldInstance.registerSystem(RoomReadingSystem, { priority: 8 });
   await loadDebugOverlay();
 
   const builder = worldInstance.getSystem(LevelBuilderSystem);
@@ -605,6 +615,15 @@ export async function launchXR(): Promise<World> {
     flags: clientFlags,
     isDev: import.meta.env.DEV,
   });
+  const roomReading = worldInstance.getSystem(RoomReadingSystem);
+  if (!roomReading) {
+    throw new Error('RoomReadingSystem failed to register');
+  }
+  roomReading.configure({ store: gameStore, explorer });
+  registerRqHook('roomReading', roomReading.debugApi(), {
+    flags: clientFlags,
+    isDev: import.meta.env.DEV,
+  });
   builder.addEventListener('levelBuilt', () => {
     placement.onLevelRebuilt();
     gateLever.onLevelRebuilt();
@@ -628,6 +647,7 @@ export async function launchXR(): Promise<World> {
     explorer.begin(fixtureLevel.plan, fixtureLevel.graph);
     platformRails.bindGraph(fixtureLevel.graph);
     slimes.bindGraph(fixtureLevel.graph);
+    roomReading.bindGraph(fixtureLevel.graph);
     if (flags.debug) {
       builder.setDebugGraph(fixtureLevel.graph);
     }
@@ -668,6 +688,7 @@ export async function launchXR(): Promise<World> {
         }
         platformRails.bindGraph(graph);
         slimes.bindGraph(graph);
+        roomReading.bindGraph(graph);
         exposeHooks(
           graph,
           gameStore.plan,
