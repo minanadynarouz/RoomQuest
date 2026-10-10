@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Server } from 'node:http';
 import type { INestApplication } from '@nestjs/common';
 import { SYNTHETIC_LIVING_ROOM } from '@roomquest/fixtures';
+import { validatePlan } from '@roomquest/level-core';
 import {
   LevelRequest,
   LevelResponse,
@@ -113,7 +114,10 @@ describe('API contract (B-02)', () => {
       expect(parsed.source).toBe('procedural');
       expect(parsed.promptVersion).toBe(PROMPT_VERSION);
       expect(parsed.repairs).toEqual([]);
-      expect(parsed.plan.title).toBe('The Living Room Quest');
+      expect(validatePlan(parsed.plan, validBody.graph).ok).toBe(true);
+      expect(
+        validBody.graph.nodes.some((node) => node.id === parsed.plan.start)
+      ).toBe(true);
       expect(parsed.latencyMs).toBeGreaterThanOrEqual(0);
 
       const expectedKey = createHash('sha256')
