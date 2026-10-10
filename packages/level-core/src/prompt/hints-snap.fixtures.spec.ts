@@ -20,6 +20,7 @@ import {
   graphHasCatalogHut,
 } from '../validate/graph-capacity';
 import { pieceFitsSurface } from '../validate/piece-fits';
+import { relaxedRulesFor } from '../validate/relaxed-rules';
 import { validatePlan } from '../validate/validate-plan';
 import { compactGraphForPrompt, promptGraphJsonBytes } from './compact-graph';
 
@@ -211,8 +212,13 @@ describe('snapPlacementsToSlots restore rate', () => {
     let degradedRestored = 0;
     const failures: string[] = [];
 
+    // Snap does not apply #60 graph-aware waivers. Full-quality (#64) plus
+    // rooms with no RelaxedRule (#65) count toward the 95% bar; waived IWER
+    // rooms stay in the degraded bucket.
     for (const room of ALL_ROOMS) {
-      const fullQuality = isFullQualityRoom(room.graph);
+      const fullQuality =
+        isFullQualityRoom(room.graph) &&
+        relaxedRulesFor(room.graph).length === 0;
       for (const tier of TIERS) {
         for (let i = 0; i < SEED_COUNT; i += 1) {
           const seed = `${room.graph.roomHash}-snap-${tier}-${String(i)}`;
