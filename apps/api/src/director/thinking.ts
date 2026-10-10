@@ -78,7 +78,7 @@ export function isUnsupportedThinkingLevelError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
   const status =
     typeof err === 'object' && err !== null && 'status' in err
-      ? (err as { status: unknown }).status
+      ? err.status
       : undefined;
   const is400 =
     status === 400 ||
