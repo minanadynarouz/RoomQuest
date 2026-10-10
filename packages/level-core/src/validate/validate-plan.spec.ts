@@ -9,6 +9,7 @@ describe('validatePlan', () => {
     const result = validatePlan(parsed, GRAPH);
     expect(result.ok).toBe(true);
     expect(result.issues).toEqual([]);
+    expect(result.relaxed).toEqual([]);
   });
 
   it('SCHEMA_INVALID: u coordinate out of 0..1', () => {

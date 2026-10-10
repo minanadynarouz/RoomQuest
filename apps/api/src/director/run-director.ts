@@ -10,6 +10,7 @@ import {
   type FallbackReason,
   type LevelPlan,
   type LevelRequest,
+  type RelaxedRule,
 } from '@roomquest/schema';
 import { makeCacheKey } from '../levels/cache-key';
 import { makeDailySeed } from '../levels/daily-seed';
@@ -72,6 +73,7 @@ type Attempt = AttemptOk | AttemptFail;
 export function bindPlanToGraph(request: LevelRequest): {
   plan: LevelPlan;
   repairs: string[];
+  relaxed: RelaxedRule[];
 } {
   const seed = makeDailySeed(request.graph.roomHash, request.date);
   const generated = generatePlan(request.graph, seed, request.tier, {
@@ -79,10 +81,14 @@ export function bindPlanToGraph(request: LevelRequest): {
   });
   const first = validatePlan(generated, request.graph);
   if (first.ok) {
-    return { plan: generated, repairs: [] };
+    return { plan: generated, repairs: [], relaxed: first.relaxed };
   }
   const repaired = repairPlan(generated, request.graph);
-  return { plan: repaired.plan, repairs: repaired.repairs };
+  return {
+    plan: repaired.plan,
+    repairs: repaired.repairs,
+    relaxed: repaired.relaxed,
+  };
 }
 
 export function proceduralOutcome(
@@ -107,6 +113,7 @@ export function proceduralOutcome(
       promptVersion,
       latencyMs: Math.max(0, now() - startedMs),
       repairs: bound.repairs,
+      relaxed: bound.relaxed,
       ...(fallbackReason === undefined ? {} : { fallbackReason }),
     }),
     telemetry,
@@ -138,6 +145,7 @@ function llmOutcome(
       promptVersion,
       latencyMs: Math.max(0, now() - startedMs),
       repairs,
+      relaxed: validatePlan(plan, request.graph).relaxed,
     }),
     telemetry,
   };

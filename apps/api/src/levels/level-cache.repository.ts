@@ -13,6 +13,7 @@ export interface LevelCacheRow {
   plan: unknown;
   source: string;
   model: string | null;
+  metadata: unknown;
 }
 
 export type LevelCacheWrite = LevelCacheRow;
@@ -55,6 +56,7 @@ export class LevelCacheRepository {
         plan: row.plan,
         source: row.source,
         model: row.model,
+        metadata: row.metadata,
       };
     } catch (error) {
       this.warnOnce(`database unreachable: ${messageOf(error)}`);
@@ -95,6 +97,7 @@ export class LevelCacheRepository {
   ): Promise<void> {
     try {
       const plan = row.plan as Prisma.InputJsonValue;
+      const metadata = row.metadata as Prisma.InputJsonValue;
       const data = {
         roomHash: row.roomHash,
         date: row.date,
@@ -103,6 +106,7 @@ export class LevelCacheRepository {
         plan,
         source: row.source,
         model: row.model,
+        metadata,
       };
       await client.levelCache.upsert({
         where: { key: row.key },

@@ -4,6 +4,7 @@ import {
   type Beat,
   type LevelPlan,
   type Placement,
+  type RelaxedRule,
   type SurfaceGraph,
   type SurfaceLabel,
   type SurfaceNode,
@@ -12,6 +13,7 @@ import {
 } from '@roomquest/schema';
 import { clampParTimeMs } from '../validate/clamp-par';
 import { pickHutSurface } from '../validate/graph-capacity';
+import { relaxedRulesFor } from '../validate/relaxed-rules';
 import {
   horizontalDistance,
   MAX_VIEW_ANGLE_DEG,
@@ -31,6 +33,15 @@ import { createRng, hashString, type Rng } from './prng';
 export interface GeneratePlanOptions {
   /** Skip these themes when the seed would pick one (API `recentThemes`). */
   recentThemes?: readonly Theme[];
+}
+
+/**
+ * Procedural plan plus the graph-aware waivers generate applied.
+ * `generatePlan` stays a {@link LevelPlan} so director/slot callers unwrap nothing.
+ */
+export interface GeneratePlanResult {
+  plan: LevelPlan;
+  relaxed: RelaxedRule[];
 }
 
 const LABEL_WORD: Record<SurfaceLabel, string> = {
@@ -67,6 +78,8 @@ const PLATFORM = KIT_CATALOG.moving_platform;
  * 0.8 m apart. Below that (IWER `meeting_room` is 3 stacked surfaces
  * 0.17 m apart; several IWER rooms have no in-cone table) this still
  * returns a schema-valid degraded plan — never an invalid one.
+ * Waivers applied for the graph are {@link generatePlanResult}.relaxed
+ * (same ids as {@link validatePlan} / {@link repairPlan}).
  */
 export function generatePlan(
   graph: SurfaceGraph,
@@ -74,10 +87,31 @@ export function generatePlan(
   tier: Tier,
   options?: GeneratePlanOptions
 ): LevelPlan {
+  return generatePlanResult(graph, seed, tier, options).plan;
+}
+
+/** {@link generatePlan} plus the waiver ids applied for `graph`. */
+export function generatePlanResult(
+  graph: SurfaceGraph,
+  seed: string,
+  tier: Tier,
+  options?: GeneratePlanOptions
+): GeneratePlanResult {
   try {
-    return generatePlanInner(graph, seed, tier, options);
+    return {
+      plan: generatePlanInner(graph, seed, tier, options),
+      relaxed: relaxedForGraph(graph),
+    };
   } catch {
-    return stubPlan(seed);
+    return { plan: stubPlan(seed), relaxed: relaxedForGraph(graph) };
+  }
+}
+
+function relaxedForGraph(graph: SurfaceGraph): RelaxedRule[] {
+  try {
+    return relaxedRulesFor(graph);
+  } catch {
+    return [];
   }
 }
 
