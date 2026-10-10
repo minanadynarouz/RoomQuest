@@ -3,9 +3,10 @@ import {
   SYNTHETIC_LIVING_ROOM,
   SYNTHETIC_LIVING_ROOM_PLAN,
 } from '@roomquest/fixtures';
+import { hintedSlotIds } from '@roomquest/level-core';
 import { LevelPlan, type LevelPlanLLM } from '@roomquest/schema';
 import { llmPlanToInput, tryParseLlmPlan } from './parse-plan';
-import { planToLlmJson } from './test-fakes';
+import { planToLlmJson, planToSlotLlmJson } from './test-fakes';
 
 const hydrate = {
   seed: SYNTHETIC_LIVING_ROOM_PLAN.seed,
@@ -51,6 +52,26 @@ describe('tryParseLlmPlan', () => {
     const result = tryParseLlmPlan({ title: 'nope' }, hydrate);
     expect(result.plan).toBeUndefined();
     expect(result.parseError).toBeDefined();
+  });
+
+  it('resolves slot-arm JSON onto surface+u+v', () => {
+    const slotIds = hintedSlotIds(SYNTHETIC_LIVING_ROOM, {
+      seed: hydrate.seed,
+    });
+    expect(slotIds.length).toBeGreaterThan(0);
+    const raw = JSON.parse(
+      planToSlotLlmJson(
+        SYNTHETIC_LIVING_ROOM_PLAN,
+        SYNTHETIC_LIVING_ROOM,
+        hydrate.seed
+      )
+    ) as unknown;
+    const result = tryParseLlmPlan(raw, { ...hydrate, placement: 'slot' });
+    expect(result.parseError).toBeUndefined();
+    expect(result.plan).toBeDefined();
+    expect(
+      result.plan?.placements.every((item) => item.surface.length > 0)
+    ).toBe(true);
   });
 });
 

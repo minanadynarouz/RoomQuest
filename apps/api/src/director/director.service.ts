@@ -1,7 +1,14 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { LevelResponse, type LevelRequest } from '@roomquest/schema';
+import { hintedSlotIds } from '@roomquest/level-core';
+import {
+  LevelPlanLLMGeminiSchema,
+  levelPlanSlotLLMGeminiSchema,
+  type LevelRequest,
+  type LevelResponse,
+} from '@roomquest/schema';
 import type { Env } from '../config/env';
+import { makeDailySeed } from '../levels/daily-seed';
 import {
   DIRECTOR_CHAT_FACTORY,
   DIRECTOR_RUNTIME,
@@ -9,7 +16,8 @@ import {
   type DirectorChatFactory,
   type DirectorRuntime,
 } from './models';
-import { PROMPT_VERSION } from './prompts';
+import { resolveDirectorPlacement } from './placement';
+import { promptVersionFor } from './prompts';
 import { LLM_QUOTA_BREAKER, type LlmQuotaBreaker } from './quota-breaker';
 import {
   proceduralOutcome,
@@ -43,7 +51,10 @@ export class DirectorService {
     const now = this.runtime?.now ?? (() => Date.now());
     const startedMs = now();
     const mode = this.config.get('DIRECTOR_MODE', { infer: true });
-    const promptVersion = PROMPT_VERSION;
+    const placement = resolveDirectorPlacement(
+      this.config.get('DIRECTOR_PLACEMENT', { infer: true })
+    );
+    const promptVersion = promptVersionFor(placement);
 
     if (mode === 'mock') {
       return proceduralOutcome(request, startedMs, [], promptVersion, now);
@@ -54,7 +65,15 @@ export class DirectorService {
       this.logger.warn(
         'DIRECTOR_MODE=live but GOOGLE_API_KEY is unset; falling back to a procedural plan'
       );
-      return proceduralOutcome(request, startedMs, [], promptVersion, now);
+      return proceduralOutcome(
+        request,
+        startedMs,
+        [],
+        promptVersion,
+        now,
+        'llm-error',
+        'draft'
+      );
     }
 
     if (this.quotaBreaker?.isOpen()) {
@@ -64,7 +83,8 @@ export class DirectorService {
         [],
         promptVersion,
         now,
-        'llm-quota'
+        'llm-quota',
+        'quota'
       );
     }
 
@@ -74,6 +94,13 @@ export class DirectorService {
         this.config.get('DIRECTOR_THINKING', { infer: true })
       )
     );
+    const seed = makeDailySeed(request.graph.roomHash, request.date);
+    const schema =
+      placement === 'slot'
+        ? levelPlanSlotLLMGeminiSchema(
+            hintedSlotIds(request.graph, { seed })
+          )
+        : LevelPlanLLMGeminiSchema;
 
     const primary = wrapChatModel(
       this.factory.createPrimary({
@@ -82,7 +109,8 @@ export class DirectorService {
         thinking,
       }),
       'google',
-      directorModel
+      directorModel,
+      schema
     );
 
     return runDirector(request, {
@@ -90,11 +118,14 @@ export class DirectorService {
       promptVersion,
       logger: this.logger,
       budgetMs: this.runtime?.budgetMs,
-      llmRepairMinRemainingMs: this.runtime?.llmRepairMinRemainingMs,
+      llmRepairMinRemainingMs:
+        this.runtime?.llmRepairMinRemainingMs ??
+        this.config.get('LLM_REPAIR_MIN_REMAINING_MS', { infer: true }),
       proceduralReserveMs: this.runtime?.proceduralReserveMs,
       now,
       startedMs,
       quotaBreaker: this.quotaBreaker,
+      placement,
     });
   }
 }

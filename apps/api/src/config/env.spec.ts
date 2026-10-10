@@ -96,6 +96,24 @@ describe('validateEnv', () => {
       validateEnv({ NODE_ENV: 'test', LLM_QUOTA_COOLDOWN_S: '0' })
     ).toThrow(/Invalid environment/);
   });
+
+  it('defaults DIRECTOR_PLACEMENT to uv and accepts slot', () => {
+    expect(validateEnv({ NODE_ENV: 'test' }).DIRECTOR_PLACEMENT).toBe('uv');
+    expect(
+      validateEnv({ NODE_ENV: 'test', DIRECTOR_PLACEMENT: 'SLOT' })
+        .DIRECTOR_PLACEMENT
+    ).toBe('slot');
+  });
+
+  it('defaults LLM_REPAIR_MIN_REMAINING_MS to 3500', () => {
+    expect(validateEnv({ NODE_ENV: 'test' }).LLM_REPAIR_MIN_REMAINING_MS).toBe(
+      3500
+    );
+    expect(
+      validateEnv({ NODE_ENV: 'test', LLM_REPAIR_MIN_REMAINING_MS: '4000' })
+        .LLM_REPAIR_MIN_REMAINING_MS
+    ).toBe(4000);
+  });
 });
 
 describe('leftover ANTHROPIC_API_KEY', () => {

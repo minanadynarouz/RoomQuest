@@ -15,6 +15,11 @@ import {
   graphCanSeparateHutAndShrine,
   graphHasCatalogHut,
   graphHasPlayableView,
+  MAX_VIEW_ANGLE_DEG,
+  MIN_PATH_DISTANCE_M,
+  RAMP_FLOOR_RUN_FACTOR,
+  BEAT_COMPLETABILITY,
+  relaxedRulesFor,
   promptGraphJsonBytes,
   snapPlacementsToSlots,
   resolveSlotIds,
@@ -86,6 +91,11 @@ describe('level-core', () => {
     expect(graphCanSeparateHutAndShrine).toBeTypeOf('function');
     expect(graphHasCatalogHut).toBeTypeOf('function');
     expect(graphHasPlayableView).toBeTypeOf('function');
+    expect(relaxedRulesFor).toBeTypeOf('function');
+    expect(MAX_VIEW_ANGLE_DEG).toBe(50);
+    expect(MIN_PATH_DISTANCE_M).toBe(0.8);
+    expect(RAMP_FLOOR_RUN_FACTOR).toBe(2);
+    expect(BEAT_COMPLETABILITY.leverReach).toBe('hand|ray');
   });
 
   it('exports resolveSlotIds, hintedSlotIds, and PlacementSlotId', () => {

@@ -445,9 +445,12 @@ function checkGateHasLever(
   }
 }
 
+/** Ramp free floor run must be at least this times |Δh| (PRD §4.2). */
+export const RAMP_FLOOR_RUN_FACTOR = 2;
+
 /**
- * Ramp: free floor run ≥ 2×|Δh| (PRD §4.2). Prefer a floor node's
- * smaller top-face dimension; otherwise use the pair gap.
+ * Ramp: free floor run ≥ {@link RAMP_FLOOR_RUN_FACTOR}×|Δh| (PRD §4.2).
+ * Prefer a floor node's smaller top-face dimension; otherwise use the pair gap.
  */
 function checkRampFloorRun(
   placement: Placement,
@@ -470,7 +473,7 @@ function checkRampFloorRun(
   const run = floor
     ? Math.max(gap, Math.min(floor.size[0], floor.size[1]))
     : gap;
-  const needed = 2 * dh;
+  const needed = RAMP_FLOOR_RUN_FACTOR * dh;
   if (run < needed) {
     issues.push(
       issue(

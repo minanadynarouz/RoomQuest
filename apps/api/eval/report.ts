@@ -1,4 +1,11 @@
-import { PlanSource, Tier } from '@roomquest/schema';
+import {
+  FallbackReason,
+  FallbackStage,
+  PlanSource,
+  RELAXED_RULE_ORDER,
+  RelaxedRule,
+  Tier,
+} from '@roomquest/schema';
 import { z } from 'zod';
 import { EVAL_BAR_P95_MS, EVAL_BAR_VALID_AFTER_REPAIR_PCT } from './constants';
 import { priceForModel } from './prices';
@@ -27,6 +34,7 @@ export const EvalRunRecordSchema = z.object({
   date: z.string(),
   seed: z.string(),
   tier: Tier,
+  placement: z.enum(['uv', 'slot']).default('uv'),
   source: PlanSource,
   model: z.string().optional(),
   validBeforeRepair: z.boolean(),
@@ -35,6 +43,9 @@ export const EvalRunRecordSchema = z.object({
   latencyMs: z.number(),
   ttftMs: z.number().nullable(),
   repairs: z.array(z.string()),
+  fallbackReason: FallbackReason.nullable().default(null),
+  fallbackStage: FallbackStage.nullable().default(null),
+  relaxed: z.array(RelaxedRule).default([]),
   estimatedCostUsd: z.number(),
   telemetry: z.array(LlmCallTelemetrySchema),
   distinctSurfaces: z.number().int(),
@@ -84,6 +95,12 @@ export const EvalAggregateSchema = z.object({
     llm: z.number().int(),
     none: z.number().int(),
   }),
+  fallbackReasonCounts: z.record(z.string(), z.number()),
+  relaxedPct: z.object({
+    minPath: z.number(),
+    hutTable: z.number(),
+    portalFov: z.number(),
+  }),
 });
 export type EvalAggregate = z.infer<typeof EvalAggregateSchema>;
 
@@ -103,6 +120,7 @@ export const EvalReportSchema = z.object({
   roomIds: z.array(z.string()),
   seedDates: z.array(z.string()),
   tiers: z.array(Tier),
+  placements: z.array(z.enum(['uv', 'slot'])).default(['uv']),
   bar: EvalBarSchema,
   aggregate: EvalAggregateSchema,
   runs: z.array(EvalRunRecordSchema),
@@ -113,14 +131,17 @@ export function matrixLabel(report: {
   roomIds: readonly string[];
   seedDates: readonly string[];
   tiers: readonly string[];
+  placements?: readonly string[];
   aggregate: { runCount: number };
 }): string {
   const rooms = report.roomIds.length;
   const tiers = report.tiers.length;
   const seeds = report.seedDates.length;
-  const cells = rooms * tiers * seeds;
+  const arms = report.placements?.length ?? 1;
+  const cells = rooms * tiers * seeds * arms;
   const runs = report.aggregate.runCount;
-  const shape = `${String(rooms)} rooms × ${String(tiers)} tiers × ${String(seeds)} seeds`;
+  const armBit = arms > 1 ? ` × ${String(arms)} placements` : '';
+  const shape = `${String(rooms)} rooms × ${String(tiers)} tiers × ${String(seeds)} seeds${armBit}`;
   if (runs === cells) {
     return `${shape} = ${String(runs)} runs`;
   }
@@ -225,6 +246,12 @@ export function aggregateRuns(runs: readonly EvalRunRecord[]): EvalAggregate {
 
   const roomSets = unionSetsByRoom(runs);
   const repairedByCounts = { local: 0, llm: 0, none: 0 };
+  const fallbackReasonCounts: Record<string, number> = {};
+  const relaxedCounts: Record<(typeof RELAXED_RULE_ORDER)[number], number> = {
+    minPath: 0,
+    hutTable: 0,
+    portalFov: 0,
+  };
   for (const run of runs) {
     if (run.repairedBy === 'local') {
       repairedByCounts.local += 1;
@@ -232,6 +259,13 @@ export function aggregateRuns(runs: readonly EvalRunRecord[]): EvalAggregate {
       repairedByCounts.llm += 1;
     } else {
       repairedByCounts.none += 1;
+    }
+    if (run.fallbackReason !== null) {
+      const key = run.fallbackReason;
+      fallbackReasonCounts[key] = (fallbackReasonCounts[key] ?? 0) + 1;
+    }
+    for (const rule of run.relaxed) {
+      relaxedCounts[rule] += 1;
     }
   }
 
@@ -269,6 +303,12 @@ export function aggregateRuns(runs: readonly EvalRunRecord[]): EvalAggregate {
       afterLlmRepair: countIssueCodes(runs, 'issuesAfterLlmRepair'),
     },
     repairedByCounts,
+    fallbackReasonCounts,
+    relaxedPct: {
+      minPath: roundPct(relaxedCounts.minPath, total),
+      hutTable: roundPct(relaxedCounts.hutTable, total),
+      portalFov: roundPct(relaxedCounts.portalFov, total),
+    },
   };
 }
 
@@ -332,7 +372,9 @@ export function renderMarkdown(report: EvalReport): string {
     .map((run) => {
       const model = run.model ?? '—';
       const ttft = run.ttftMs === null ? '—' : run.ttftMs.toFixed(1);
-      return `| ${run.roomId} | ${run.date} | ${run.tier} | ${run.source} | ${model} | ${run.validBeforeRepair ? 'yes' : 'no'} | ${run.validAfterRepair ? 'yes' : 'no'} | ${run.fallbackToProcedural ? 'yes' : 'no'} | ${run.latencyMs.toFixed(1)} | ${ttft} | ${String(run.distinctSurfaces)} | ${String(run.distinctPieceTypes)} | ${formatUsd(run.estimatedCostUsd)} |`;
+      const reason = run.fallbackReason ?? '—';
+      const stage = run.fallbackStage ?? '—';
+      return `| ${run.roomId} | ${run.date} | ${run.tier} | ${run.placement} | ${run.source} | ${model} | ${run.validBeforeRepair ? 'yes' : 'no'} | ${run.validAfterRepair ? 'yes' : 'no'} | ${run.fallbackToProcedural ? 'yes' : 'no'} | ${reason} | ${stage} | ${run.latencyMs.toFixed(1)} | ${ttft} | ${String(run.distinctSurfaces)} | ${String(run.distinctPieceTypes)} | ${formatUsd(run.estimatedCostUsd)} |`;
     })
     .join('\n');
 
@@ -353,6 +395,7 @@ ${modeLine}
 | Rooms | ${report.roomIds.join(', ')} |
 | Seeds (dates) | ${report.seedDates.join(', ')} |
 | Tiers | ${report.tiers.join(', ')} |
+| Placements | ${report.placements.join(', ')} |
 | Matrix | ${matrixLabel(report)} |
 
 ## Bar
@@ -396,6 +439,27 @@ ${modelRows.length > 0 ? modelRows : '| — | 0 |'}
 | llm | ${String(report.aggregate.repairedByCounts.llm)} |
 | none | ${String(report.aggregate.repairedByCounts.none)} |
 
+### Procedural fallback reasons
+
+| reason | runs |
+| --- | --- |
+${
+  Object.entries(report.aggregate.fallbackReasonCounts)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([reason, count]) => `| ${reason} | ${String(count)} |`)
+    .join('\n') || '| — | 0 |'
+}
+
+### Relaxed-rule % (graph-capacity waivers)
+
+Percent of runs whose room applied each #60 / #65 waiver.
+
+| rule | % of runs |
+| --- | --- |
+| minPath | ${formatPct(report.aggregate.relaxedPct.minPath)} |
+| hutTable | ${formatPct(report.aggregate.relaxedPct.hutTable)} |
+| portalFov | ${formatPct(report.aggregate.relaxedPct.portalFov)} |
+
 ### Validation issue codes
 
 Counts of \`validatePlan\` \`code\` (+ path in JSON) at first try, after local repair, and after LLM repair.
@@ -406,8 +470,8 @@ ${issueCodeRows(report.aggregate)}
 
 ## Per run
 
-| room | date | tier | source | model | valid before | valid after | procedural | latency ms | TTFT ms | surfaces | pieces | cost |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| room | date | tier | placement | source | model | valid before | valid after | procedural | reason | stage | latency ms | TTFT ms | surfaces | pieces | cost |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 ${runRows}
 
 Live reports also store each run's raw first-try LLM plan (\`firstTryPlan\`) and, when structured parse failed, \`firstTryRawText\` in the JSON next to the issue traces.
@@ -434,6 +498,7 @@ export function printSummary(report: EvalReport): void {
     `p50: ${report.aggregate.p50LatencyMs.toFixed(1)} ms  p95: ${report.aggregate.p95LatencyMs.toFixed(1)} ms`,
     `p50 TTFT: ${report.aggregate.p50TtftMs.toFixed(1)} ms  p95 TTFT: ${report.aggregate.p95TtftMs.toFixed(1)} ms`,
     `thoughtsTokenCount: ${String(report.aggregate.thoughtsTokenCount)}`,
+    `relaxed-rule %: minPath=${report.aggregate.relaxedPct.minPath.toFixed(1)} hutTable=${report.aggregate.relaxedPct.hutTable.toFixed(1)} portalFov=${report.aggregate.relaxedPct.portalFov.toFixed(1)}`,
     `mean distinct surfaces: ${report.aggregate.meanDistinctSurfaces.toFixed(1)}  pieces: ${report.aggregate.meanDistinctPieceTypes.toFixed(1)}`,
     `mean pairwise Jaccard piece-types: ${report.aggregate.meanPairwisePieceTypeJaccard.toFixed(3)}  surface-labels: ${report.aggregate.meanPairwiseSurfaceLabelJaccard.toFixed(3)}`,
     `tokens: ${String(report.aggregate.inputTokens)} in / ${String(report.aggregate.thoughtsTokenCount)} thoughts / ${String(report.aggregate.outputTokens)} out`,

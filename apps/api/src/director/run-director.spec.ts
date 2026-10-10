@@ -229,9 +229,11 @@ describe('runDirector', () => {
       expect(outcome.response.latencyMs).toBe(DIRECTOR_LLM_WINDOW_MS);
       expect(Date.now()).toBe(DIRECTOR_LLM_WINDOW_MS);
       expect(Date.now()).toBeLessThan(DIRECTOR_BUDGET_MS);
+      expect(outcome.response.fallbackReason).toBe('llm-timeout');
+      expect(outcome.response.fallbackStage).toBe('draft');
     });
 
-    it('skips the LLM repair call when fewer than 2 s of LLM window remain', async () => {
+    it('skips the LLM repair call when remaining LLM time is below the p95 gate', async () => {
       let t = 0;
       const fake = new AfterGenerateFakeListChatModel({
         responses: [startEqualsGoalJson(), validJson],
@@ -248,9 +250,32 @@ describe('runDirector', () => {
         logger: silentLogger,
       });
       expect(outcome.response.source).toBe('procedural');
+      expect(outcome.response.fallbackReason).toBe('llm-invalid');
+      expect(outcome.response.fallbackStage).toBe('local');
       expect(outcome.telemetry).toHaveLength(1);
       expect(outcome.telemetry[0]?.outcome).toBe('invalid');
       expect(validatePlan(outcome.response.plan, request.graph).ok).toBe(true);
+    });
+
+    it('attempts LLM repair when remaining LLM time meets the p95 gate', async () => {
+      let t = 0;
+      const fake = new AfterGenerateFakeListChatModel({
+        responses: [startEqualsGoalJson(), validJson],
+      });
+      fake.onAfterGenerate = () => {
+        t = DIRECTOR_LLM_WINDOW_MS - LLM_REPAIR_MIN_REMAINING_MS;
+      };
+      const outcome = await runDirector(request, {
+        primary: structuredFromFake(fake),
+        budgetMs: DIRECTOR_BUDGET_MS,
+        proceduralReserveMs: PROCEDURAL_RESERVE_MS,
+        llmRepairMinRemainingMs: LLM_REPAIR_MIN_REMAINING_MS,
+        now: () => t,
+        logger: silentLogger,
+      });
+      expect(outcome.response.source).toBe('llm_repaired');
+      expect(outcome.telemetry).toHaveLength(2);
+      expect(outcome.repairedBy).toBe('llm');
     });
 
     it('returns procedural within the 7 s budget when first and repair calls are both slow', async () => {
@@ -294,6 +319,8 @@ describe('runDirector', () => {
       expect(outcome.telemetry).toHaveLength(1);
       expect(outcome.telemetry[0]?.provider).toBe('google');
       expect(outcome.telemetry[0]?.outcome).toBe('error');
+      expect(outcome.response.fallbackReason).toBe('llm-error');
+      expect(outcome.response.fallbackStage).toBe('draft');
       expect(validatePlan(outcome.response.plan, request.graph).ok).toBe(true);
     });
 
@@ -336,6 +363,8 @@ describe('runDirector', () => {
     expect(outcome.firstTryRawText).toBe('{"nope":true}');
     expect(outcome.validation.firstTry[0]?.code).toBe('SCHEMA_INVALID');
     expect(outcome.repairedBy).toBeNull();
+    expect(outcome.response.fallbackReason).toBe('llm-parse');
+    expect(outcome.response.fallbackStage).toBe('local');
   });
 
   it('falls back to procedural after two invalid LLM plans', async () => {
@@ -351,5 +380,7 @@ describe('runDirector', () => {
     expect(
       outcome.telemetry.filter((row) => row.outcome === 'invalid').length
     ).toBeGreaterThanOrEqual(2);
+    expect(outcome.response.fallbackReason).toBe('llm-invalid');
+    expect(outcome.response.fallbackStage).toBe('llm-repair');
   });
 });

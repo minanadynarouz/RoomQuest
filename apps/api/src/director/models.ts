@@ -100,14 +100,15 @@ export const defaultDirectorChatFactory: DirectorChatFactory = {
 export function wrapChatModel(
   model: BaseChatModel,
   provider: LlmProvider,
-  modelId: string
+  modelId: string,
+  schema: Record<string, unknown> = LevelPlanLLMGeminiSchema
 ): StructuredChat {
   return {
     provider,
     model: modelId,
     async invokeStructured(messages, signal) {
       stripUnsupportedThinking(model);
-      const structured = model.withStructuredOutput(LevelPlanLLMGeminiSchema, {
+      const structured = model.withStructuredOutput(schema, {
         includeRaw: true,
         method: 'jsonSchema',
         name: 'LevelPlanLLM',

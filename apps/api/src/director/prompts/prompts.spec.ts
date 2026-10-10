@@ -14,7 +14,7 @@ import { SYNTHETIC_LIVING_ROOM } from '@roomquest/fixtures';
 
 describe('director prompts', () => {
   it('exports a prompt version used in the cache key', () => {
-    expect(PROMPT_VERSION).toBe('v1.1');
+    expect(PROMPT_VERSION).toBe('v1.2');
   });
 
   it('keeps a byte-stable system prefix (provider prompt caching)', () => {
@@ -51,10 +51,12 @@ describe('director prompts', () => {
       'seed',
       'tier',
       'recentThemes',
+      'placement',
       'variation',
       'waivers',
       'graph',
     ]);
+    expect(parsed.placement).toBe('uv');
     expect(Array.isArray(parsed.waivers)).toBe(true);
     const variation = parsed.variation as {
       themeWord: string;
@@ -102,6 +104,12 @@ describe('director prompts', () => {
     expect(SYSTEM_PREFIX).not.toContain('preferredStartSurface');
     expect(SYSTEM_PREFIX).not.toContain('themeWord');
     expect(SYSTEM_PREFIX).not.toContain('waivers');
+    expect(SYSTEM_PREFIX).toContain(`max reach ${String(KIT_CATALOG.lever.maxReachDistance)}m`);
+    expect(SYSTEM_PREFIX).toContain(
+      `max step height ${String(KIT_CATALOG.plank_bridge.maxDeltaHeight)}m`
+    );
+    expect(SYSTEM_PREFIX).toContain('minimum floor run');
+    expect(SYSTEM_PREFIX).toContain('Beat completability');
   });
 
   it('graphForPrompt is the toggleable compactGraphForPrompt wrapper', () => {

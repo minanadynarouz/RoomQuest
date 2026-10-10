@@ -80,6 +80,8 @@ describe('DirectorService', () => {
     const response = await director.plan(request);
     const parsed = LevelResponse.parse(response);
     expect(parsed.source).toBe('procedural');
+    expect(parsed.fallbackReason).toBe('llm-error');
+    expect(parsed.fallbackStage).toBe('draft');
     expect(createPrimary).not.toHaveBeenCalled();
     expect(parsed.model).toBeUndefined();
   });
@@ -112,6 +114,7 @@ describe('DirectorService', () => {
     const parsed = LevelResponse.parse(response);
     expect(parsed.source).toBe('procedural');
     expect(parsed.fallbackReason).toBe('llm-quota');
+    expect(parsed.fallbackStage).toBe('quota');
     expect(createPrimary).not.toHaveBeenCalled();
   });
 });

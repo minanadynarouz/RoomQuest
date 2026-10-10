@@ -1,4 +1,5 @@
 import type { Tier } from '@roomquest/schema';
+import type { DirectorPlacement } from '../src/director/placement';
 import type { DirectorLogger } from '../src/director/telemetry';
 
 export interface EvalHarnessOptions {
@@ -15,4 +16,5 @@ export interface EvalHarnessOptions {
   directorModel?: string;
   thinking?: string;
   runCount?: number;
+  placements?: readonly DirectorPlacement[];
 }

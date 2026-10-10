@@ -10,6 +10,22 @@ import {
 import { issue, type Issue } from './types';
 
 /**
+ * Beat completability (design doc §6). Imported by the cached director
+ * prefix so the numbers/rules stay in lockstep with {@link checkBeatsInOrder}.
+ */
+export const BEAT_COMPLETABILITY = {
+  inOrder: true,
+  leverReach: 'hand|ray',
+  gateNeedsReachableLever: true,
+  explorerMustReach: [
+    'crystal_shrine',
+    'gem',
+    'slime',
+    'village_hut',
+  ] as const,
+} as const;
+
+/**
  * BFS solvability (design doc §6):
  * - goal reachable from start over adjacent + ramps + portals +
  *   player-built bridges (assumed built)

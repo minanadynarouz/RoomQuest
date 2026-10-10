@@ -1,4 +1,10 @@
 import type { Tier } from '@roomquest/schema';
+import {
+  DIRECTOR_PLACEMENTS,
+  isDirectorPlacement,
+  resolveDirectorPlacement,
+  type DirectorPlacement,
+} from '../src/director/placement';
 import { EVAL_DEFAULT_RUNS, EVAL_TIERS } from './constants';
 import type { EvalHarnessOptions } from './options';
 
@@ -33,6 +39,25 @@ function isTier(value: string): value is Tier {
   return false;
 }
 
+function parsePlacements(
+  raw: string | undefined
+): readonly DirectorPlacement[] | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (raw === 'all') {
+    return [...DIRECTOR_PLACEMENTS];
+  }
+  const placements: DirectorPlacement[] = [];
+  for (const part of raw.split(',').map((item) => item.trim())) {
+    if (!isDirectorPlacement(part)) {
+      throw new Error(`Unknown placement "${part}" (use uv, slot, or all)`);
+    }
+    placements.push(part);
+  }
+  return placements;
+}
+
 function parseTiers(raw: string | undefined): readonly Tier[] | undefined {
   if (raw === undefined) {
     return undefined;
@@ -64,5 +89,10 @@ export function parseEvalArgs(argv: string[]): EvalHarnessOptions {
     outDir: flagValue(args, '--out-dir'),
     thinking: flagValue(args, '--thinking'),
     runCount: runs ?? EVAL_DEFAULT_RUNS,
+    placements:
+      parsePlacements(flagValue(args, '--placement')) ??
+      parsePlacements(flagValue(args, '--placements')) ?? [
+        resolveDirectorPlacement(process.env.DIRECTOR_PLACEMENT),
+      ],
   };
 }

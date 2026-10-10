@@ -3,23 +3,33 @@ import {
   clampParTimeMs,
   createRng,
   pickTitle,
+  resolveSlotIds,
+  type LevelPlanWithSlots,
+  type PlacementInput,
 } from '@roomquest/level-core';
 import {
   LevelPlan,
   LevelPlanLLM,
+  LevelPlanSlotLLM,
   PLAYER_BUILT_PIECE_IDS,
   type Beat,
   type Placement,
   type PlacementLLM,
+  type PlacementSlotLLM,
   type SurfaceGraph,
   type Theme,
   type Tier,
 } from '@roomquest/schema';
+import {
+  DEFAULT_DIRECTOR_PLACEMENT,
+  type DirectorPlacement,
+} from './placement';
 
 export interface HydrateContext {
   seed: string;
   graph: SurfaceGraph;
   tier: Tier;
+  placement?: DirectorPlacement;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -182,10 +192,113 @@ export interface ParsedLlmPlan {
   parseError?: string;
 }
 
+function slotPlacementToInput(placement: PlacementSlotLLM): PlacementInput {
+  const input: PlacementInput = {
+    id: placement.i,
+    piece: placement.pc,
+    slot: placement.slot,
+    playerBuilt: playerBuiltFor(placement.pc),
+    links: placement.lk.slice(0, 2),
+  };
+  if (placement.t !== null) {
+    input.to = placement.t;
+  }
+  return input;
+}
+
+function looksLikeSlotCandidate(raw: unknown): boolean {
+  if (!isRecord(raw) || !Array.isArray(raw.pl) || raw.pl.length === 0) {
+    return false;
+  }
+  const first = raw.pl[0];
+  return isRecord(first) && typeof first.slot === 'string';
+}
+
+function slotPlanToInput(
+  llm: LevelPlanSlotLLM,
+  ctx: HydrateContext
+): { input: Record<string, unknown>; resolveError?: string } {
+  const rng = createRng(`${ctx.seed}|${ctx.tier}|llm`);
+  const title = pickTitle(llm.th, rng);
+  const draftPlacements = llm.pl.map(slotPlacementToInput);
+  const draft: LevelPlanWithSlots = {
+    seed: ctx.seed,
+    theme: llm.th,
+    title,
+    start: ctx.graph.nodes[0]?.id ?? 's1',
+    goal: ctx.graph.nodes[1]?.id ?? ctx.graph.nodes[0]?.id ?? 's2',
+    placements: draftPlacements,
+    beats: [
+      { goal: 'Bridge the gap', uses: [] },
+      { goal: 'Reach the crystal shrine', uses: [] },
+    ],
+    dialogue: [],
+    parTimeMs: clampParTimeMs(90_000 + draftPlacements.length * 20_000),
+  };
+  const resolved = resolveSlotIds(draft, ctx.graph, { seed: ctx.seed });
+  if (resolved.issues.length > 0) {
+    return {
+      input: {},
+      resolveError: resolved.issues
+        .map((issue) => `${issue.code}: ${issue.message}`)
+        .join('; '),
+    };
+  }
+  const hut = resolved.plan.placements.find(
+    (item) => item.piece === 'village_hut'
+  );
+  const shrine = resolved.plan.placements.find(
+    (item) => item.piece === 'crystal_shrine'
+  );
+  const start = hut?.surface ?? draft.start;
+  const goal = shrine?.surface ?? draft.goal;
+  return {
+    input: {
+      ...resolved.plan,
+      start,
+      goal,
+      beats: beatsFromPlacements(resolved.plan.placements),
+      dialogue: buildDialogue(llm.th, rng, {
+        startLabel: labelOf(ctx.graph, start),
+        goalLabel: labelOf(ctx.graph, goal),
+      }),
+      parTimeMs: clampParTimeMs(
+        90_000 + resolved.plan.placements.length * 20_000
+      ),
+    },
+  };
+}
+
 export function tryParseLlmPlan(
   raw: unknown,
   ctx: HydrateContext
 ): ParsedLlmPlan {
+  const placement = ctx.placement ?? DEFAULT_DIRECTOR_PLACEMENT;
+  const useSlot = placement === 'slot' || looksLikeSlotCandidate(raw);
+  if (useSlot) {
+    const slotParsed = LevelPlanSlotLLM.safeParse(raw);
+    if (!slotParsed.success) {
+      return {
+        parseError: slotParsed.error.issues
+          .map((issue) => issue.message)
+          .join('; '),
+      };
+    }
+    const slotted = slotPlanToInput(slotParsed.data, ctx);
+    if (slotted.resolveError !== undefined) {
+      return { parseError: `SCHEMA_RESOLVE: ${slotted.resolveError}` };
+    }
+    const planParsed = LevelPlan.safeParse(slotted.input);
+    if (!planParsed.success) {
+      return {
+        parseError: planParsed.error.issues
+          .map((issue) => issue.message)
+          .join('; '),
+      };
+    }
+    return { plan: planParsed.data };
+  }
+
   const llmParsed = LevelPlanLLM.safeParse(raw);
   if (!llmParsed.success) {
     return {
@@ -194,9 +307,7 @@ export function tryParseLlmPlan(
         .join('; '),
     };
   }
-  const planParsed = LevelPlan.safeParse(
-    llmPlanToInput(llmParsed.data, ctx)
-  );
+  const planParsed = LevelPlan.safeParse(llmPlanToInput(llmParsed.data, ctx));
   if (!planParsed.success) {
     return {
       llm: llmParsed.data,

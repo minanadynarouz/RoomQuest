@@ -55,8 +55,28 @@ export const envSchema = z.object({
       return value.trim().toLowerCase();
     })
     .pipe(z.enum(['minimal', 'low', 'default'])),
+  /**
+   * LLM placement encoding. `uv` is today's compact `s`/`u`/`v`. `slot`
+   * asks Gemini for hinted slot ids; the server resolves them to surface+u+v
+   * before validate / send so the client never sees the seed.
+   */
+  DIRECTOR_PLACEMENT: z
+    .string()
+    .optional()
+    .transform((value) => {
+      if (value === undefined || value.trim().length === 0) {
+        return 'uv';
+      }
+      return value.trim().toLowerCase();
+    })
+    .pipe(z.enum(['uv', 'slot'])),
   /** Seconds to skip Gemini after 429 / RESOURCE_EXHAUSTED when the error has no Retry-After. */
   LLM_QUOTA_COOLDOWN_S: z.coerce.number().int().min(1).default(600),
+  /**
+   * Skip the LLM repair call unless at least this many ms remain in the
+   * LLM window (p95 of a first-try call). Default 3500.
+   */
+  LLM_REPAIR_MIN_REMAINING_MS: z.coerce.number().int().min(1).default(3500),
 });
 
 export type Env = z.infer<typeof envSchema>;

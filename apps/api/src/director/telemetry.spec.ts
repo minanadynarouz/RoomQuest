@@ -63,6 +63,25 @@ describe('tokensFromRaw', () => {
     expect(tokens.thoughtsTokenCount).toBe(9);
   });
 
+  it('reads Gemini SDK generateContent usageMetadata when LangChain drops thoughts', () => {
+    const tokens = tokensFromRaw({
+      usage_metadata: {
+        input_tokens: 10,
+        output_tokens: 20,
+      },
+      response: {
+        usageMetadata: {
+          promptTokenCount: 10,
+          candidatesTokenCount: 20,
+          thoughtsTokenCount: 7,
+        },
+      },
+    });
+    expect(tokens.inputTokens).toBe(10);
+    expect(tokens.outputTokens).toBe(20);
+    expect(tokens.thoughtsTokenCount).toBe(7);
+  });
+
   it('merges LangChain usage_metadata with Gemini usageMetadata.thoughtsTokenCount', () => {
     const tokens = tokensFromRaw({
       usage_metadata: {

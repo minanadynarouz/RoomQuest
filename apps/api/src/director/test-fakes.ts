@@ -2,7 +2,8 @@ import { FakeListChatModel } from '@langchain/core/utils/testing';
 import { AIMessage } from '@langchain/core/messages';
 import type { BaseLanguageModelInput } from '@langchain/core/language_models/base';
 import { RunnableLambda } from '@langchain/core/runnables';
-import type { LevelPlan } from '@roomquest/schema';
+import { listHintedSlots } from '@roomquest/level-core';
+import type { LevelPlan, SurfaceGraph } from '@roomquest/schema';
 import { abortableDelay } from './errors';
 import { wrapJsonChatModel } from './models';
 import type { StructuredChat } from './structured-chat';
@@ -26,6 +27,34 @@ export function planToLlmJson(plan: LevelPlan): string {
       v: placement.v,
       lk: placement.links,
     })),
+  });
+}
+
+/** Compact slot-arm JSON for mock eval (`slot` instead of `s`/`u`/`v`). */
+export function planToSlotLlmJson(
+  plan: LevelPlan,
+  graph: SurfaceGraph,
+  seed: string
+): string {
+  const slots = listHintedSlots(graph, { seed });
+  return JSON.stringify({
+    th: plan.theme,
+    pl: plan.placements.map((placement) => {
+      const match =
+        slots.find(
+          (slot) =>
+            slot.surfaceId === placement.surface &&
+            Math.abs(slot.u - placement.u) < 0.05 &&
+            Math.abs(slot.v - placement.v) < 0.05
+        ) ?? slots.find((slot) => slot.surfaceId === placement.surface);
+      return {
+        i: placement.id,
+        pc: placement.piece,
+        slot: match?.id ?? slots[0]?.id ?? 's1',
+        t: placement.to ?? null,
+        lk: placement.links,
+      };
+    }),
   });
 }
 

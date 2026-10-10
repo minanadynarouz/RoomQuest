@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   FallbackReason,
+  FallbackStage,
+  orderRelaxedRules,
+  RelaxedRule,
   LevelRequest,
   LevelResponse,
   ResultRequest,
@@ -194,14 +197,16 @@ describe('API schemas', () => {
       expect(result.repairs).toHaveLength(2);
     });
 
-    it('accepts optional fallbackReason llm-quota', () => {
+    it('accepts optional fallbackReason and fallbackStage', () => {
       const withReason = {
         ...validResponse,
         source: 'procedural' as const,
         fallbackReason: 'llm-quota' as const,
+        fallbackStage: 'quota' as const,
       };
       const result = LevelResponse.parse(withReason);
       expect(result.fallbackReason).toBe('llm-quota');
+      expect(result.fallbackStage).toBe('quota');
       expect(LevelResponse.parse(validResponse).fallbackReason).toBeUndefined();
       expect(() =>
         LevelResponse.parse({ ...validResponse, fallbackReason: 'timeout' })
@@ -210,9 +215,26 @@ describe('API schemas', () => {
   });
 
   describe('FallbackReason', () => {
-    it('accepts llm-quota only', () => {
+    it('accepts the director fallback reasons', () => {
       expect(FallbackReason.parse('llm-quota')).toBe('llm-quota');
+      expect(FallbackReason.parse('llm-invalid')).toBe('llm-invalid');
+      expect(FallbackReason.parse('llm-timeout')).toBe('llm-timeout');
+      expect(FallbackReason.parse('llm-error')).toBe('llm-error');
+      expect(FallbackReason.parse('llm-parse')).toBe('llm-parse');
+      expect(FallbackReason.parse('schema-resolve')).toBe('schema-resolve');
       expect(() => FallbackReason.parse('timeout')).toThrow();
+    });
+  });
+
+  describe('FallbackStage and RelaxedRule', () => {
+    it('accepts director stages and orders waiver ids', () => {
+      expect(FallbackStage.parse('llm-repair')).toBe('llm-repair');
+      expect(RelaxedRule.parse('hutTable')).toBe('hutTable');
+      expect(orderRelaxedRules(['portalFov', 'minPath', 'hutTable'])).toEqual([
+        'minPath',
+        'hutTable',
+        'portalFov',
+      ]);
     });
   });
 

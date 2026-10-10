@@ -1,28 +1,15 @@
 import {
-  PieceId,
+  PlacementSlotId,
   type LevelPlan,
   type PieceId as PieceKind,
   type Placement,
   type SurfaceGraph,
 } from '@roomquest/schema';
-import { z } from 'zod';
 import { surfaceHints } from '../placement/slots';
 import { orderSurfacesByArea } from '../room-reading/order';
 
-/**
- * Gemini-safe placement fragment: `slot` instead of surface+u+v.
- * Plain `z.string()` — no regex — so the Backend Developer can lift it
- * into `@roomquest/schema` behind a flag. Does not change {@link LevelPlan}.
- */
-export const PlacementSlotId = z.object({
-  id: z.string(),
-  piece: PieceId,
-  slot: z.string(),
-  to: z.string().nullable(),
-  playerBuilt: z.boolean(),
-  links: z.array(z.string()),
-});
-export type PlacementSlotId = z.infer<typeof PlacementSlotId>;
+export { PlacementSlotId };
+export type { PlacementSlotId };
 
 /** Prompt-facing slot: graph-unique id plus centimetre-rounded u/v. */
 export interface CompactHintedSlot {

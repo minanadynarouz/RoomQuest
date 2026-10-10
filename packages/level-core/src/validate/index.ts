@@ -10,10 +10,19 @@ export { clampParTimeMs } from './clamp-par';
 export { validatePlan } from './validate-plan';
 export { ISSUE_CODES } from './types';
 export type { Issue, IssueCode, ValidationResult } from './types';
-export { bfsPath, bfsReachable, explorerAdjacency } from './graph-utils';
+export {
+  bfsPath,
+  bfsReachable,
+  explorerAdjacency,
+  MAX_VIEW_ANGLE_DEG,
+  MIN_PATH_DISTANCE_M,
+} from './graph-utils';
 export { pairFitsPiece, pieceFitsSurface } from './piece-fits';
 export {
   graphCanSeparateHutAndShrine,
   graphHasCatalogHut,
   graphHasPlayableView,
 } from './graph-capacity';
+export { RAMP_FLOOR_RUN_FACTOR } from './constraints';
+export { BEAT_COMPLETABILITY } from './solvability';
+export { relaxedRulesFor } from './relaxed-rules';

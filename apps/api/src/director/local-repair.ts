@@ -5,6 +5,7 @@ import {
   type RepairResult,
 } from '@roomquest/level-core';
 import type { LevelPlan, SurfaceGraph } from '@roomquest/schema';
+import { tryRepairRoute } from './repair-route';
 
 /**
  * Apply `snapPlacementsToSlots` from `@roomquest/level-core` (#61).
@@ -18,24 +19,30 @@ export function trySnapPlacementsToSlots(
 }
 
 /**
- * Local deterministic repair: `repairPlan`, then `snapPlacementsToSlots`,
- * then `validatePlan`.
+ * Local deterministic repair: snap, then `repairRoute` (when present),
+ * then `repairPlan`. Route `links` hints are reserved for repairRoute.
  */
 export function localRepairPlan(
   plan: LevelPlan,
   graph: SurfaceGraph
 ): RepairResult {
-  const repaired = repairPlan(plan, graph);
-  const snapped = snapPlacementsToSlots(repaired.plan, graph);
-  if (snapped.changes.length === 0) {
+  const snapped = snapPlacementsToSlots(plan, graph);
+  const routed = tryRepairRoute(snapped.plan, graph);
+  const repaired = repairPlan(routed.plan, graph);
+  const extra: string[] = [];
+  if (snapped.changes.length > 0) {
+    extra.push('snap-to-slots');
+  }
+  extra.push(...routed.repairs);
+  const repairs = [...extra, ...repaired.repairs].filter(
+    (item, index, all) => all.indexOf(item) === index
+  );
+  if (extra.length === 0) {
     return repaired;
   }
-  const repairs = repaired.repairs.includes('snap-to-slots')
-    ? repaired.repairs
-    : [...repaired.repairs, 'snap-to-slots'];
   return {
-    plan: snapped.plan,
+    plan: repaired.plan,
     repairs,
-    result: validatePlan(snapped.plan, graph),
+    result: validatePlan(repaired.plan, graph),
   };
 }

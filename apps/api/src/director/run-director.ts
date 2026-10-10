@@ -8,6 +8,7 @@ import {
 import {
   LevelResponse,
   type FallbackReason,
+  type FallbackStage,
   type LevelPlan,
   type LevelRequest,
 } from '@roomquest/schema';
@@ -25,9 +26,13 @@ import {
 import { localRepairPlan } from './local-repair';
 import { expandSlimCandidate, tryParseLlmPlan } from './parse-plan';
 import {
+  DEFAULT_DIRECTOR_PLACEMENT,
+  type DirectorPlacement,
+} from './placement';
+import {
   buildRepairMessage,
   buildUserMessage,
-  PROMPT_VERSION,
+  promptVersionFor,
   SYSTEM_PREFIX,
 } from './prompts';
 import { isQuotaError, type LlmQuotaBreaker } from './quota-breaker';
@@ -66,6 +71,7 @@ export interface RunDirectorOptions {
   promptVersion?: string;
   logger: DirectorLogger;
   quotaBreaker?: LlmQuotaBreaker;
+  placement?: DirectorPlacement;
 }
 
 interface AttemptOk {
@@ -75,6 +81,7 @@ interface AttemptOk {
   raw: unknown;
   rawText: string | null;
   issues: Issue[];
+  failKind?: 'invalid' | 'parse' | 'schema-resolve';
 }
 
 interface AttemptFail {
@@ -127,7 +134,8 @@ export function proceduralOutcome(
   telemetry: LlmCallTelemetry[],
   promptVersion: string,
   now: () => number,
-  fallbackReason?: FallbackReason
+  fallbackReason?: FallbackReason,
+  fallbackStage?: FallbackStage
 ): DirectorOutcome {
   const bound = bindPlanToGraph(request);
   return withTrace({
@@ -144,6 +152,7 @@ export function proceduralOutcome(
       latencyMs: Math.max(0, now() - startedMs),
       repairs: bound.repairs,
       ...(fallbackReason === undefined ? {} : { fallbackReason }),
+      ...(fallbackStage === undefined ? {} : { fallbackStage }),
     }),
     telemetry,
   });
@@ -189,10 +198,43 @@ function repairAsPlan(
   return expandSlimCandidate(raw) as LevelPlan;
 }
 
+function reasonForFailKind(
+  failKind: AttemptOk['failKind']
+): FallbackReason {
+  if (failKind === 'parse') {
+    return 'llm-parse';
+  }
+  if (failKind === 'schema-resolve') {
+    return 'schema-resolve';
+  }
+  return 'llm-invalid';
+}
+
+function reasonForAttemptFail(kind: AttemptFail['kind']): {
+  reason: FallbackReason;
+  stage: FallbackStage;
+} {
+  if (kind === 'quota') {
+    return { reason: 'llm-quota', stage: 'quota' };
+  }
+  if (kind === 'timeout') {
+    return { reason: 'llm-timeout', stage: 'draft' };
+  }
+  return { reason: 'llm-error', stage: 'draft' };
+}
+
+function failKindFromParse(parseError: string | undefined): AttemptOk['failKind'] {
+  if (parseError !== undefined && parseError.startsWith('SCHEMA_RESOLVE:')) {
+    return 'schema-resolve';
+  }
+  return 'parse';
+}
+
 /**
- * Live director loop: Gemini → validate → local repair (+ snap hook) →
- * validate → one Gemini repair → procedural. Never throws for
- * provider/timeout/invalid output.
+ * Live director loop: Gemini → validate → local repair (snap →
+ * repairRoute → repairPlan) → validate → one Gemini repair if the
+ * remaining LLM window is at least {@link LLM_REPAIR_MIN_REMAINING_MS}
+ * → procedural. Never throws for provider/timeout/invalid output.
  */
 export async function runDirector(
   request: LevelRequest,
@@ -202,7 +244,9 @@ export async function runDirector(
   const startedMs = options.startedMs ?? now();
   const repairMin =
     options.llmRepairMinRemainingMs ?? LLM_REPAIR_MIN_REMAINING_MS;
-  const promptVersion = options.promptVersion ?? PROMPT_VERSION;
+  const placement = options.placement ?? DEFAULT_DIRECTOR_PLACEMENT;
+  const promptVersion =
+    options.promptVersion ?? promptVersionFor(placement);
   const seed = makeDailySeed(request.graph.roomHash, request.date);
   const telemetry: LlmCallTelemetry[] = [];
   const quotaFallback = (): DirectorOutcome =>
@@ -212,7 +256,8 @@ export async function runDirector(
       telemetry,
       promptVersion,
       now,
-      'llm-quota'
+      'llm-quota',
+      'quota'
     );
 
   if (options.quotaBreaker?.isOpen()) {
@@ -267,6 +312,7 @@ export async function runDirector(
         seed,
         graph: request.graph,
         tier: request.tier,
+        placement,
       });
       if (parsedPlan.plan !== undefined) {
         const validation = validatePlan(parsedPlan.plan, request.graph);
@@ -295,6 +341,7 @@ export async function runDirector(
           raw: candidate,
           rawText,
           issues: validation.issues,
+          failKind: 'invalid',
         };
       }
       record(chat, callStarted, 'invalid', call.raw, call.ttftMs);
@@ -309,6 +356,7 @@ export async function runDirector(
             message: parsedPlan.parseError ?? 'LevelPlanLLM parse failed',
           },
         ],
+        failKind: failKindFromParse(parsedPlan.parseError),
       };
     } catch (err) {
       if (isQuotaError(err)) {
@@ -337,6 +385,7 @@ export async function runDirector(
           seed,
           tier: request.tier,
           recentThemes: request.recentThemes,
+          placement,
         })
       ),
     ];
@@ -349,12 +398,29 @@ export async function runDirector(
     }
 
     if (draft.kind !== 'plan') {
-      return proceduralOutcome(
-        request,
-        startedMs,
-        telemetry,
-        promptVersion,
-        now
+      const mapped = reasonForAttemptFail(draft.kind);
+      return withTrace(
+        proceduralOutcome(
+          request,
+          startedMs,
+          telemetry,
+          promptVersion,
+          now,
+          mapped.reason,
+          mapped.stage
+        ),
+        {
+          validation: {
+            firstTry: [
+              {
+                code: draft.kind === 'timeout' ? 'LLM_TIMEOUT' : 'LLM_ERROR',
+                path: 'draft',
+              },
+            ],
+            afterLocal: null,
+            afterLlmRepair: null,
+          },
+        }
       );
     }
 
@@ -421,6 +487,8 @@ export async function runDirector(
       );
     }
 
+    const draftReason = reasonForFailKind(draft.failKind);
+
     if (!deadline.canStartLlm(repairMin)) {
       options.logger.debug(
         `director.skip_llm_repair remainingForLlm=${String(deadline.remainingForLlm())} min=${String(repairMin)}`
@@ -431,7 +499,9 @@ export async function runDirector(
           startedMs,
           telemetry,
           promptVersion,
-          now
+          now,
+          'llm-invalid',
+          'local'
         ),
         {
           validation: {
@@ -522,7 +592,15 @@ export async function runDirector(
         );
       }
       return withTrace(
-        proceduralOutcome(request, startedMs, telemetry, promptVersion, now),
+        proceduralOutcome(
+          request,
+          startedMs,
+          telemetry,
+          promptVersion,
+          now,
+          reasonForFailKind(repaired.failKind ?? draft.failKind),
+          'llm-repair'
+        ),
         {
           validation: {
             firstTry: firstTryIssues,
@@ -535,13 +613,30 @@ export async function runDirector(
       );
     }
 
+    const repairFail = reasonForAttemptFail(repaired.kind);
     return withTrace(
-      proceduralOutcome(request, startedMs, telemetry, promptVersion, now),
+      proceduralOutcome(
+        request,
+        startedMs,
+        telemetry,
+        promptVersion,
+        now,
+        repairFail.reason === 'llm-timeout' || repairFail.reason === 'llm-error'
+          ? repairFail.reason
+          : draftReason,
+        'llm-repair'
+      ),
       {
         validation: {
           firstTry: firstTryIssues,
           afterLocal,
-          afterLlmRepair: null,
+          afterLlmRepair: [
+            {
+              code:
+                repaired.kind === 'timeout' ? 'LLM_TIMEOUT' : 'LLM_ERROR',
+              path: 'llm-repair',
+            },
+          ],
         },
         repairedBy: null,
         ...draftTrace,

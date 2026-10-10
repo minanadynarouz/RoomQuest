@@ -6,8 +6,41 @@ import { LevelPlan, Theme, Tier, PlanSource } from './level.js';
  * Why the API returned a procedural plan instead of Gemini.
  * Response-only — never part of LevelPlanLLM (Gemini structured output).
  */
-export const FallbackReason = z.enum(['llm-quota']);
+export const FallbackReason = z.enum([
+  'llm-quota',
+  'llm-invalid',
+  'llm-timeout',
+  'llm-error',
+  'llm-parse',
+  'schema-resolve',
+]);
 export type FallbackReason = z.infer<typeof FallbackReason>;
+
+/** Director stage that decided to fall back to generatePlan. */
+export const FallbackStage = z.enum([
+  'draft',
+  'local',
+  'llm-repair',
+  'quota',
+]);
+export type FallbackStage = z.infer<typeof FallbackStage>;
+
+/** Graph-capacity waivers (#60 / #65). Order is always minPath, hutTable, portalFov. */
+export const RelaxedRule = z.enum(['minPath', 'hutTable', 'portalFov']);
+export type RelaxedRule = z.infer<typeof RelaxedRule>;
+
+export const RELAXED_RULE_ORDER = [
+  'minPath',
+  'hutTable',
+  'portalFov',
+] as const satisfies readonly RelaxedRule[];
+
+export function orderRelaxedRules(
+  rules: readonly RelaxedRule[]
+): RelaxedRule[] {
+  const seen = new Set(rules);
+  return RELAXED_RULE_ORDER.filter((rule) => seen.has(rule));
+}
 
 /**
  * API request/response types
@@ -48,8 +81,10 @@ export const LevelResponse = z.object({
   latencyMs: z.number(),
   /** Validator repairs applied (if any) */
   repairs: z.array(z.string()),
-  /** Present when source is procedural because Gemini quota was exhausted. */
+  /** Present when source is procedural because Gemini was skipped or failed. */
   fallbackReason: FallbackReason.optional(),
+  /** Stage that chose the procedural fallback. Set whenever fallbackReason is. */
+  fallbackStage: FallbackStage.optional(),
 });
 export type LevelResponse = z.infer<typeof LevelResponse>;
 

@@ -181,7 +181,7 @@ describe('eval harness', () => {
     expect(markdown).toContain('Repair stage that fixed the plan');
   });
 
-  it('cycles rooms, then tiers, then seeds', async () => {
+  it('spreads --runs even round-robin across rooms, tiers, and seeds', async () => {
     const result = await runEvalHarness({
       mock: true,
       roomLimit: 1,
@@ -198,8 +198,40 @@ describe('eval harness', () => {
     }
     expect(result.report.runs.map((run) => `${run.tier}:${run.date}`)).toEqual([
       'easy:2026-10-01',
-      'easy:2026-10-02',
-      'normal:2026-10-01',
+      'normal:2026-10-02',
+      'easy:2026-10-01',
+    ]);
+    expect(result.report.aggregate.relaxedPct).toBeDefined();
+    expect(typeof result.report.aggregate.relaxedPct.hutTable).toBe('number');
+  });
+
+  it('parses --placement and round-robins arms', async () => {
+    const options = parseEvalArgs([
+      '--mock',
+      '--placement',
+      'uv,slot',
+      '--runs',
+      '2',
+    ]);
+    expect(options.placements).toEqual(['uv', 'slot']);
+    const result = await runEvalHarness({
+      mock: true,
+      roomLimit: 1,
+      seedLimit: 1,
+      tiers: ['easy'],
+      runCount: 2,
+      placements: ['uv', 'slot'],
+      now: () => FIXED_NOW_MS,
+      write: false,
+      googleApiKey: undefined,
+    });
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') {
+      return;
+    }
+    expect(result.report.runs.map((run) => run.placement)).toEqual([
+      'uv',
+      'slot',
     ]);
   });
 });

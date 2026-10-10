@@ -43,7 +43,9 @@ Set these in the Render Dashboard. They are declared with `sync: false` so `rend
 | `DIRECTOR_MODE` | `live` | `live` |
 | `DIRECTOR_MODEL` | `gemini-3.8-flash` | `gemini-3.8-flash` |
 | `DIRECTOR_THINKING` | `low` | `low` |
+| `DIRECTOR_PLACEMENT` | `uv` | `uv` |
 | `LLM_QUOTA_COOLDOWN_S` | `600` | `600` |
+| `LLM_REPAIR_MIN_REMAINING_MS` | `3500` | `3500` |
 | `CORS_ORIGINS` | staging client origins (Vercel preview / `revision_branch` URL) | prod Vercel domain, GitHub Pages origin |
 | `NODE_ENV` | `production` | `production` |
 | `GIT_SHA` | git sha of the deployed commit (set by the deploy workflow) | same |

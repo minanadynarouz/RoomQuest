@@ -151,3 +151,72 @@ export type LevelPlanLLM = z.infer<typeof LevelPlanLLM>;
 
 /** Gemini `responseSchema` for `withStructuredOutput` (zod parse stays on `LevelPlanLLM`). */
 export const LevelPlanLLMGeminiSchema = toGeminiSchema(LevelPlanLLM);
+
+/**
+ * Shared slot-placement fragment (#64). Gemini-safe: plain `slot` string,
+ * no regex / pattern. The director builds a per-request string enum from
+ * `hintedSlotIds(graph, { seed })`. Does not change {@link LevelPlan}.
+ */
+export const PlacementSlotId = z.object({
+  id: z.string(),
+  piece: PieceId,
+  slot: z.string(),
+  to: z.string().nullable(),
+  playerBuilt: z.boolean(),
+  links: z.array(z.string()),
+});
+export type PlacementSlotId = z.infer<typeof PlacementSlotId>;
+
+/** Compact Gemini slot placement (`slot` instead of `s`/`u`/`v`). */
+export const PlacementSlotLLM = z.object({
+  i: z.string(),
+  pc: PieceId,
+  slot: z.string(),
+  t: z.string().nullable(),
+  lk: z.array(z.string()),
+});
+export type PlacementSlotLLM = z.infer<typeof PlacementSlotLLM>;
+
+export const LevelPlanSlotLLM = z.object({
+  th: Theme,
+  pl: z.array(PlacementSlotLLM).min(4).max(14),
+});
+export type LevelPlanSlotLLM = z.infer<typeof LevelPlanSlotLLM>;
+
+function slotIdField(slotIds: readonly string[]): z.ZodType<string> {
+  if (slotIds.length === 0) {
+    return z.string();
+  }
+  return z.enum(slotIds as [string, ...string[]]);
+}
+
+/**
+ * Per-request compact slot schema. `slot` is a Gemini string enum of the
+ * hinted ids for this graph+seed — no `pattern`.
+ */
+export function levelPlanSlotLLMSchema(slotIds: readonly string[]): z.ZodType<{
+  th: Theme;
+  pl: PlacementSlotLLM[];
+}> {
+  return z.object({
+    th: Theme,
+    pl: z
+      .array(
+        z.object({
+          i: z.string(),
+          pc: PieceId,
+          slot: slotIdField(slotIds),
+          t: z.string().nullable(),
+          lk: z.array(z.string()),
+        })
+      )
+      .min(4)
+      .max(14),
+  });
+}
+
+export function levelPlanSlotLLMGeminiSchema(
+  slotIds: readonly string[]
+): Record<string, unknown> {
+  return toGeminiSchema(levelPlanSlotLLMSchema(slotIds));
+}

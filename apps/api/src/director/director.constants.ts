@@ -7,9 +7,10 @@
 export const DIRECTOR_BUDGET_MS = 7000;
 
 /**
- * Skip the LLM repair call when less than this much of the LLM window remains.
+ * Skip the LLM repair call unless at least this much of the LLM window
+ * remains (p95 of a first-try Gemini call). Default 3500.
  */
-export const LLM_REPAIR_MIN_REMAINING_MS = 2000;
+export const LLM_REPAIR_MIN_REMAINING_MS = 3500;
 
 /**
  * Headroom inside the 7 s budget so generatePlan and the HTTP response finish

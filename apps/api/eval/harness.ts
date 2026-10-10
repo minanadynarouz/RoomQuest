@@ -1,5 +1,13 @@
-import { generatePlan } from '@roomquest/level-core';
-import { LevelRequest } from '@roomquest/schema';
+import {
+  generatePlan,
+  hintedSlotIds,
+  relaxedRulesFor,
+} from '@roomquest/level-core';
+import {
+  LevelPlanLLMGeminiSchema,
+  LevelRequest,
+  levelPlanSlotLLMGeminiSchema,
+} from '@roomquest/schema';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DEFAULT_DIRECTOR_MODEL } from '../src/director/director.constants';
@@ -8,19 +16,25 @@ import {
   wrapChatModel,
 } from '../src/director/models';
 import {
-  DEFAULT_DIRECTOR_THINKING_ID,
-  resolveDirectorThinkingId,
-  thinkingVariantById,
-} from '../src/director/thinking';
-import { PROMPT_VERSION } from '../src/director/prompts';
+  DEFAULT_DIRECTOR_PLACEMENT,
+  resolveDirectorPlacement,
+  type DirectorPlacement,
+} from '../src/director/placement';
+import { promptVersionFor } from '../src/director/prompts';
 import { runDirector } from '../src/director/run-director';
 import {
   planToLlmJson,
+  planToSlotLlmJson,
   silentLogger,
   structuredFromFake,
   UsageFakeListChatModel,
 } from '../src/director/test-fakes';
 import type { LlmCallTelemetry } from '../src/director/telemetry';
+import {
+  DEFAULT_DIRECTOR_THINKING_ID,
+  resolveDirectorThinkingId,
+  thinkingVariantById,
+} from '../src/director/thinking';
 import { makeDailySeed } from '../src/levels/daily-seed';
 import {
   EVAL_MAX_ROOMS,
@@ -28,6 +42,7 @@ import {
   EVAL_SEED_DATES,
   EVAL_TIERS,
 } from './constants';
+import { spreadEvalCells } from './matrix';
 import type { EvalHarnessOptions } from './options';
 import { findRepoRoot } from './paths';
 import { estimateCallCostUsd } from './prices';
@@ -181,60 +196,70 @@ export async function runEvalHarness(
   );
   const thinkingVariant = thinkingVariantById(thinkingId);
 
-  const livePrimary =
-    !options.mock && googleApiKey !== undefined
-      ? wrapChatModel(
-          defaultDirectorChatFactory.createPrimary({
-            model: directorModel,
-            apiKey: googleApiKey,
-            thinking: thinkingVariant?.config,
-          }),
-          'google',
-          directorModel
-        )
-      : undefined;
+  const placements: readonly DirectorPlacement[] =
+    options.placements !== undefined && options.placements.length > 0
+      ? options.placements
+      : [resolveDirectorPlacement(process.env.DIRECTOR_PLACEMENT)];
 
-  const   cells: {
-    room: (typeof rooms)[number];
-    date: string;
-    tier: (typeof tiers)[number];
-  }[] = [];
-  for (const room of rooms) {
-    for (const tier of tiers) {
-      for (const date of seedDates) {
-        cells.push({ room, date, tier });
-      }
-    }
-  }
+  const cartesian =
+    rooms.length * tiers.length * seedDates.length * placements.length;
+  const total = options.runCount ?? cartesian;
+  const cells = spreadEvalCells(
+    total,
+    rooms,
+    tiers,
+    seedDates,
+    placements
+  );
   if (cells.length === 0) {
     throw new Error('Eval harness produced an empty run matrix');
   }
 
-  const total = options.runCount ?? cells.length;
   const runs: EvalRunRecord[] = [];
 
-  for (let i = 0; i < total; i += 1) {
-    const cell = cells[i % cells.length];
-    if (cell === undefined) {
-      throw new Error('Eval harness: run matrix index out of range');
-    }
-    const { room, date, tier } = cell;
+  for (const cell of cells) {
+    const { room, date, tier, placement } = cell;
     const seed = makeDailySeed(room.graph.roomHash, date);
     const request = LevelRequest.parse({
       graph: room.graph,
       date,
       tier,
     });
+    const schema =
+      placement === 'slot'
+        ? levelPlanSlotLLMGeminiSchema(
+            hintedSlotIds(room.graph, { seed })
+          )
+        : LevelPlanLLMGeminiSchema;
 
     const primary = options.mock
       ? structuredFromFake(
           new UsageFakeListChatModel({
-            responses: [planToLlmJson(generatePlan(room.graph, seed, tier))],
+            responses: [
+              placement === 'slot'
+                ? planToSlotLlmJson(
+                    generatePlan(room.graph, seed, tier),
+                    room.graph,
+                    seed
+                  )
+                : planToLlmJson(generatePlan(room.graph, seed, tier)),
+            ],
           }),
           'google',
           directorModel
         )
-      : livePrimary;
+      : googleApiKey !== undefined
+        ? wrapChatModel(
+            defaultDirectorChatFactory.createPrimary({
+              model: directorModel,
+              apiKey: googleApiKey,
+              thinking: thinkingVariant?.config,
+            }),
+            'google',
+            directorModel,
+            schema
+          )
+        : undefined;
 
     if (primary === undefined) {
       throw new Error('Eval harness: live primary chat model was not created');
@@ -244,6 +269,8 @@ export async function runEvalHarness(
       primary,
       now,
       logger,
+      placement,
+      promptVersion: promptVersionFor(placement),
     });
 
     const flags = classifySource(outcome.response.source);
@@ -262,12 +289,16 @@ export async function runEvalHarness(
       date,
       seed,
       tier,
+      placement,
       source: outcome.response.source,
       model: outcome.response.model,
       ...flags,
       latencyMs: outcome.response.latencyMs,
       ttftMs: ttfts.length > 0 ? ttfts.reduce((a, b) => a + b, 0) : null,
       repairs: [...outcome.response.repairs],
+      fallbackReason: outcome.response.fallbackReason ?? null,
+      fallbackStage: outcome.response.fallbackStage ?? null,
+      relaxed: relaxedRulesFor(room.graph),
       estimatedCostUsd: runCost(outcome.telemetry),
       telemetry: outcome.telemetry.map((row) => ({ ...row })),
       distinctSurfaces: variety.distinctSurfaces,
@@ -287,12 +318,13 @@ export async function runEvalHarness(
   const report = EvalReportSchema.parse({
     generatedAt,
     mock: options.mock,
-    promptVersion: PROMPT_VERSION,
+    promptVersion: promptVersionFor(placements[0] ?? DEFAULT_DIRECTOR_PLACEMENT),
     directorModel,
     thinking: thinkingVariant?.label ?? DEFAULT_DIRECTOR_THINKING_ID,
     roomIds: rooms.map((room) => room.id),
     seedDates: [...seedDates],
     tiers: [...tiers],
+    placements: [...placements],
     bar: evaluateBar(aggregate),
     aggregate,
     runs,

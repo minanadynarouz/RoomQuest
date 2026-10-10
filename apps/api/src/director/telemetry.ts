@@ -77,6 +77,10 @@ function usageSources(raw: unknown): Record<string, unknown>[] {
     nested === undefined ? undefined : asRecord(nested.usageMetadata),
     nested === undefined ? undefined : asRecord(nested.usage_metadata),
     response === undefined ? undefined : asRecord(response.usageMetadata),
+    // Gemini SDK generateContent result: { response: { usageMetadata } }
+    response === undefined
+      ? undefined
+      : asRecord(asRecord(response.usageMetadata)),
   ].filter((item): item is Record<string, unknown> => item !== undefined);
   return parts;
 }

@@ -7,7 +7,12 @@ export {
   PROCEDURAL_RESERVE_MS,
   DEFAULT_DIRECTOR_MODEL,
 } from './director.constants';
-export { PROMPT_VERSION, SYSTEM_PREFIX } from './prompts';
+export { PROMPT_VERSION, promptVersionFor, SYSTEM_PREFIX } from './prompts';
+export {
+  DEFAULT_DIRECTOR_PLACEMENT,
+  resolveDirectorPlacement,
+  type DirectorPlacement,
+} from './placement';
 export {
   runDirector,
   proceduralOutcome,

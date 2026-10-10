@@ -30,6 +30,10 @@ services:
         sync: false
       - key: DIRECTOR_THINKING
         sync: false
+      - key: DIRECTOR_PLACEMENT
+        sync: false
+      - key: LLM_REPAIR_MIN_REMAINING_MS
+        sync: false
       - key: CORS_ORIGINS
         sync: false
       - key: NODE_ENV
@@ -61,6 +65,10 @@ services:
       - key: DIRECTOR_MODEL
         sync: false
       - key: DIRECTOR_THINKING
+        sync: false
+      - key: DIRECTOR_PLACEMENT
+        sync: false
+      - key: LLM_REPAIR_MIN_REMAINING_MS
         sync: false
       - key: CORS_ORIGINS
         sync: false

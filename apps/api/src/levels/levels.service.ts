@@ -4,7 +4,8 @@ import { LevelPlan, LevelResponse, type LevelRequest } from '@roomquest/schema';
 import { RateLimitedException } from '../common/rate-limited.exception';
 import { DirectorService } from '../director/director.service';
 import { DIRECTOR_RUNTIME, type DirectorRuntime } from '../director/models';
-import { PROMPT_VERSION } from '../director/prompts';
+import { resolveDirectorPlacement } from '../director/placement';
+import { promptVersionFor } from '../director/prompts';
 import { makeCacheKey } from './cache-key';
 import { CacheMissLimiter } from './cache-miss-limiter';
 import { LevelCacheRepository } from './level-cache.repository';
@@ -29,7 +30,9 @@ export class LevelsService {
   ): Promise<LevelResponse> {
     const now = this.runtime?.now ?? (() => Date.now());
     const startedMs = now();
-    const promptVersion = PROMPT_VERSION;
+    const promptVersion = promptVersionFor(
+      resolveDirectorPlacement(process.env.DIRECTOR_PLACEMENT)
+    );
     const cacheKey = makeCacheKey(
       request.graph.roomHash,
       request.date,

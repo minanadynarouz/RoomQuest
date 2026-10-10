@@ -122,6 +122,61 @@ describe('defaultDirectorChatFactory', () => {
     expect(properties.th).toBeDefined();
   });
 
+  it('puts thinkingConfig LOW on the outgoing generationConfig', async () => {
+    const primary = defaultDirectorChatFactory.createPrimary({
+      model: DEFAULT_DIRECTOR_MODEL,
+      apiKey: 'test-google-key',
+    });
+    const captured: unknown[] = [];
+    const client = (
+      primary as unknown as {
+        client: {
+          generateContent: (
+            request: unknown,
+            requestOptions?: unknown
+          ) => Promise<unknown>;
+        };
+      }
+    ).client;
+    client.generateContent = (request: unknown) => {
+      captured.push(request);
+      return Promise.resolve({
+        response: {
+          candidates: [
+            {
+              content: {
+                role: 'model',
+                parts: [{ text: '{}' }],
+              },
+              finishReason: 'STOP',
+            },
+          ],
+          usageMetadata: {
+            promptTokenCount: 10,
+            candidatesTokenCount: 20,
+            thoughtsTokenCount: 7,
+          },
+        },
+      });
+    };
+    const chat = wrapChatModel(primary, 'google', DEFAULT_DIRECTOR_MODEL);
+    await chat.invokeStructured(
+      [new HumanMessage('plan')],
+      new AbortController().signal
+    );
+    expect(captured).toHaveLength(1);
+    const payload = captured[0] as {
+      generationConfig?: {
+        thinkingConfig?: { thinkingLevel?: string };
+        responseSchema?: unknown;
+      };
+    };
+    expect(payload.generationConfig?.thinkingConfig).toEqual({
+      thinkingLevel: 'LOW',
+    });
+    expect(payload.generationConfig?.responseSchema).toBeDefined();
+  });
+
   it('sends thinkingLevel LOW by default (MINIMAL 400s on gemini-3.8-flash)', () => {
     const primary = defaultDirectorChatFactory.createPrimary({
       model: DEFAULT_DIRECTOR_MODEL,
