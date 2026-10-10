@@ -4,8 +4,9 @@ import { LevelPlanLLM } from '@roomquest/schema';
 import { defaultDirectorChatFactory, wrapChatModel } from './models';
 import { DEFAULT_DIRECTOR_MODEL } from './director.constants';
 
-function callerMaxRetries(model: ChatGoogleGenerativeAI): number | undefined {
-  const caller = (model as { caller?: { maxRetries?: number } }).caller;
+function callerMaxRetries(model: object): number | undefined {
+  const caller = (model as unknown as { caller?: { maxRetries?: number } })
+    .caller;
   return caller?.maxRetries;
 }
 
