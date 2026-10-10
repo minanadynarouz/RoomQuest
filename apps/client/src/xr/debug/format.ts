@@ -40,6 +40,8 @@ const DEBUG_LINES: DebugLine[] = [
   { id: 'debug-repairs', text: '' },
   { id: 'debug-fallback', text: '' },
   { id: 'debug-issues', text: '' },
+  { id: 'debug-director', text: '' },
+  { id: 'debug-reqid', text: '' },
 ];
 
 function setLineText(index: number, text: string): void {
@@ -57,6 +59,8 @@ export function formatDebugLines(stats: RqPerfStats): DebugLine[] {
   setLineText(6, `${padLabel('repairs')}${String(stats.repairs)}`);
   setLineText(7, `${padLabel('fallback')}${formatDash(stats.fallbackReason)}`);
   setLineText(8, `${padLabel('issues')}${String(stats.validationIssues)}`);
+  setLineText(9, `${padLabel('director')}${formatDash(stats.directorStatus)}`);
+  setLineText(10, `${padLabel('reqId')}${formatDash(stats.requestId)}`);
   return DEBUG_LINES;
 }
 

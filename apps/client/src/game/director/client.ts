@@ -30,6 +30,7 @@ import {
 import { fallbackReasonFromIssues, issueCodesOf } from './issues.js';
 import {
   cooldownUntilMs,
+  parseRetryAfterHeader,
   parseRetryAfterS,
   remainingRetryAfterS,
 } from './rate-limit.js';
@@ -45,8 +46,10 @@ import {
   type DirectorClient,
   type DirectorClientOptions,
   type DirectorMode,
+  type DirectorRequestEndInfo,
   type DirectorResult,
   type FallbackReason,
+  type FetchHeadersLike,
   type FetchLike,
   type RequestPlanOverrides,
 } from './types.js';
@@ -111,6 +114,20 @@ interface PostFailure {
   reason: FallbackReason;
   apiErrorCode?: ErrorCode;
   retryAfterS?: number;
+  requestId?: string;
+}
+
+function readResponseHeader(
+  headers: FetchHeadersLike | undefined,
+  name: string
+): string | undefined {
+  try {
+    const value = headers?.get(name)?.trim();
+    return value && value.length > 0 ? value : undefined;
+  } catch {
+    // Forbidden header (CORS has not exposed it yet) or missing Headers.
+    return undefined;
+  }
 }
 
 async function readJson(response: Pick<Response, 'json'>): Promise<unknown> {
@@ -135,8 +152,11 @@ async function postLevels(
   body: unknown,
   headers: Record<string, string>,
   budgetMs: number,
-  timeoutReason: FallbackReason = 'timeout'
-): Promise<{ ok: true; payload: unknown } | PostFailure> {
+  timeoutReason: FallbackReason = 'timeout',
+  nowMs: () => number = () => Date.now()
+): Promise<
+  { ok: true; payload: unknown; requestId?: string } | PostFailure
+> {
   const controller = new AbortController();
   const timer = setTimeout(() => {
     controller.abort();
@@ -151,29 +171,36 @@ async function postLevels(
     });
 
     const payload = await readJson(response);
+    const requestId = readResponseHeader(response.headers, 'X-Request-Id');
 
     if (response.status === 429) {
+      const retryAfterS =
+        parseRetryAfterHeader(
+          readResponseHeader(response.headers, 'Retry-After'),
+          nowMs()
+        ) ?? parseRetryAfterS(payload);
       return {
         ok: false,
         reason: 'rate-limited',
         apiErrorCode: parseApiError(payload),
-        retryAfterS: parseRetryAfterS(payload),
+        retryAfterS,
+        requestId,
       };
     }
 
     if (!response.ok) {
       const apiErrorCode = parseApiError(payload);
       if (apiErrorCode) {
-        return { ok: false, reason: 'api-error', apiErrorCode };
+        return { ok: false, reason: 'api-error', apiErrorCode, requestId };
       }
-      return { ok: false, reason: 'http-error' };
+      return { ok: false, reason: 'http-error', requestId };
     }
 
     if (payload === undefined) {
-      return { ok: false, reason: 'invalid-plan' };
+      return { ok: false, reason: 'invalid-plan', requestId };
     }
 
-    return { ok: true, payload };
+    return { ok: true, payload, requestId };
   } catch (err) {
     if (isAbortError(err)) {
       return { ok: false, reason: timeoutReason };
@@ -199,6 +226,7 @@ function localResult(
     model?: string;
     promptVersion?: string;
     tier?: Tier;
+    requestId?: string;
   }
 ): DirectorResult {
   return {
@@ -215,6 +243,7 @@ function localResult(
     apiErrorCode: extras?.apiErrorCode,
     retryAfterS: extras?.retryAfterS,
     issues: extras?.issues ?? [],
+    requestId: extras?.requestId,
   };
 }
 
@@ -258,6 +287,17 @@ export function createDirectorClient(
   let skipUntilMs: number | undefined;
   let usedColdStartBudget = false;
 
+  function finish(result: DirectorResult): DirectorResult {
+    const info: DirectorRequestEndInfo = {
+      status: result.usedFallback ? 'fallback' : 'resolved',
+      source: result.usedFallback ? 'procedural' : 'llm',
+      fallbackReason: result.fallbackReason,
+      requestId: result.requestId,
+    };
+    options.onRequestEnd?.(info);
+    return result;
+  }
+
   async function requestPlan(
     graph: SurfaceGraph,
     overrides: RequestPlanOverrides = {}
@@ -283,6 +323,7 @@ export function createDirectorClient(
         apiErrorCode?: ErrorCode;
         retryAfterS?: number;
         issues?: Issue[];
+        requestId?: string;
       }
     ): Promise<DirectorResult> {
       let plan: LevelPlan;
@@ -305,7 +346,7 @@ export function createDirectorClient(
         { ...extras, tier }
       );
       logDirectorResult(result);
-      return result;
+      return finish(result);
     }
 
     if (mode === 'off') {
@@ -339,6 +380,7 @@ export function createDirectorClient(
       ? 'cold-start-timeout'
       : 'timeout';
 
+    options.onRequestStart?.();
     const api = await postLevels(
       fetchFn,
       levelsUrl,
@@ -349,7 +391,8 @@ export function createDirectorClient(
         'X-Client-Version': clientVersion,
       },
       requestBudgetMs,
-      timeoutReason
+      timeoutReason,
+      nowMs
     );
 
     if (!api.ok) {
@@ -359,12 +402,13 @@ export function createDirectorClient(
       return useGenerator(api.reason, {
         apiErrorCode: api.apiErrorCode,
         retryAfterS: api.retryAfterS,
+        requestId: api.requestId,
       });
     }
 
     const parsed = LevelResponse.safeParse(api.payload);
     if (!parsed.success) {
-      return useGenerator('invalid-plan');
+      return useGenerator('invalid-plan', { requestId: api.requestId });
     }
 
     logGraphDrift(graph, postedGraph);
@@ -378,7 +422,10 @@ export function createDirectorClient(
       if (repaired.result.ok) {
         const latencyMs = nowMs() - started;
         if (latencyMs > requestBudgetMs) {
-          return useGenerator(timeoutReason, { issues: local.issues });
+          return useGenerator(timeoutReason, {
+            issues: local.issues,
+            requestId: api.requestId,
+          });
         }
         void genPromise.catch(() => undefined);
         const result = localResult(
@@ -394,18 +441,22 @@ export function createDirectorClient(
             model: parsed.data.model,
             promptVersion: parsed.data.promptVersion,
             tier,
+            requestId: api.requestId,
           }
         );
         logDirectorResult(result);
-        return result;
+        return finish(result);
       }
       const reason = fallbackReasonFromIssues(local.issues);
-      return useGenerator(reason, { issues: local.issues });
+      return useGenerator(reason, {
+        issues: local.issues,
+        requestId: api.requestId,
+      });
     }
 
     const latencyMs = nowMs() - started;
     if (latencyMs > requestBudgetMs) {
-      return useGenerator(timeoutReason);
+      return useGenerator(timeoutReason, { requestId: api.requestId });
     }
 
     // Generator was already racing; ignore its result.
@@ -422,9 +473,10 @@ export function createDirectorClient(
       usedFallback: false,
       issues: [],
       tier,
+      requestId: api.requestId,
     };
     logDirectorResult(result);
-    return result;
+    return finish(result);
   }
 
   return { requestPlan };

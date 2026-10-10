@@ -8,6 +8,27 @@ import type { ErrorCode, LevelPlan, PlanSource, Tier } from '@roomquest/schema';
 import type { FallbackReason } from './director/types.js';
 import type { StarCount } from './stars.js';
 
+/** In-flight director POST, for the room-reading animation. */
+export type DirectorRequestStatus =
+  | 'idle'
+  | 'requesting'
+  | 'resolved'
+  | 'fallback';
+
+/** Coarse source shown on `directorRequest` (API plan vs local generator). */
+export type DirectorRequestSource = 'llm' | 'procedural';
+
+export interface DirectorRequestState {
+  status: DirectorRequestStatus;
+  startedAt?: number;
+  source?: DirectorRequestSource;
+  fallbackReason?: string;
+  /** `X-Request-Id` when CORS exposes it; otherwise omitted. */
+  requestId?: string;
+}
+
+export const IDLE_DIRECTOR_REQUEST: DirectorRequestState = { status: 'idle' };
+
 /**
  * Options for startBuilding, including F-03 director metadata.
  */
@@ -113,6 +134,16 @@ export type GameEvent =
       placementId: string;
       timestamp: number;
       beatIndex: number;
+    }
+  | { type: 'directorRequestStarted'; timestamp: number; beatIndex: number }
+  | {
+      type: 'directorRequestEnded';
+      source: DirectorRequestSource;
+      fallbackReason?: string;
+      durationMs: number;
+      requestId?: string;
+      timestamp: number;
+      beatIndex: number;
     };
 
 /** Reasons the explorer waits. X-07 adds `unalignedPlatform`. */
@@ -208,4 +239,6 @@ export interface GameState {
   validationIssues: Issue[];
   /** Difficulty used when posting `proc:<seed>:<tier>` (F-07). */
   tier: Tier | null;
+  /** In-flight / last director `/levels` request (room-reading). */
+  directorRequest: DirectorRequestState;
 }

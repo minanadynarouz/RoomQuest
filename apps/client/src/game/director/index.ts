@@ -18,8 +18,10 @@ export type {
   DirectorResult,
   DirectorClient,
   DirectorClientOptions,
+  DirectorRequestEndInfo,
   FallbackReason,
   FetchLike,
+  FetchHeadersLike,
   GenerateFn,
   RepairFn,
   ValidateFn,
@@ -33,6 +35,7 @@ export { getOrCreateDeviceId } from './device-id.js';
 export { fallbackReasonFromIssues } from './issues.js';
 export {
   parseRetryAfterS,
+  parseRetryAfterHeader,
   cooldownUntilMs,
   remainingRetryAfterS,
 } from './rate-limit.js';

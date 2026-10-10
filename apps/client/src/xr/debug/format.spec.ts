@@ -15,6 +15,8 @@ describe('debug overlay format', () => {
       repairs: 0,
       fallbackReason: null,
       validationIssues: 0,
+      directorStatus: 'resolved',
+      requestId: 'req-abc',
     });
     expect(block).toContain('PERF');
     expect(block).toContain('fps      60');
@@ -23,6 +25,8 @@ describe('debug overlay format', () => {
     expect(block).toContain('source   cache');
     expect(block).toContain('latency  8ms');
     expect(block).toContain('fallback -');
+    expect(block).toContain('director resolved');
+    expect(block).toContain('reqId    req-abc');
     expect(formatLatency(null)).toBe('-');
     expect(formatDebugLines(EMPTY_PERF_STATS).map((line) => line.id)).toEqual([
       'debug-fps',
@@ -34,6 +38,8 @@ describe('debug overlay format', () => {
       'debug-repairs',
       'debug-fallback',
       'debug-issues',
+      'debug-director',
+      'debug-reqid',
     ]);
   });
 });

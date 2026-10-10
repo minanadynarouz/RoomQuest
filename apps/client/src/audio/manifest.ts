@@ -42,7 +42,10 @@ export interface SoundEntry {
 
 /** Store events plus pinch/grab, tray-return, and F-07 pause HUD actions. */
 export type SoundKey =
-  | GameEvent['type']
+  | Exclude<
+      GameEvent['type'],
+      'directorRequestStarted' | 'directorRequestEnded'
+    >
   | 'grab'
   | 'invalidPlace'
   | 'pause'

@@ -50,6 +50,7 @@ describe('registerRqHook / installRqHooks', () => {
         store: { plan: null } as RqHooks['store'],
         plan: null,
         stats: () => ({ ...EMPTY_PERF_STATS, drawCalls: 4 }),
+        director: () => ({ status: 'idle' as const }),
       },
       { ...debugOn, target }
     );
@@ -57,6 +58,7 @@ describe('registerRqHook / installRqHooks', () => {
     expect(target.__rq?.store).toBeDefined();
     expect(target.__rq?.plan).toBeNull();
     expect(target.__rq?.stats?.().drawCalls).toBe(4);
+    expect(target.__rq?.director?.()).toEqual({ status: 'idle' });
     expect(target.__rq?.autoSolve).toBeUndefined();
   });
 

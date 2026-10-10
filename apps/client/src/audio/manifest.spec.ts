@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { GameEvent } from '../game/types.js';
 import {
   SOUND_KEYS,
   SOUND_MANIFEST,
   type SoundKey,
 } from './manifest.js';
 
-const STORE_EVENTS: GameEvent['type'][] = [
+const STORE_EVENTS: SoundKey[] = [
   'pieceBuilt',
   'gateOpened',
   'slimeStunned',

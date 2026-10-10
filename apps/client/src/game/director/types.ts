@@ -87,6 +87,10 @@ export type RepairFn = (
 /**
  * Narrow fetch contract so tests can mock without a full Request polyfill.
  */
+export interface FetchHeadersLike {
+  get(name: string): string | null;
+}
+
 export type FetchLike = (
   input: string,
   init: {
@@ -95,7 +99,18 @@ export type FetchLike = (
     body: string;
     signal: AbortSignal;
   }
-) => Promise<Pick<Response, 'ok' | 'status' | 'json'>>;
+) => Promise<
+  Pick<Response, 'ok' | 'status' | 'json'> & {
+    headers?: FetchHeadersLike;
+  }
+>;
+
+export interface DirectorRequestEndInfo {
+  status: 'resolved' | 'fallback';
+  source: 'llm' | 'procedural';
+  fallbackReason?: FallbackReason;
+  requestId?: string;
+}
 
 export interface DirectorClientOptions {
   fetch: FetchLike;
@@ -116,6 +131,10 @@ export interface DirectorClientOptions {
   /** True when landing fired a health GET that has not settled yet. */
   isHealthPrewarmPending?: () => boolean;
   nowMs?: () => number;
+  /** Called immediately before POST /levels (including cold-start). */
+  onRequestStart?: () => void;
+  /** Called when a plan is chosen (API or fallback). */
+  onRequestEnd?: (info: DirectorRequestEndInfo) => void;
 }
 
 export interface RequestPlanOverrides {
@@ -144,6 +163,8 @@ export interface DirectorResult {
   issues?: Issue[];
   /** Difficulty used for this request (F-07 proc keys). */
   tier?: Tier;
+  /** `X-Request-Id` when the response header is readable. */
+  requestId?: string;
 }
 
 export interface DirectorClient {

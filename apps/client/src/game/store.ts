@@ -4,7 +4,7 @@
  * Pure TypeScript, no DOM, IWSDK or Three.js imports
  */
 
-import { signal, computed } from '@preact/signals-core';
+import { signal, computed, effect } from '@preact/signals-core';
 import { clampParTimeMs, type Issue } from '@roomquest/level-core';
 import type { ErrorCode, LevelPlan, PlanSource, Tier } from '@roomquest/schema';
 import type { FallbackReason } from './director/types.js';
@@ -20,8 +20,10 @@ import type {
   StuckPlayerSignal,
   StartBuildingOptions,
   ExplorerBlockReason,
+  DirectorRequestState,
+  DirectorRequestSource,
 } from './types.js';
-import { defaultClock } from './types.js';
+import { defaultClock, IDLE_DIRECTOR_REQUEST } from './types.js';
 import { calculateStars } from './stars.js';
 
 /**
@@ -92,6 +94,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
   const retryAfterS = signal<number | null>(null);
   const validationIssues = signal<Issue[]>([]);
   const tier = signal<Tier | null>(null);
+  const directorRequest = signal<DirectorRequestState>(IDLE_DIRECTOR_REQUEST);
 
   // Computed values
   const state = computed<GameState>(() => ({
@@ -112,6 +115,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
     retryAfterS: retryAfterS.value,
     validationIssues: validationIssues.value,
     tier: tier.value,
+    directorRequest: directorRequest.value,
   }));
 
   // Helper to get current elapsed time (not a computed to avoid caching issues)
@@ -312,6 +316,14 @@ export function createGameStore(options: GameStoreOptions = {}) {
     | { type: 'pieceMoved'; placementId: string; aligned: boolean }
     | { type: 'platformAligned'; placementId: string }
     | { type: 'portalUsed'; placementId: string }
+    | { type: 'directorRequestStarted' }
+    | {
+        type: 'directorRequestEnded';
+        source: DirectorRequestSource;
+        fallbackReason?: string;
+        durationMs: number;
+        requestId?: string;
+      }
     | {
         type: 'beatCompleted';
         beatIndex: number;
@@ -403,6 +415,8 @@ export function createGameStore(options: GameStoreOptions = {}) {
     get tier() {
       return tier.value;
     },
+    /** Read-only in-flight director signal (`store.directorRequest.value`). */
+    directorRequest,
 
     // Phase transitions
     requestLevel() {
@@ -514,8 +528,51 @@ export function createGameStore(options: GameStoreOptions = {}) {
       beatTimings.value = [];
       currentBeatIndex.value = 0;
       error.value = null;
+      directorRequest.value = IDLE_DIRECTOR_REQUEST;
       resetTimer();
       transition('landing');
+    },
+
+    beginDirectorRequest() {
+      directorRequest.value = {
+        status: 'requesting',
+        startedAt: clock.now(),
+      };
+      emitEvent({ type: 'directorRequestStarted' });
+    },
+
+    endDirectorRequest(info: {
+      status: 'resolved' | 'fallback';
+      source: DirectorRequestSource;
+      fallbackReason?: string;
+      requestId?: string;
+    }) {
+      const now = clock.now();
+      const startedAt =
+        directorRequest.value.status === 'requesting'
+          ? (directorRequest.value.startedAt ?? now)
+          : now;
+      const durationMs = Math.max(0, now - startedAt);
+      directorRequest.value = {
+        status: info.status,
+        startedAt,
+        source: info.source,
+        fallbackReason: info.fallbackReason,
+        requestId: info.requestId,
+      };
+      emitEvent({
+        type: 'directorRequestEnded',
+        source: info.source,
+        fallbackReason: info.fallbackReason,
+        durationMs,
+        requestId: info.requestId,
+      });
+    },
+
+    onDirectorRequest(cb: (state: DirectorRequestState) => void): () => void {
+      return effect(() => {
+        cb(directorRequest.value);
+      });
     },
 
     // Event emission
