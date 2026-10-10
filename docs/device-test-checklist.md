@@ -4,11 +4,13 @@ A single ~20-minute pass on a **real Meta Quest** (Quest 3 or 3S) against the st
 
 You do **not** need the GitHub repo, a computer, Node, or any developer tools. A friend or community member with a Quest can run this.
 
-**Play URL (Engineering Lead fills this in):** `<STAGING_URL>`
+Staging is redeployed only at milestones, so a first load may take ~30-60 s while the Render instance wakes.
+
+**Play URL (Engineering Lead fills this in):** `https://roomquest-client-staging.onrender.com`
 
 Open that URL in **Quest Browser**. For the fps / debug overlay used in this pass, open:
 
-`<STAGING_URL>?debug=1`
+`https://roomquest-client-staging.onrender.com?debug=1`
 
 (If the URL already contains `?`, add `&debug=1` instead.)
 
@@ -52,6 +54,12 @@ Fill this in before or right after Setup. Reuse these versions on every Fail.
 
 ## Setup (~2 min)
 
+- [ ] **Wake the staging API.** Before starting, open `https://roomquest-api-staging.onrender.com/api/health` in Quest Browser and wait until it shows db `"up"`. This wakes the API so the first level is not a procedural fallback from a timeout.
+
+  | Pass / Fail | Notes |
+  | --- | --- |
+  | | |
+
 - [ ] **Quest Browser version.** Open Quest Browser → ⋯ (or the browser menu) and write the version in Notes and in the tester block.
 
   | Pass / Fail | Notes |
@@ -64,7 +72,7 @@ Fill this in before or right after Setup. Reuse these versions on every Fail.
   | --- | --- |
   | | |
 
-- [ ] **URL opened in Quest Browser.** Paste `<STAGING_URL>?debug=1` into Quest Browser (HTTPS). You should see the Roomquest landing page. Do not use a desktop or phone browser for this pass.
+- [ ] **URL opened in Quest Browser.** Paste `https://roomquest-client-staging.onrender.com?debug=1` into Quest Browser (HTTPS). You should see the Roomquest landing page. Do not use a desktop or phone browser for this pass. After Enter, note the director source (`llm` or `procedural`) shown in the `?debug=1` overlay.
 
   | Pass / Fail | Notes |
   | --- | --- |
