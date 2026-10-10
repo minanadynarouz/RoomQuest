@@ -4,6 +4,7 @@
  */
 
 import type { FallbackReason } from '../../game/director/types.js';
+import type { DirectorRequestStatus } from '../../game/types.js';
 import type { PlanSource } from '@roomquest/schema';
 import type { RollingFps } from './rolling-fps.js';
 
@@ -26,6 +27,8 @@ export interface RqPerfStats {
   repairs: number;
   fallbackReason: FallbackReason | null;
   validationIssues: number;
+  directorStatus: DirectorRequestStatus;
+  requestId: string | null;
 }
 
 export const EMPTY_PERF_STATS: RqPerfStats = {
@@ -38,6 +41,8 @@ export const EMPTY_PERF_STATS: RqPerfStats = {
   repairs: 0,
   fallbackReason: null,
   validationIssues: 0,
+  directorStatus: 'idle',
+  requestId: null,
 };
 
 export function readRendererInfo(
@@ -60,6 +65,8 @@ export interface PerfStatsInput {
   repairs: readonly string[];
   fallbackReason: FallbackReason | null;
   validationIssues: number;
+  directorStatus?: DirectorRequestStatus;
+  requestId?: string | null;
 }
 
 export function collectPerfStats(input: PerfStatsInput): RqPerfStats {
@@ -76,6 +83,8 @@ export function collectPerfStats(input: PerfStatsInput): RqPerfStats {
     repairs: input.repairs.length,
     fallbackReason: input.fallbackReason,
     validationIssues: input.validationIssues,
+    directorStatus: input.directorStatus ?? 'idle',
+    requestId: input.requestId ?? null,
   };
 }
 
@@ -89,6 +98,8 @@ export function copyPerfStats(from: RqPerfStats, into: RqPerfStats): void {
   into.repairs = from.repairs;
   into.fallbackReason = from.fallbackReason;
   into.validationIssues = from.validationIssues;
+  into.directorStatus = from.directorStatus;
+  into.requestId = from.requestId;
 }
 
 export function perfSignature(stats: RqPerfStats): string {
@@ -102,5 +113,7 @@ export function perfSignature(stats: RqPerfStats): string {
     stats.repairs,
     stats.fallbackReason ?? '',
     stats.validationIssues,
+    stats.directorStatus,
+    stats.requestId ?? '',
   ].join('|');
 }

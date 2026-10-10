@@ -44,6 +44,31 @@ export function parseRetryAfterS(payload: unknown): number | undefined {
   return undefined;
 }
 
+/**
+ * Parse a CORS-readable `Retry-After` header (delta-seconds or HTTP-date).
+ * Returns whole seconds, or `undefined` when the header is missing/unreadable.
+ */
+export function parseRetryAfterHeader(
+  value: string | null | undefined,
+  nowMs: number
+): number | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+  if (/^\d+$/.test(trimmed)) {
+    return asNonNegativeNumber(Number(trimmed));
+  }
+  const dateMs = Date.parse(trimmed);
+  if (!Number.isFinite(dateMs)) {
+    return undefined;
+  }
+  return Math.max(0, Math.ceil((dateMs - nowMs) / 1000));
+}
+
 /** Absolute time (ms) until which live POSTs should be skipped. */
 export function cooldownUntilMs(nowMs: number, retryAfterS: number): number {
   return nowMs + retryAfterS * 1000;

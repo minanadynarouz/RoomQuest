@@ -116,6 +116,8 @@ const statsGetter = createStatsGetter(() =>
     repairs: gameStore.repairs,
     fallbackReason: gameStore.fallbackReason,
     validationIssues: gameStore.validationIssues.length,
+    directorStatus: gameStore.directorRequest.value.status,
+    requestId: gameStore.directorRequest.value.requestId ?? null,
   })
 );
 
@@ -230,6 +232,7 @@ function exposeHooks(
       platform: latestPlatform,
       slime: latestSlime,
       stats: statsGetter,
+      director: () => gameStore.directorRequest.value,
       playSynthetic: playSyntheticLevel,
     },
     { flags: clientFlags, isDev: import.meta.env.DEV }
@@ -362,6 +365,12 @@ async function startPlayableLevel(
     storage: browserKv(),
     fetch: (input, init) => fetch(input, init),
     apiBaseUrl: import.meta.env.VITE_API_BASE_URL ?? '',
+    onRequestStart: () => {
+      gameStore.beginDirectorRequest();
+    },
+    onRequestEnd: (info) => {
+      gameStore.endDirectorRequest(info);
+    },
   });
   const postedGraph = snapshotSurfaceGraph(graph);
   const result = await director.requestPlan(postedGraph);

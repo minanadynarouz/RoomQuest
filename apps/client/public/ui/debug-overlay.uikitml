@@ -1,7 +1,7 @@
 <style>
   .panel-root {
     flex-direction: column;
-    width: 210px;
+    width: 280px;
   }
 
   .panel-content {
@@ -52,5 +52,7 @@
     <div id="debug-repairs" class="row">repairs    0</div>
     <div id="debug-fallback" class="row">fallback   -</div>
     <div id="debug-issues" class="row">issues     0</div>
+    <div id="debug-director" class="row">director   -</div>
+    <div id="debug-reqid" class="row">reqId      -</div>
   </div>
 </Panel>

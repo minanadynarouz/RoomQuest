@@ -6,5 +6,6 @@
 export * from './types.js';
 export * from './store.js';
 export * from './stars.js';
+export * from './on-director-request.js';
 export * from './director/index.js';
 export * from './results/index.js';

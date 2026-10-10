@@ -104,6 +104,7 @@ describe('createGameStore', () => {
       expect(store.retryAfterS).toBeNull();
       expect(store.validationIssues).toEqual([]);
       expect(store.tier).toBeNull();
+      expect(store.directorRequest.value).toEqual({ status: 'idle' });
     });
   });
 

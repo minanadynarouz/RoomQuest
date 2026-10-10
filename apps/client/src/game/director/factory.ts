@@ -10,6 +10,7 @@ import { parseDirectorFlags } from './flags.js';
 import {
   DEFAULT_CLIENT_VERSION,
   type DirectorClient,
+  type DirectorRequestEndInfo,
   type FetchLike,
   type GenerateFn,
   type KvStore,
@@ -28,6 +29,8 @@ export interface DirectorEnv {
   repair?: RepairFn;
   budgetMs?: number;
   randomUUID?: () => string;
+  onRequestStart?: () => void;
+  onRequestEnd?: (info: DirectorRequestEndInfo) => void;
 }
 
 /**
@@ -51,5 +54,7 @@ export function createDirectorClientFromEnv(env: DirectorEnv): DirectorClient {
     date: flags.date,
     seed: flags.seed,
     budgetMs: env.budgetMs,
+    onRequestStart: env.onRequestStart,
+    onRequestEnd: env.onRequestEnd,
   });
 }

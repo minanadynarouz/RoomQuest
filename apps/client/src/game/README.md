@@ -64,6 +64,7 @@ Event types:
 - `explorerOutOfView`: Explorer outside player FoV
 - `beatCompleted`: Beat finished with duration
 - `won`: Level completed
+- `directorRequestStarted` / `directorRequestEnded`: in-flight `/levels` (room-reading)
 
 ## Beat Tracking
 

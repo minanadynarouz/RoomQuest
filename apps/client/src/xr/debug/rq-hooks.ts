@@ -8,7 +8,7 @@
  * `registerRqHook('autoSolve', async () => { ... })`
  */
 
-import type { GameStore } from '../../game/index.js';
+import type { DirectorRequestState, GameStore } from '../../game/index.js';
 import type { LevelPlan, SurfaceGraph } from '@roomquest/schema';
 import type { HudPanelId } from '../../ui/visibility.js';
 import {
@@ -57,6 +57,8 @@ export interface RqHooks {
   placement?: PlacementDebugApi | null;
   platform?: PlatformDebugApi | null;
   stats?: () => RqPerfStats;
+  /** In-flight director `/levels` state for room-reading / debug. */
+  director?: () => DirectorRequestState;
   autoSolve?: () => Promise<void>;
   /** Debug/e2e: force the synthetic living-room plan into `playing`. */
   playSynthetic?: () => boolean;

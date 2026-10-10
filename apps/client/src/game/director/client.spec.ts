@@ -264,14 +264,29 @@ function apiResponse(overrides?: Partial<LevelResponse>): LevelResponse {
   };
 }
 
+function headerBag(
+  headers: Record<string, string>
+): { get(name: string): string | null } {
+  const normalized = new Map(
+    Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value])
+  );
+  return {
+    get(name: string) {
+      return normalized.get(name.toLowerCase()) ?? null;
+    },
+  };
+}
+
 function jsonResponse(
   payload: unknown,
-  status = 200
+  status = 200,
+  headers?: Record<string, string>
 ): Awaited<ReturnType<FetchLike>> {
   return {
     ok: status >= 200 && status < 300,
     status,
     json: () => Promise.resolve(payload),
+    headers: headers ? headerBag(headers) : undefined,
   };
 }
 
@@ -339,6 +354,26 @@ describe('createDirectorClient', () => {
     expect(result.cacheKey).toBe('abcd1234abcd1234');
     expect(result.latencyMs).toBeGreaterThanOrEqual(0);
     expect(fetchFn).toHaveBeenCalledOnce();
+    expect(result.requestId).toBeUndefined();
+  });
+
+  it('stores X-Request-Id when the response header is readable', async () => {
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve(
+        jsonResponse(apiResponse(), 200, { 'X-Request-Id': 'req-readable' })
+      )
+    );
+    const result = await client(fetchFn).requestPlan(GRAPH);
+    expect(result.usedFallback).toBe(false);
+    expect(result.requestId).toBe('req-readable');
+  });
+
+  it('leaves requestId undefined when X-Request-Id is not readable', async () => {
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve(jsonResponse(apiResponse(), 200))
+    );
+    const result = await client(fetchFn).requestPlan(GRAPH);
+    expect(result.requestId).toBeUndefined();
   });
 
   it('accepts a B-05 server plan for the posted graph snapshot and posts the result to the cacheKey', async () => {
@@ -688,11 +723,34 @@ describe('createDirectorClient', () => {
     expect(result.usedFallback).toBe(true);
     expect(result.fallbackReason).toBe('rate-limited');
     expect(result.retryAfterS).toBe(3600);
+    expect(result.requestId).toBeUndefined();
     expect(result.apiErrorCode).toBe('RATE_LIMITED');
     expect(result.source).toBe('procedural');
     expect(result.plan.start).toBe('s1');
     expect(console.warn).not.toHaveBeenCalled();
     expect(console.info).toHaveBeenCalled();
+  });
+
+  it('prefers a readable Retry-After header over the 429 body', async () => {
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve(
+        jsonResponse(
+          {
+            error: {
+              code: 'RATE_LIMITED',
+              message: 'slow',
+              retryAfterS: 3600,
+            },
+          },
+          429,
+          { 'Retry-After': '45', 'X-Request-Id': 'req-429' }
+        )
+      )
+    );
+    const result = await client(fetchFn).requestPlan(GRAPH);
+    expect(result.fallbackReason).toBe('rate-limited');
+    expect(result.retryAfterS).toBe(45);
+    expect(result.requestId).toBe('req-429');
   });
 
   it('falls back silently on 429 with only retryAfterS', async () => {

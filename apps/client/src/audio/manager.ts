@@ -48,12 +48,14 @@ function playEntry(key: SoundKey): void {
 }
 
 export function handleGameEvent(event: GameEvent, atMs = nowMs()): void {
-  const entry = SOUND_MANIFEST[event.type];
+  if (!(event.type in SOUND_MANIFEST)) return;
+  const key = event.type as SoundKey;
+  const entry = SOUND_MANIFEST[key];
   if (entry.spatial) {
     if (atMs - lastSpatialAt < CHIRP_COOLDOWN_MS) return;
     lastSpatialAt = atMs;
   }
-  playEntry(event.type);
+  playEntry(key);
 }
 
 export function bindAudioStore(store: GameStore): void {
