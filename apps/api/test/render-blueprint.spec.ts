@@ -12,7 +12,7 @@ describe('render.yaml (B-10)', () => {
     expect(yaml).toContain('name: roomquest-api-staging');
     expect(yaml).toContain('name: roomquest-api-prod');
     expect(yaml).toContain('runtime: node');
-    expect(yaml).toContain('region: oregon');
+    expect(yaml).toContain('region: frankfurt');
     expect(yaml).toContain('autoDeploy: false');
     expect(yaml).toContain('healthCheckPath: /api/health');
     expect(yaml).toContain(
@@ -28,10 +28,8 @@ describe('render.yaml (B-10)', () => {
       'DATABASE_URL',
       'DIRECT_URL',
       'GOOGLE_API_KEY',
-      'ANTHROPIC_API_KEY',
       'DIRECTOR_MODE',
       'DIRECTOR_MODEL',
-      'FALLBACK_MODEL',
       'CORS_ORIGINS',
       'NODE_ENV',
       'GIT_SHA',

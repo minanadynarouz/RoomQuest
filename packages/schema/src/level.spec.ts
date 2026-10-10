@@ -397,7 +397,7 @@ describe('Level schemas', () => {
       expect(() => PlacementLLM.parse(missingPlayerBuilt.placements[0])).toThrow();
     });
 
-    it('validates parTimeMs in LevelPlanLLM (positive integer, no bounds)', () => {
+    it('validates parTimeMs in LevelPlanLLM (integer >= 1, no upper bound)', () => {
       // Valid in range
       expect(() => LevelPlanLLM.parse(validPlanLLM)).not.toThrow();
 
@@ -409,7 +409,7 @@ describe('Level schemas', () => {
         LevelPlanLLM.parse({ ...validPlanLLM, parTimeMs: 1000 }),
       ).not.toThrow();
 
-      // Zero (should fail - not positive)
+      // Zero (should fail - min 1)
       expect(() =>
         LevelPlanLLM.parse({ ...validPlanLLM, parTimeMs: 0 }),
       ).toThrow();

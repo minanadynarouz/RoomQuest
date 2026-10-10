@@ -2,10 +2,7 @@ import { generatePlan } from '@roomquest/level-core';
 import { LevelRequest } from '@roomquest/schema';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import {
-  DEFAULT_DIRECTOR_MODEL,
-  DEFAULT_FALLBACK_MODEL,
-} from '../src/director/director.constants';
+import { DEFAULT_DIRECTOR_MODEL } from '../src/director/director.constants';
 import {
   defaultDirectorChatFactory,
   wrapChatModel,
@@ -61,7 +58,7 @@ function nonEmpty(value: string | undefined): string | undefined {
 function resolveKey(
   explicit: string | undefined,
   provided: boolean,
-  envName: 'GOOGLE_API_KEY' | 'ANTHROPIC_API_KEY'
+  envName: 'GOOGLE_API_KEY'
 ): string | undefined {
   if (provided) {
     return nonEmpty(explicit);
@@ -130,27 +127,15 @@ export async function runEvalHarness(
     nonEmpty(options.directorModel) ??
     nonEmpty(process.env.DIRECTOR_MODEL) ??
     DEFAULT_DIRECTOR_MODEL;
-  const fallbackModel =
-    nonEmpty(options.fallbackModel) ??
-    nonEmpty(process.env.FALLBACK_MODEL) ??
-    DEFAULT_FALLBACK_MODEL;
 
   const googleApiKey = resolveKey(
     options.googleApiKey,
     Object.hasOwn(options, 'googleApiKey'),
     'GOOGLE_API_KEY'
   );
-  const anthropicApiKey = resolveKey(
-    options.anthropicApiKey,
-    Object.hasOwn(options, 'anthropicApiKey'),
-    'ANTHROPIC_API_KEY'
-  );
 
   if (!options.mock && googleApiKey === undefined) {
     const missingKeys = ['GOOGLE_API_KEY'];
-    if (anthropicApiKey === undefined) {
-      missingKeys.push('ANTHROPIC_API_KEY');
-    }
     return {
       status: 'skipped',
       reason: skipReason(missingKeys),
@@ -182,17 +167,6 @@ export async function runEvalHarness(
           }),
           'google',
           directorModel
-        )
-      : undefined;
-  const liveFallback =
-    !options.mock && anthropicApiKey !== undefined
-      ? wrapChatModel(
-          defaultDirectorChatFactory.createFallback({
-            model: fallbackModel,
-            apiKey: anthropicApiKey,
-          }),
-          'anthropic',
-          fallbackModel
         )
       : undefined;
 
@@ -228,7 +202,6 @@ export async function runEvalHarness(
 
         const outcome = await runDirector(request, {
           primary,
-          fallback: options.mock ? undefined : liveFallback,
           now,
           logger,
         });
@@ -259,7 +232,6 @@ export async function runEvalHarness(
     mock: options.mock,
     promptVersion: PROMPT_VERSION,
     directorModel,
-    fallbackModel,
     roomIds: rooms.map((room) => room.id),
     seedDates: [...seedDates],
     tiers: [...tiers],

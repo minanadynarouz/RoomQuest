@@ -3,7 +3,6 @@ import { createDirectorDeadline, type DirectorDeadline } from './deadline';
 import {
   DIRECTOR_BUDGET_MS,
   DIRECTOR_LLM_WINDOW_MS,
-  FALLBACK_MIN_REMAINING_MS,
   LLM_REPAIR_MIN_REMAINING_MS,
   PROCEDURAL_RESERVE_MS,
 } from './director.constants';
@@ -40,7 +39,7 @@ describe('createDirectorDeadline', () => {
     t = 5000;
     expect(deadline.remainingMs()).toBe(3000);
     expect(deadline.remainingForLlm()).toBe(2750);
-    expect(deadline.canStartLlm(FALLBACK_MIN_REMAINING_MS)).toBe(false);
+    expect(deadline.canStartLlm(3000)).toBe(false);
     expect(deadline.canStartLlm(LLM_REPAIR_MIN_REMAINING_MS)).toBe(true);
   });
 

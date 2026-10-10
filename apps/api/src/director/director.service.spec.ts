@@ -40,7 +40,6 @@ async function serviceWithEnv(
           factory ??
           ({
             createPrimary: vi.fn(),
-            createFallback: vi.fn(),
           } satisfies DirectorChatFactory),
       },
     ],
@@ -65,7 +64,6 @@ describe('DirectorService', () => {
     });
     const factory: DirectorChatFactory = {
       createPrimary,
-      createFallback: vi.fn(),
     };
     const director = await serviceWithEnv({ DIRECTOR_MODE: 'live' }, factory);
     const response = await director.plan(request);
@@ -81,7 +79,6 @@ describe('DirectorService', () => {
     });
     const factory: DirectorChatFactory = {
       createPrimary: () => fake,
-      createFallback: vi.fn(),
     };
     const director = await serviceWithEnv(
       { DIRECTOR_MODE: 'live', GOOGLE_API_KEY: 'test-google-key' },

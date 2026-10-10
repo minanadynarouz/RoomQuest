@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { toGeminiSchema } from './json-schema.js';
 import { PieceId } from './piece.js';
 
 /**
@@ -23,7 +24,12 @@ export type Tier = z.infer<typeof Tier>;
 /**
  * Plan source tracking
  */
-export const PlanSource = z.enum(['cache', 'llm', 'llm_repaired', 'procedural']);
+export const PlanSource = z.enum([
+  'cache',
+  'llm',
+  'llm_repaired',
+  'procedural',
+]);
 export type PlanSource = z.infer<typeof PlanSource>;
 
 /**
@@ -122,6 +128,8 @@ export type LevelPlan = z.infer<typeof LevelPlan>;
  * - No regex patterns
  * - No unions or discriminated unions
  * - Flat objects with primitives, enums, strings, numbers, and simple arrays
+ * - parTimeMs uses `.min(1)` (not `.positive()`) so JSON Schema emits `minimum`
+ * - Send `LevelPlanLLMGeminiSchema` on the wire; still parse with this zod schema
  *
  * Parse LLM output with LevelPlanLLM, then use LevelPlan.parse() to normalize.
  */
@@ -161,9 +169,12 @@ export const LevelPlanLLM = z.object({
   parTimeMs: z
     .number()
     .int()
-    .positive()
+    .min(1)
     .describe(
-      'Par completion time in milliseconds for 3-star rating (target: 1-8 minutes)',
+      'Par completion time in milliseconds for 3-star rating (target: 1-8 minutes)'
     ),
 });
 export type LevelPlanLLM = z.infer<typeof LevelPlanLLM>;
+
+/** Gemini `responseSchema` for `withStructuredOutput` (zod parse stays on `LevelPlanLLM`). */
+export const LevelPlanLLMGeminiSchema = toGeminiSchema(LevelPlanLLM);

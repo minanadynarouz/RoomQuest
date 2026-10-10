@@ -34,12 +34,15 @@ export function structuredFromFake(
 
 export class ThrowingFakeListChatModel extends FakeListChatModel {
   onThrow?: () => void;
+  generateCalls = 0;
 
   constructor(private readonly error: Error) {
-    super({ responses: ['{}'] });
+    // Match production Gemini: no LangChain retry/backoff on the 7 s budget.
+    super({ responses: ['{}'], maxRetries: 0 });
   }
 
   _generate(): Promise<never> {
+    this.generateCalls += 1;
     this.onThrow?.();
     return Promise.reject(this.error);
   }

@@ -1,13 +1,10 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`Level schemas > LevelPlanLLM JSON schema > matches the expected JSON schema snapshot 1`] = `
+exports[`toGeminiSchema > matches the Gemini LevelPlanLLM schema snapshot 1`] = `
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "additionalProperties": false,
   "properties": {
     "beats": {
       "items": {
-        "additionalProperties": false,
         "properties": {
           "goal": {
             "type": "string",
@@ -31,7 +28,6 @@ exports[`Level schemas > LevelPlanLLM JSON schema > matches the expected JSON sc
     },
     "dialogue": {
       "items": {
-        "additionalProperties": false,
         "properties": {
           "line": {
             "type": "string",
@@ -67,7 +63,6 @@ exports[`Level schemas > LevelPlanLLM JSON schema > matches the expected JSON sc
     },
     "placements": {
       "items": {
-        "additionalProperties": false,
         "properties": {
           "id": {
             "type": "string",
@@ -100,10 +95,8 @@ exports[`Level schemas > LevelPlanLLM JSON schema > matches the expected JSON sc
             "type": "string",
           },
           "to": {
-            "type": [
-              "string",
-              "null",
-            ],
+            "nullable": true,
+            "type": "string",
           },
           "u": {
             "maximum": 1,

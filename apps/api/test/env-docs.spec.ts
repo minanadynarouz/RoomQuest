@@ -17,11 +17,9 @@ const NEST_ENV_KEYS = [
   'CORS_ORIGINS',
   'GIT_SHA',
   'GOOGLE_API_KEY',
-  'ANTHROPIC_API_KEY',
   'DATABASE_URL',
   'DIRECT_URL',
   'DIRECTOR_MODEL',
-  'FALLBACK_MODEL',
 ] as const;
 
 /** Render injects PORT; NODE_VERSION is a native runtime pin, not Nest. */

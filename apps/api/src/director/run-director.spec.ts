@@ -1,3 +1,4 @@
+import { AIMessage } from '@langchain/core/messages';
 import { FakeListChatModel } from '@langchain/core/utils/testing';
 import {
   SYNTHETIC_LIVING_ROOM,
@@ -9,11 +10,11 @@ import { describe, expect, it } from 'vitest';
 import {
   DIRECTOR_BUDGET_MS,
   DIRECTOR_LLM_WINDOW_MS,
-  FALLBACK_MIN_REMAINING_MS,
   LLM_REPAIR_MIN_REMAINING_MS,
   PROCEDURAL_RESERVE_MS,
 } from './director.constants';
 import { wrapChatModel } from './models';
+import type { StructuredChat } from './structured-chat';
 import { PROMPT_VERSION } from './prompts';
 import { runDirector } from './run-director';
 import {
@@ -85,6 +86,34 @@ describe('runDirector', () => {
     expect(outcome.telemetry[0]?.outcome).toBe('ok');
     expect(outcome.telemetry[0]?.inputTokens).toBe(12);
     expect(outcome.telemetry[0]?.outputTokens).toBe(34);
+  });
+
+  it('feeds includeRaw text into local repair when structured parse fails', async () => {
+    let calls = 0;
+    const primary: StructuredChat = {
+      provider: 'google',
+      model: 'gemini-3.8-flash',
+      invokeStructured: () => {
+        calls += 1;
+        return Promise.resolve({
+          parsed: null,
+          raw: new AIMessage(dirtyLocalRepairJson()),
+        });
+      },
+    };
+    const outcome = await runDirector(request, {
+      primary,
+      logger: silentLogger,
+    });
+    expect(calls).toBe(1);
+    expect(outcome.response.source).toBe('llm_repaired');
+    expect(outcome.response.repairs.length).toBeGreaterThan(0);
+    expect(validatePlan(outcome.response.plan, request.graph).ok).toBe(true);
+    expect(outcome.telemetry).toHaveLength(1);
+    expect(outcome.telemetry[0]?.outcome).toBe('invalid');
+    expect(
+      outcome.response.plan.placements.some((p) => p.id === 'p-slime')
+    ).toBe(false);
   });
 
   it('locally repairs an invalid first plan without a second LLM call', async () => {
@@ -188,53 +217,46 @@ describe('runDirector', () => {
       );
     });
 
-    it('skips the fallback model when fewer than 3 s remain', async () => {
+    it('goes straight to procedural within the budget when Gemini fails', async () => {
       let t = 0;
       const primary = new ThrowingFakeListChatModel(new Error('gemini down'));
       primary.onThrow = () => {
-        t = DIRECTOR_LLM_WINDOW_MS - FALLBACK_MIN_REMAINING_MS + 1;
+        t = 400;
       };
-      const fallback = new FakeListChatModel({ responses: [validJson] });
       const outcome = await runDirector(request, {
-        primary: structuredFromFake(primary),
-        fallback: structuredFromFake(
-          fallback,
-          'anthropic',
-          'claude-haiku-4-5'
-        ),
+        primary: structuredFromFake(primary, 'google', 'gemini-3.8-flash'),
         budgetMs: DIRECTOR_BUDGET_MS,
-        fallbackMinRemainingMs: FALLBACK_MIN_REMAINING_MS,
+        proceduralReserveMs: PROCEDURAL_RESERVE_MS,
         now: () => t,
         logger: silentLogger,
       });
       expect(outcome.response.source).toBe('procedural');
       expect(outcome.response.model).toBeUndefined();
-      expect(
-        outcome.telemetry.some((row) => row.provider === 'anthropic')
-      ).toBe(false);
+      expect(outcome.response.latencyMs).toBeLessThan(DIRECTOR_BUDGET_MS);
+      expect(outcome.telemetry).toHaveLength(1);
+      expect(outcome.telemetry[0]?.provider).toBe('google');
+      expect(outcome.telemetry[0]?.outcome).toBe('error');
+      expect(validatePlan(outcome.response.plan, request.graph).ok).toBe(true);
     });
-  });
 
-  it('falls back to the secondary model on a provider error when budget remains', async () => {
-    const primary = new ThrowingFakeListChatModel(
-      new Error('gemini unavailable')
-    );
-    const fallback = new FakeListChatModel({ responses: [validJson] });
-    const outcome = await runDirector(request, {
-      primary: structuredFromFake(primary, 'google', 'gemini-3.8-flash'),
-      fallback: structuredFromFake(
-        fallback,
-        'anthropic',
-        'claude-haiku-4-5'
-      ),
-      logger: silentLogger,
+    it('invokes Gemini exactly once on a provider error (no hidden retries)', async () => {
+      let t = 0;
+      const primary = new ThrowingFakeListChatModel(new Error('gemini down'));
+      primary.onThrow = () => {
+        t = 400;
+      };
+      const outcome = await runDirector(request, {
+        primary: wrapChatModel(primary, 'google', 'gemini-3.8-flash'),
+        budgetMs: DIRECTOR_BUDGET_MS,
+        proceduralReserveMs: PROCEDURAL_RESERVE_MS,
+        now: () => t,
+        logger: silentLogger,
+      });
+      expect(primary.generateCalls).toBe(1);
+      expect(outcome.response.source).toBe('procedural');
+      expect(outcome.telemetry).toHaveLength(1);
+      expect(outcome.telemetry[0]?.outcome).toBe('error');
     });
-    expect(outcome.response.source).toBe('llm');
-    expect(outcome.response.model).toBe('claude-haiku-4-5');
-    expect(outcome.telemetry[0]?.outcome).toBe('error');
-    expect(outcome.telemetry[0]?.provider).toBe('google');
-    expect(outcome.telemetry[1]?.outcome).toBe('ok');
-    expect(outcome.telemetry[1]?.provider).toBe('anthropic');
   });
 
   it('falls back to procedural after two invalid LLM plans', async () => {

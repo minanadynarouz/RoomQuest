@@ -50,7 +50,7 @@ Always **200** while the Node process is up. Used by the landing-page pre-warm a
 | `status`  | Always `"ok"`.                                                                                                                             |
 | `version` | `GIT_SHA` env var. Local default `"dev"` when unset or empty. Staging/prod should set this to the git commit sha.                          |
 | `db`      | `"up"` \| `"down"` \| `"disabled"`. `"disabled"` when `DATABASE_URL` is unset; `"up"` when a bounded `SELECT 1` ping succeeds; `"down"` when the URL is set but Postgres is unreachable (the ping is capped at 2 s). The process still returns 200. |
-| `llm`     | `"configured"` if `GOOGLE_API_KEY` or `ANTHROPIC_API_KEY` is a non-empty string, else `"missing"`. Keys are not required to start the API. |
+| `llm`     | `"configured"` if `GOOGLE_API_KEY` is a non-empty string, else `"missing"`. Keys are not required to start the API. |
 | `time`    | ISO 8601 UTC timestamp (`Date.toISOString()`).                                                                                             |
 
 ---
@@ -94,11 +94,10 @@ Architecture server semantics:
 3. **Cache** (when `DATABASE_URL` is set and Postgres is reachable): look up `LevelCache` by `cacheKey`. On a hit, **always** re-run `level-core.validatePlan` against the **incoming** graph (roomHash only covers the 6 largest surfaces). If valid, return `source:"cache"` (this does **not** count against the per-device cache-miss budget). If validation fails, treat it as a miss, regenerate, and overwrite the row.
 4. **Mock** (`DIRECTOR_MODE=mock`, the default): return the `synthetic_living_room` plan fixture from `@roomquest/fixtures`, parsed with `LevelPlan`. `source` is `"procedural"`. `model` is omitted. No LLM keys required.
 5. **Live** (`DIRECTOR_MODE=live`): LangChain director with a **7 s whole-request** budget (the client aborts `/levels` at 8 s). One `AbortSignal` is shared by every step, measured from request arrival. LLM work is aborted **250 ms** before the 7 s wall so `generatePlan` and the HTTP response still finish in time.
-   1. Primary: `ChatGoogleGenerativeAI` (`DIRECTOR_MODEL`, default `gemini-3.8-flash`), temperature 0.7, `thinkingConfig.thinkingLevel = LOW`, `.withStructuredOutput(LevelPlanLLM)`.
+   1. Primary: `ChatGoogleGenerativeAI` (`DIRECTOR_MODEL`, default `gemini-3.8-flash`), temperature 0.7, `thinkingConfig.thinkingLevel = LOW`, `.withStructuredOutput(LevelPlanLLMGeminiSchema)` then zod `LevelPlanLLM`.
    2. Parse `LevelPlanLLM` → `clampParTimeMs` → `LevelPlan.parse` → `validatePlan(plan, graph)`.
    3. If invalid: local `repairPlan` first. If still invalid: **one** LLM repair call that includes the issue messages (same static system prefix), **skipped** when fewer than **2 s** of the LLM window remain.
-   4. Provider error on the primary: try Anthropic `ChatAnthropic` (`FALLBACK_MODEL`, default `claude-haiku-4-5`) only when **≥ 3 s** of the LLM window remain and `ANTHROPIC_API_KEY` is set.
-   5. Still invalid, out of time, or any remaining provider error: `generatePlan(graph, seed, tier)` with `source:"procedural"`.
+   4. Still invalid, out of time, or a Gemini provider error: `generatePlan(graph, seed, tier)` with `source:"procedural"`.
 6. After a successful director/procedural result, the plan is upserted into `LevelCache`. The write is bounded (~200 ms or whatever remains of the 7 s budget) so it cannot push the response past the wall; if the wait elapses the insert continues in the background.
 7. `source` is `"cache"` | `"llm"` | `"llm_repaired"` | `"procedural"`. `model` is set for LLM sources (and echoed from the cached row on a hit). `repairs` lists local repair actions (and `"llm-repair"` when the second call ran); cache hits return `repairs: []`.
 8. `latencyMs` is server handling time in milliseconds.
@@ -301,9 +300,7 @@ None of these are required to start the API. CI sets `TEST_DATABASE_URL` on the 
 | `CORS_ORIGINS` | optional | `http://localhost:5173,https://localhost:5173` | `http://localhost:5173,https://localhost:5173,https://roomquest.vercel.app` | **all**. Comma-separated extra origins. Vercel preview hosts and `https://localhost:*` are hardcoded in CORS. |
 | `GIT_SHA` | optional | `dev` (empty/unset also becomes `dev`) | `9f8e7d6c5b4a3210` | **local** `dev`; **staging** / **prod** = deployed git sha (set by the deploy workflow). |
 | `DIRECTOR_MODEL` | optional | `gemini-3.8-flash` | `gemini-3.8-flash` | **staging** / **prod**; **local** only when exercising live director. |
-| `FALLBACK_MODEL` | optional | `claude-haiku-4-5` | `claude-haiku-4-5` | **staging** / **prod**; **local** only when exercising live director. |
 | `GOOGLE_API_KEY` | optional | unset | Gemini API key (never commit) | **staging** / **prod** when `DIRECTOR_MODE=live`; **local** live director / **eval** (`pnpm --filter api eval`). Also a **GitHub Actions repository secret** for `.github/workflows/eval.yml`. Blank → health `llm:"missing"`; live eval skips unless `--mock`. |
-| `ANTHROPIC_API_KEY` | optional | unset | Anthropic API key (never commit) | **staging** / **prod** fallback; **local** live director / **eval**. Optional **GitHub Actions repository secret** for `eval.yml`. Either key makes health `llm:"configured"`. |
 | `DATABASE_URL` | optional | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **local** Docker Postgres 17 (runtime / pooled). **staging** / **prod**: Neon pooled URL — declared in `render.yaml`, values set later (M-10). Unset → health `db:"disabled"`; unreachable → health `db:"down"`. `/levels` still serves without cache (warning logged); `/result` returns `202 {stored:false}`; process still 200. |
 | `DIRECT_URL` | optional | unset | `postgresql://postgres:postgres@localhost:5432/roomquest` | **local** Docker (Prisma CLI / `pnpm --filter api db:migrate`). **staging** / **prod**: Neon unpooled URL for `migrate deploy` at the end of the Render build (`render.yaml`) and later in GitHub Environments (L-03 / L-04). |
 | `NODE_VERSION` | Render build only (not read by Nest) | `22` in `render.yaml` | `22` | **staging** / **prod** Render native runtime. **local** uses `.nvmrc` (`22`). |
@@ -328,18 +325,17 @@ It writes `docs/eval/<YYYY-MM-DD>.md` and `docs/eval/<YYYY-MM-DD>.json`, prints 
 | `--out-dir DIR`             | Report directory (default: `docs/eval`).                                                           |
 | `--no-write`                | Print only; do not write files.                                                                    |
 
-Live eval needs `GOOGLE_API_KEY`. `ANTHROPIC_API_KEY` is optional (provider fallback). If `GOOGLE_API_KEY` is unset, the harness prints that clearly and **skips** (exit 0) unless you pass `--mock`. Never hardcode keys. Prices used for the cost estimate live in `apps/api/eval/prices.ts`.
+Live eval needs `GOOGLE_API_KEY`. If it is unset, the harness prints that clearly and **skips** (exit 0) unless you pass `--mock`. Never hardcode keys. Prices used for the cost estimate live in `apps/api/eval/prices.ts`.
 
 ### GitHub Actions `eval.yml`
 
 Manual **`workflow_dispatch` only** — it does **not** run on pull requests. Required / optional repository secrets:
 
-| Secret              | Required                   | Used for                                                       |
-| ------------------- | -------------------------- | -------------------------------------------------------------- |
-| `GOOGLE_API_KEY`    | **required for live eval** | Gemini primary (`DIRECTOR_MODEL`, default `gemini-3.8-flash`)  |
-| `ANTHROPIC_API_KEY` | optional                   | Claude fallback (`FALLBACK_MODEL`, default `claude-haiku-4-5`) |
+| Secret           | Required                   | Used for                                                    |
+| ---------------- | -------------------------- | ----------------------------------------------------------- |
+| `GOOGLE_API_KEY` | **required for live eval** | Gemini (`DIRECTOR_MODEL`, default `gemini-3.8-flash`)       |
 
-The workflow sets `DIRECTOR_MODE=live` and reads the API keys from those **exact** repository secret names (`GOOGLE_API_KEY`, `ANTHROPIC_API_KEY` — same as `apps/api/src/config/env.ts`). Optional repository **variables** `DIRECTOR_MODEL` and `FALLBACK_MODEL` override model ids when set (blank → API defaults). Dispatch with `mock=true` to run FakeListChatModel and skip the live-key check. The markdown + JSON report is uploaded as the `director-eval-report` artifact.
+The workflow sets `DIRECTOR_MODE=live` and reads the API key from that **exact** repository secret name (`GOOGLE_API_KEY` — same as `apps/api/src/config/env.ts`). Optional repository **variable** `DIRECTOR_MODEL` overrides the model id when set (blank → API default). Dispatch with `mock=true` to run FakeListChatModel and skip the live-key check. The markdown + JSON report is uploaded as the `director-eval-report` artifact.
 
 ## Local run (no database)
 

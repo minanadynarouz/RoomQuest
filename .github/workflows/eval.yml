@@ -20,7 +20,6 @@ jobs:
     env:
       DIRECTOR_MODE: live
       GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -61,7 +60,6 @@ jobs:
           if [ -z "$GOOGLE_API_KEY" ]; then
             echo "GOOGLE_API_KEY repository secret is missing."
             echo "Add it under Settings → Secrets and variables → Actions."
-            echo "ANTHROPIC_API_KEY is optional (provider fallback)."
             echo "Re-run with mock=true to exercise FakeListChatModel."
             exit 1
           fi
@@ -69,7 +67,6 @@ jobs:
       - name: Run director eval
         env:
           DIRECTOR_MODEL: ${{ vars.DIRECTOR_MODEL }}
-          FALLBACK_MODEL: ${{ vars.FALLBACK_MODEL }}
         run: |
           if [ "${{ inputs.mock }}" = "true" ]; then
             pnpm --filter api eval -- --mock

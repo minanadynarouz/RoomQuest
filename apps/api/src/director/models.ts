@@ -1,14 +1,10 @@
-import { ChatAnthropic } from '@langchain/anthropic';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { BaseMessageLike } from '@langchain/core/messages';
-import { LevelPlanLLM } from '@roomquest/schema';
+import { LevelPlanLLMGeminiSchema } from '@roomquest/schema';
 import { DIRECTOR_TEMPERATURE } from './director.constants';
 import { raceAbort } from './errors';
-import {
-  type StructuredChat,
-  unwrapStructured,
-} from './structured-chat';
+import { type StructuredChat, unwrapStructured } from './structured-chat';
 import type { LlmProvider } from './telemetry';
 
 export const DIRECTOR_CHAT_FACTORY = Symbol('DIRECTOR_CHAT_FACTORY');
@@ -17,7 +13,6 @@ export const DIRECTOR_RUNTIME = Symbol('DIRECTOR_RUNTIME');
 /** Optional test/eval overrides for the 7 s whole-request budget. Production leaves this empty. */
 export interface DirectorRuntime {
   budgetMs?: number;
-  fallbackMinRemainingMs?: number;
   llmRepairMinRemainingMs?: number;
   proceduralReserveMs?: number;
   now?: () => number;
@@ -30,7 +25,6 @@ export interface ChatModelParams {
 
 export interface DirectorChatFactory {
   createPrimary(input: ChatModelParams): BaseChatModel;
-  createFallback(input: ChatModelParams): BaseChatModel;
 }
 
 /**
@@ -44,16 +38,10 @@ export const defaultDirectorChatFactory: DirectorChatFactory = {
       model: input.model,
       apiKey: input.apiKey,
       temperature: DIRECTOR_TEMPERATURE,
+      // LangChain's AsyncCaller defaults to 6 retries with backoff. The
+      // director owns the 7 s budget, so draft and repair must not retry.
       maxRetries: 0,
       thinkingConfig: { thinkingLevel: 'LOW' },
-    });
-  },
-  createFallback(input: ChatModelParams): BaseChatModel {
-    return new ChatAnthropic({
-      model: input.model,
-      apiKey: input.apiKey,
-      temperature: DIRECTOR_TEMPERATURE,
-      maxRetries: 0,
     });
   },
 };
@@ -67,8 +55,12 @@ export function wrapChatModel(
     provider,
     model: modelId,
     async invokeStructured(messages, signal) {
-      const structured = model.withStructuredOutput(LevelPlanLLM, {
+      // Pass the converted JSON schema only — never zod LevelPlanLLM.
+      // LangChain's Zod path re-runs toJsonSchema and the bad keywords return.
+      const structured = model.withStructuredOutput(LevelPlanLLMGeminiSchema, {
         includeRaw: true,
+        method: 'jsonSchema',
+        name: 'LevelPlanLLM',
       });
       const result: unknown = await raceAbort(
         structured.invoke(messages, { signal }) as Promise<unknown>,

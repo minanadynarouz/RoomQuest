@@ -1,11 +1,7 @@
-export type LlmProvider = 'google' | 'anthropic';
+export type LlmProvider = 'google';
 
 export type LlmCallOutcome =
-  | 'ok'
-  | 'invalid'
-  | 'repaired'
-  | 'timeout'
-  | 'error';
+  'ok' | 'invalid' | 'repaired' | 'timeout' | 'error';
 
 /**
  * One LLM round-trip. B-07 eval can reuse this record. Do not log API keys.

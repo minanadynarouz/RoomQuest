@@ -13,10 +13,7 @@ import {
 import { makeCacheKey } from '../levels/cache-key';
 import { makeDailySeed } from '../levels/daily-seed';
 import { createDirectorDeadline } from './deadline';
-import {
-  FALLBACK_MIN_REMAINING_MS,
-  LLM_REPAIR_MIN_REMAINING_MS,
-} from './director.constants';
+import { LLM_REPAIR_MIN_REMAINING_MS } from './director.constants';
 import { isTimeoutError } from './errors';
 import { tryParseLlmPlan } from './parse-plan';
 import {
@@ -25,7 +22,7 @@ import {
   PROMPT_VERSION,
   SYSTEM_PREFIX,
 } from './prompts';
-import type { StructuredChat } from './structured-chat';
+import { structuredCandidate, type StructuredChat } from './structured-chat';
 import {
   logLlmCall,
   tokensFromRaw,
@@ -41,9 +38,7 @@ export interface DirectorOutcome {
 
 export interface RunDirectorOptions {
   primary: StructuredChat;
-  fallback?: StructuredChat;
   budgetMs?: number;
-  fallbackMinRemainingMs?: number;
   llmRepairMinRemainingMs?: number;
   proceduralReserveMs?: number;
   now?: () => number;
@@ -126,7 +121,10 @@ function llmOutcome(
   };
 }
 
-function repairAsPlan(raw: unknown, fallback: LevelPlan | undefined): LevelPlan {
+function repairAsPlan(
+  raw: unknown,
+  fallback: LevelPlan | undefined
+): LevelPlan {
   if (fallback !== undefined) {
     return fallback;
   }
@@ -134,7 +132,7 @@ function repairAsPlan(raw: unknown, fallback: LevelPlan | undefined): LevelPlan 
 }
 
 /**
- * Live director loop: LLM → validate → local repair → one LLM repair →
+ * Live director loop: Gemini → validate → local repair → one Gemini repair →
  * procedural. Never throws for provider/timeout/invalid output.
  */
 export async function runDirector(
@@ -143,8 +141,6 @@ export async function runDirector(
 ): Promise<DirectorOutcome> {
   const now = options.now ?? (() => Date.now());
   const startedMs = options.startedMs ?? now();
-  const fallbackMin =
-    options.fallbackMinRemainingMs ?? FALLBACK_MIN_REMAINING_MS;
   const repairMin =
     options.llmRepairMinRemainingMs ?? LLM_REPAIR_MIN_REMAINING_MS;
   const promptVersion = options.promptVersion ?? PROMPT_VERSION;
@@ -186,11 +182,9 @@ export async function runDirector(
       return { kind: 'timeout' };
     }
     try {
-      const { parsed, raw } = await chat.invokeStructured(
-        messages,
-        deadline.signal
-      );
-      const parsedPlan = tryParseLlmPlan(parsed);
+      const call = await chat.invokeStructured(messages, deadline.signal);
+      const candidate = structuredCandidate(call);
+      const parsedPlan = tryParseLlmPlan(candidate);
       if (parsedPlan.plan !== undefined) {
         const validation = validatePlan(parsedPlan.plan, request.graph);
         if (validation.ok) {
@@ -198,30 +192,30 @@ export async function runDirector(
             chat,
             callStarted,
             phase === 'repair' ? 'repaired' : 'ok',
-            raw
+            call.raw
           );
           return {
             kind: 'plan',
             valid: true,
             plan: parsedPlan.plan,
-            raw: parsed,
+            raw: candidate,
             issues: [],
           };
         }
-        record(chat, callStarted, 'invalid', raw);
+        record(chat, callStarted, 'invalid', call.raw);
         return {
           kind: 'plan',
           valid: false,
           plan: parsedPlan.plan,
-          raw: parsed,
+          raw: candidate,
           issues: validation.issues,
         };
       }
-      record(chat, callStarted, 'invalid', raw);
+      record(chat, callStarted, 'invalid', call.raw);
       return {
         kind: 'plan',
         valid: false,
-        raw: parsed,
+        raw: candidate,
         issues: [
           {
             code: 'SCHEMA_INVALID',
@@ -256,16 +250,8 @@ export async function runDirector(
       ),
     ];
 
-    let chat = options.primary;
-    let draft = await attempt(chat, draftMessages, 'draft');
-
-    if (draft.kind === 'error') {
-      const fallback = options.fallback;
-      if (fallback !== undefined && deadline.canStartLlm(fallbackMin)) {
-        chat = fallback;
-        draft = await attempt(chat, draftMessages, 'draft');
-      }
-    }
+    const chat = options.primary;
+    const draft = await attempt(chat, draftMessages, 'draft');
 
     if (draft.kind !== 'plan') {
       return proceduralOutcome(
@@ -365,13 +351,7 @@ export async function runDirector(
       }
     }
 
-    return proceduralOutcome(
-      request,
-      startedMs,
-      telemetry,
-      promptVersion,
-      now
-    );
+    return proceduralOutcome(request, startedMs, telemetry, promptVersion, now);
   } finally {
     deadline.dispose();
   }
