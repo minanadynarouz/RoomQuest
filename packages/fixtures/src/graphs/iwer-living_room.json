@@ -1,0 +1,700 @@
+{
+  "version": 1,
+  "roomHash": "e6b881f35dd9",
+  "mode": "scene",
+  "floorY": 0,
+  "nodes": [
+    {
+      "id": "s1",
+      "label": "couch",
+      "kind": "plane",
+      "topHeight": 1.25,
+      "centroid": [
+        2.2600000000000002,
+        1.23,
+        -0.17
+      ],
+      "size": [
+        1.9786709547042847,
+        0.8194400072097778
+      ],
+      "yaw": -3.1342785356454064,
+      "area": 1.6,
+      "reach": "outOfView",
+      "angleFromForward": 86
+    },
+    {
+      "id": "s2",
+      "label": "table",
+      "kind": "plane",
+      "topHeight": 0.8,
+      "centroid": [
+        -1.54,
+        0.79,
+        0.2
+      ],
+      "size": [
+        1.3017747402191162,
+        0.7540977597236633
+      ],
+      "yaw": -1.5704776966173977,
+      "area": 1,
+      "reach": "outOfView",
+      "angleFromForward": 97
+    },
+    {
+      "id": "s3",
+      "label": "table",
+      "kind": "plane",
+      "topHeight": 1.1500000000000001,
+      "centroid": [
+        -1.54,
+        1.17,
+        0.2
+      ],
+      "size": [
+        1.3017746210098267,
+        0.7935258150100708
+      ],
+      "yaw": 0.0014460757308301427,
+      "area": 1,
+      "reach": "outOfView",
+      "angleFromForward": 97
+    },
+    {
+      "id": "s4",
+      "label": "table",
+      "kind": "plane",
+      "topHeight": 1.1500000000000001,
+      "centroid": [
+        -1.53,
+        1.1300000000000001,
+        -1.19
+      ],
+      "size": [
+        1.3056834936141968,
+        0.780824601650238
+      ],
+      "yaw": 0.00003393893931947893,
+      "area": 1,
+      "reach": "outOfView",
+      "angleFromForward": 53
+    },
+    {
+      "id": "s5",
+      "label": "couch",
+      "kind": "plane",
+      "topHeight": 0.45,
+      "centroid": [
+        2.2600000000000002,
+        0.47000000000000003,
+        -0.17
+      ],
+      "size": [
+        1.7456411123275757,
+        0.5247406959533691
+      ],
+      "yaw": 1.6114151102938774,
+      "area": 0.9,
+      "reach": "outOfView",
+      "angleFromForward": 86
+    },
+    {
+      "id": "s6",
+      "label": "table",
+      "kind": "plane",
+      "topHeight": 0.8,
+      "centroid": [
+        -1.53,
+        0.78,
+        -1.19
+      ],
+      "size": [
+        1.3056834936141968,
+        0.7204214334487915
+      ],
+      "yaw": -1.5581154354984825,
+      "area": 0.9,
+      "reach": "outOfView",
+      "angleFromForward": 56
+    },
+    {
+      "id": "s7",
+      "label": "table",
+      "kind": "plane",
+      "topHeight": 0.45,
+      "centroid": [
+        1.26,
+        0.45,
+        -0.4
+      ],
+      "size": [
+        1.1182578802108765,
+        0.6114785671234131
+      ],
+      "yaw": 1.5627728095608207,
+      "area": 0.7000000000000001,
+      "reach": "outOfView",
+      "angleFromForward": 77
+    },
+    {
+      "id": "s8",
+      "label": "table",
+      "kind": "plane",
+      "topHeight": 0.8500000000000001,
+      "centroid": [
+        2.52,
+        0.85,
+        1.02
+      ],
+      "size": [
+        0.9043254852294922,
+        0.6054584980010986
+      ],
+      "yaw": 3.1415925629718497,
+      "area": 0.5,
+      "reach": "outOfView",
+      "angleFromForward": 111
+    },
+    {
+      "id": "s9",
+      "label": "table",
+      "kind": "plane",
+      "topHeight": 0.75,
+      "centroid": [
+        1.26,
+        0.76,
+        -0.4
+      ],
+      "size": [
+        1.1182578802108765,
+        0.45833253860473633
+      ],
+      "yaw": 0.000022139385083210134,
+      "area": 0.5,
+      "reach": "outOfView",
+      "angleFromForward": 75
+    },
+    {
+      "id": "s10",
+      "label": "other",
+      "kind": "plane",
+      "topHeight": 1.4500000000000002,
+      "centroid": [
+        -1.34,
+        1.45,
+        0.67
+      ],
+      "size": [
+        0.31274351477622986,
+        0.510998010635376
+      ],
+      "yaw": 3.141592630228869,
+      "area": 0.2,
+      "reach": "outOfView",
+      "angleFromForward": 116
+    },
+    {
+      "id": "s11",
+      "label": "other",
+      "kind": "plane",
+      "topHeight": 1.5,
+      "centroid": [
+        -1.35,
+        1.49,
+        -0.67
+      ],
+      "size": [
+        0.30594420433044434,
+        0.5548313856124878
+      ],
+      "yaw": 3.1415926534330523,
+      "area": 0.2,
+      "reach": "outOfView",
+      "angleFromForward": 64
+    },
+    {
+      "id": "s12",
+      "label": "floor",
+      "kind": "plane",
+      "topHeight": 0,
+      "centroid": [
+        0.05,
+        0,
+        -0.18
+      ],
+      "size": [
+        4.562091827392578,
+        5.989412307739258
+      ],
+      "yaw": 1.5924676484232658,
+      "area": 27.3,
+      "reach": "outOfView",
+      "angleFromForward": 84
+    }
+  ],
+  "edges": [
+    {
+      "a": "s1",
+      "b": "s2",
+      "gap": 2.18,
+      "dh": -0.45,
+      "kind": "ramp"
+    },
+    {
+      "a": "s1",
+      "b": "s3",
+      "gap": 2.18,
+      "dh": -0.1,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s1",
+      "b": "s4",
+      "gap": 2.2800000000000002,
+      "dh": -0.1,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s1",
+      "b": "s5",
+      "gap": 0,
+      "dh": -0.8,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s1",
+      "b": "s6",
+      "gap": 2.2800000000000002,
+      "dh": -0.45,
+      "kind": "ramp"
+    },
+    {
+      "a": "s1",
+      "b": "s7",
+      "gap": 0,
+      "dh": -0.8,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s1",
+      "b": "s8",
+      "gap": 0,
+      "dh": -0.4,
+      "kind": "ramp"
+    },
+    {
+      "a": "s1",
+      "b": "s9",
+      "gap": 0,
+      "dh": -0.5,
+      "kind": "ramp"
+    },
+    {
+      "a": "s1",
+      "b": "s10",
+      "gap": 2.5500000000000003,
+      "dh": 0.2,
+      "kind": "ramp"
+    },
+    {
+      "a": "s1",
+      "b": "s11",
+      "gap": 2.5,
+      "dh": 0.25,
+      "kind": "ramp"
+    },
+    {
+      "a": "s1",
+      "b": "s12",
+      "gap": 0,
+      "dh": -1.25,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s2",
+      "b": "s3",
+      "gap": 0,
+      "dh": 0.35000000000000003,
+      "kind": "ramp"
+    },
+    {
+      "a": "s2",
+      "b": "s4",
+      "gap": 0.09,
+      "dh": 0.35000000000000003,
+      "kind": "ramp"
+    },
+    {
+      "a": "s2",
+      "b": "s5",
+      "gap": 2.29,
+      "dh": -0.35000000000000003,
+      "kind": "ramp"
+    },
+    {
+      "a": "s2",
+      "b": "s6",
+      "gap": 0.09,
+      "dh": 0,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s2",
+      "b": "s7",
+      "gap": 1.6500000000000001,
+      "dh": -0.35000000000000003,
+      "kind": "rope"
+    },
+    {
+      "a": "s2",
+      "b": "s8",
+      "gap": 3.04,
+      "dh": 0.05,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s2",
+      "b": "s9",
+      "gap": 1.6500000000000001,
+      "dh": -0.05,
+      "kind": "rope"
+    },
+    {
+      "a": "s2",
+      "b": "s10",
+      "gap": 0,
+      "dh": 0.65,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s2",
+      "b": "s11",
+      "gap": 0.09,
+      "dh": 0.7000000000000001,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s2",
+      "b": "s12",
+      "gap": 0,
+      "dh": -0.8,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s3",
+      "b": "s4",
+      "gap": 0.09,
+      "dh": 0,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s3",
+      "b": "s5",
+      "gap": 2.29,
+      "dh": -0.7000000000000001,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s3",
+      "b": "s6",
+      "gap": 0.09,
+      "dh": -0.35000000000000003,
+      "kind": "ramp"
+    },
+    {
+      "a": "s3",
+      "b": "s7",
+      "gap": 1.6500000000000001,
+      "dh": -0.7000000000000001,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s3",
+      "b": "s8",
+      "gap": 3.04,
+      "dh": -0.3,
+      "kind": "ramp"
+    },
+    {
+      "a": "s3",
+      "b": "s9",
+      "gap": 1.6500000000000001,
+      "dh": -0.4,
+      "kind": "ramp"
+    },
+    {
+      "a": "s3",
+      "b": "s10",
+      "gap": 0,
+      "dh": 0.3,
+      "kind": "ramp"
+    },
+    {
+      "a": "s3",
+      "b": "s11",
+      "gap": 0.09,
+      "dh": 0.35000000000000003,
+      "kind": "ramp"
+    },
+    {
+      "a": "s3",
+      "b": "s12",
+      "gap": 0,
+      "dh": -1.1500000000000001,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s4",
+      "b": "s5",
+      "gap": 2.4,
+      "dh": -0.7000000000000001,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s4",
+      "b": "s6",
+      "gap": 0,
+      "dh": -0.35000000000000003,
+      "kind": "ramp"
+    },
+    {
+      "a": "s4",
+      "b": "s7",
+      "gap": 1.69,
+      "dh": -0.7000000000000001,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s4",
+      "b": "s8",
+      "gap": 3.5100000000000002,
+      "dh": -0.3,
+      "kind": "ramp"
+    },
+    {
+      "a": "s4",
+      "b": "s9",
+      "gap": 1.69,
+      "dh": -0.4,
+      "kind": "ramp"
+    },
+    {
+      "a": "s4",
+      "b": "s10",
+      "gap": 1.06,
+      "dh": 0.3,
+      "kind": "rope"
+    },
+    {
+      "a": "s4",
+      "b": "s11",
+      "gap": 0,
+      "dh": 0.35000000000000003,
+      "kind": "ramp"
+    },
+    {
+      "a": "s4",
+      "b": "s12",
+      "gap": 0,
+      "dh": -1.1500000000000001,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s5",
+      "b": "s6",
+      "gap": 2.4,
+      "dh": 0.35000000000000003,
+      "kind": "ramp"
+    },
+    {
+      "a": "s5",
+      "b": "s7",
+      "gap": 0,
+      "dh": 0,
+      "kind": "adjacent"
+    },
+    {
+      "a": "s5",
+      "b": "s8",
+      "gap": 0,
+      "dh": 0.4,
+      "kind": "ramp"
+    },
+    {
+      "a": "s5",
+      "b": "s9",
+      "gap": 0,
+      "dh": 0.3,
+      "kind": "ramp"
+    },
+    {
+      "a": "s5",
+      "b": "s10",
+      "gap": 2.67,
+      "dh": 1,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s5",
+      "b": "s11",
+      "gap": 2.62,
+      "dh": 1.05,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s5",
+      "b": "s12",
+      "gap": 0,
+      "dh": -0.45,
+      "kind": "ramp"
+    },
+    {
+      "a": "s6",
+      "b": "s7",
+      "gap": 1.69,
+      "dh": -0.35000000000000003,
+      "kind": "rope"
+    },
+    {
+      "a": "s6",
+      "b": "s8",
+      "gap": 3.5100000000000002,
+      "dh": 0.05,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s6",
+      "b": "s9",
+      "gap": 1.69,
+      "dh": -0.05,
+      "kind": "rope"
+    },
+    {
+      "a": "s6",
+      "b": "s10",
+      "gap": 1.06,
+      "dh": 0.65,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s6",
+      "b": "s11",
+      "gap": 0,
+      "dh": 0.7000000000000001,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s6",
+      "b": "s12",
+      "gap": 0,
+      "dh": -0.8,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s7",
+      "b": "s8",
+      "gap": 0.89,
+      "dh": 0.4,
+      "kind": "ramp"
+    },
+    {
+      "a": "s7",
+      "b": "s9",
+      "gap": 0,
+      "dh": 0.3,
+      "kind": "ramp"
+    },
+    {
+      "a": "s7",
+      "b": "s10",
+      "gap": 2.1,
+      "dh": 1,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s7",
+      "b": "s11",
+      "gap": 1.9100000000000001,
+      "dh": 1.05,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s7",
+      "b": "s12",
+      "gap": 0,
+      "dh": -0.45,
+      "kind": "ramp"
+    },
+    {
+      "a": "s8",
+      "b": "s9",
+      "gap": 0.89,
+      "dh": -0.1,
+      "kind": "plank"
+    },
+    {
+      "a": "s8",
+      "b": "s10",
+      "gap": 3.27,
+      "dh": 0.6,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s8",
+      "b": "s11",
+      "gap": 3.62,
+      "dh": 0.65,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s8",
+      "b": "s12",
+      "gap": 0.01,
+      "dh": -0.85,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s9",
+      "b": "s10",
+      "gap": 2.1,
+      "dh": 0.7000000000000001,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s9",
+      "b": "s11",
+      "gap": 1.9100000000000001,
+      "dh": 0.75,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s9",
+      "b": "s12",
+      "gap": 0,
+      "dh": -0.75,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s10",
+      "b": "s11",
+      "gap": 1.03,
+      "dh": 0.05,
+      "kind": "rope"
+    },
+    {
+      "a": "s10",
+      "b": "s12",
+      "gap": 0,
+      "dh": -1.45,
+      "kind": "portalOnly"
+    },
+    {
+      "a": "s11",
+      "b": "s12",
+      "gap": 0,
+      "dh": -1.5,
+      "kind": "portalOnly"
+    }
+  ]
+}

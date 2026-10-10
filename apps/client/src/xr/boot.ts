@@ -103,6 +103,7 @@ let latestSlime: SlimeDebugApi | null = null;
 let clientFlags: ClientFlags = readClientFlags('');
 let overlayRequested = false;
 let autoSolveHookRegistered = false;
+let surfaceGraphHookRegistered = false;
 let sessionController: SessionController | null = null;
 let sessionHooksRegistered = false;
 let visibilityBound = false;
@@ -203,6 +204,16 @@ function registerAutoSolveHook(): void {
   );
 }
 
+function registerSurfaceGraphHook(): void {
+  if (surfaceGraphHookRegistered) return;
+  surfaceGraphHookRegistered = true;
+  registerRqHook(
+    'surfaceGraph',
+    () => latestGraph,
+    { flags: clientFlags, isDev: import.meta.env.DEV }
+  );
+}
+
 function exposeHooks(
   graph: SurfaceGraph | null = latestGraph,
   plan: LevelPlan | null = latestPlan,
@@ -221,6 +232,7 @@ function exposeHooks(
   latestSlime = slime;
   if (typeof window === 'undefined') return;
   registerAutoSolveHook();
+  registerSurfaceGraphHook();
   installRqHooks(
     {
       store: gameStore,

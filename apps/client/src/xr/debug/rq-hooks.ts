@@ -49,6 +49,8 @@ export interface RqGuidanceDebug {
 export interface RqHooks {
   store?: GameStore;
   graph?: SurfaceGraph | null;
+  /** Debug/e2e: live SurfaceGraph snapshot (null until graphReady). */
+  surfaceGraph?: () => SurfaceGraph | null;
   plan?: LevelPlan | null;
   snapTargets?: readonly SnapTarget[];
   drawCalls?: number;

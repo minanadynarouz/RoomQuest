@@ -4,6 +4,7 @@ import { SYNTHETIC_LIVING_ROOM } from './graphs/synthetic-living-room.js';
 import { SYNTHETIC_LIVING_ROOM_PLAN } from './plans/synthetic-living-room-plan.js';
 import { SYNTHETIC_PLATFORM_PORTAL_PLAN } from './plans/synthetic-platform-portal-plan.js';
 import { SYNTHETIC_SLIME_PLAN } from './plans/synthetic-slime-plan.js';
+import { IWER_GRAPHS, IWER_ROOM_IDS } from './graphs/iwer.js';
 
 describe('Fixtures', () => {
   describe('SYNTHETIC_LIVING_ROOM', () => {
@@ -194,6 +195,30 @@ describe('Fixtures', () => {
           expect(surfaceIds).toContain(placement.to);
         }
       });
+    });
+  });
+
+  describe('IWER emulator graphs', () => {
+    it.each([...IWER_ROOM_IDS])('%s is a valid SurfaceGraph', (room) => {
+      const graph = IWER_GRAPHS[room];
+      const result = SurfaceGraph.parse(graph);
+      expect(result.version).toBe(1);
+      expect(result.roomHash).toMatch(/^[a-f0-9]{12}$/);
+      expect(result.nodes.length).toBeGreaterThanOrEqual(2);
+      expect(result.nodes.length).toBeLessThanOrEqual(12);
+      expect(result.edges.length).toBeLessThanOrEqual(66);
+    });
+
+    it('covers all five emulator rooms with distinct hashes', () => {
+      expect(IWER_ROOM_IDS).toEqual([
+        'living_room',
+        'meeting_room',
+        'music_room',
+        'office_large',
+        'office_small',
+      ]);
+      const hashes = IWER_ROOM_IDS.map((room) => IWER_GRAPHS[room].roomHash);
+      expect(new Set(hashes).size).toBe(IWER_ROOM_IDS.length);
     });
   });
 

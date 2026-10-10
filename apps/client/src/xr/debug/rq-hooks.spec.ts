@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
+import type { SurfaceGraph } from '@roomquest/schema';
 import {
   installRqHooks,
   registerRqHook,
@@ -165,6 +166,24 @@ describe('registerRqHook / installRqHooks', () => {
     installRqHooks({ drawCalls: 1 }, { ...debugOn, target });
     installRqHooks({ drawCalls: 1 }, { ...off, target });
     expect(target.__rq).toBeUndefined();
+  });
+
+  it('lets SurfaceGraphSystem register surfaceGraph without replacing the rest of __rq', () => {
+    installRqHooks({ drawCalls: 5, graph: null }, { ...debugOn, target });
+    const snapshot = {
+      version: 1 as const,
+      roomHash: 'aaaaaaaaaaaa',
+      mode: 'scene' as const,
+      floorY: 0,
+      nodes: [],
+      edges: [],
+    } as unknown as SurfaceGraph;
+    const surfaceGraph = (): SurfaceGraph | null => snapshot;
+    expect(
+      registerRqHook('surfaceGraph', surfaceGraph, { ...debugOn, target })
+    ).toBe(true);
+    expect(target.__rq?.drawCalls).toBe(5);
+    expect(target.__rq?.surfaceGraph?.()?.roomHash).toBe('aaaaaaaaaaaa');
   });
 
   it('lets X-09 register villageAnchor without replacing the rest of __rq', () => {
