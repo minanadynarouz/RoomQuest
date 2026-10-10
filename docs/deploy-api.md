@@ -89,7 +89,7 @@ BASE_URL=https://roomquest-api-staging.onrender.com pnpm --filter api smoke
 | Check | Notes |
 | --- | --- |
 | `GET /api/health` | 200 with a non-empty `version` and `db:"up"` |
-| `POST /api/v1/levels` | Fixture graphs from `@roomquest/fixtures` (and `packages/fixtures/rooms/*.json` when present). Body parses as `LevelResponse`; `level-core.validatePlan` must succeed; `latencyMs` ≤ 7 s |
+| `POST /api/v1/levels` | `synthetic_living_room` from `@roomquest/fixtures` (mock director plan only validates on that graph). Body parses as `LevelResponse`; `level-core.validatePlan` must succeed; `latencyMs` ≤ 7 s |
 | Repeat `/levels` | `source:"cache"` |
 | `POST /api/v1/levels/:cacheKey/result` | 201 `{id}` using the returned `cacheKey` |
 | Proc result | 201 using `procLevelKey(seed, tier)` with `planSource:"procedural"` |

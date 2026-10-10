@@ -10,12 +10,10 @@ import {
   type SurfaceGraph,
 } from '@roomquest/schema';
 import { z } from 'zod';
-import { loadEvalRooms } from '../eval/rooms';
 import { findRepoRoot } from '../eval/paths';
 import { DIRECTOR_BUDGET_MS } from '../src/director/director.constants';
 import { makeDailySeed } from '../src/levels/daily-seed';
 import { CACHE_MISS_LIMIT } from '../src/levels/rate-limit.constants';
-import type { DirectorLogger } from '../src/director/telemetry';
 import type { SmokeOptions } from './args';
 import { CLIENT_VERSION, PREVIEW_ORIGIN, SMOKE_DATE } from './constants';
 import { header, smokeRequest, type SmokeResponse } from './http';
@@ -42,12 +40,6 @@ export interface SmokeReport {
   checks: SmokeCheck[];
   ok: boolean;
 }
-
-const silentLogger: DirectorLogger = {
-  log: () => undefined,
-  warn: () => undefined,
-  debug: () => undefined,
-};
 
 function uniqueRoomHash(): string {
   return randomBytes(6).toString('hex');
@@ -209,11 +201,9 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
-function loadRooms(repoRoot: string): { id: string; graph: SurfaceGraph }[] {
-  const fromDisk = loadEvalRooms(repoRoot, silentLogger);
-  if (fromDisk.length > 0) {
-    return fromDisk;
-  }
+function loadRooms(): { id: string; graph: SurfaceGraph }[] {
+  // Mock director always returns SYNTHETIC_LIVING_ROOM_PLAN. IWER graphs from
+  // #57 are for live eval; they fail validatePlan against the mock fixture.
   return [{ id: 'synthetic_living_room', graph: SYNTHETIC_LIVING_ROOM }];
 }
 
@@ -224,7 +214,7 @@ export async function runSmoke(
   const checks: SmokeCheck[] = [];
   const deviceId = randomUUID();
   const rateLimitDeviceId = randomUUID();
-  const rooms = loadRooms(repoRoot).map((room) => ({
+  const rooms = loadRooms().map((room) => ({
     ...room,
     graph: cloneGraph(room.graph, uniqueRoomHash()),
   }));
