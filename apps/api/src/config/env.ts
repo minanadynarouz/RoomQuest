@@ -45,6 +45,16 @@ export const envSchema = z.object({
       }
       return value.trim();
     }),
+  DIRECTOR_THINKING: z
+    .string()
+    .optional()
+    .transform((value) => {
+      if (value === undefined || value.trim().length === 0) {
+        return 'low';
+      }
+      return value.trim().toLowerCase();
+    })
+    .pipe(z.enum(['minimal', 'low', 'default'])),
   /** Seconds to skip Gemini after 429 / RESOURCE_EXHAUSTED when the error has no Retry-After. */
   LLM_QUOTA_COOLDOWN_S: z.coerce.number().int().min(1).default(600),
 });

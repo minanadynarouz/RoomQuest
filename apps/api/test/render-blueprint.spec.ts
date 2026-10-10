@@ -30,6 +30,7 @@ describe('render.yaml (B-10)', () => {
       'GOOGLE_API_KEY',
       'DIRECTOR_MODE',
       'DIRECTOR_MODEL',
+      'DIRECTOR_THINKING',
       'CORS_ORIGINS',
       'NODE_ENV',
       'GIT_SHA',

@@ -4,6 +4,8 @@ import type { LlmProvider } from './telemetry';
 export interface StructuredPlanCall {
   parsed: unknown;
   raw?: unknown;
+  /** Time-to-first-token in ms when the provider streamed; otherwise null. */
+  ttftMs?: number | null;
 }
 
 /**
@@ -24,7 +26,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function textFromRaw(raw: unknown): string | undefined {
+export function textFromRaw(raw: unknown): string | undefined {
   if (typeof raw === 'string') {
     return raw;
   }
@@ -52,6 +54,16 @@ function textFromRaw(raw: unknown): string | undefined {
   return texts.length > 0 ? texts : undefined;
 }
 
+/** Strip a single ``` / ```json fence wrapper so JSON.parse can run. */
+export function stripCodeFences(text: string): string {
+  const trimmed = text.trim();
+  const fenced = /^```(?:json)?\s*\r?\n?([\s\S]*?)\r?\n?```$/i.exec(trimmed);
+  if (fenced?.[1] !== undefined) {
+    return fenced[1].trim();
+  }
+  return trimmed;
+}
+
 /** JSON object from an `includeRaw` AIMessage when LangChain's parser yields null. */
 export function jsonFromRaw(raw: unknown): unknown {
   const text = textFromRaw(raw);
@@ -59,7 +71,7 @@ export function jsonFromRaw(raw: unknown): unknown {
     return isRecord(raw) && !('content' in raw) ? raw : undefined;
   }
   try {
-    return JSON.parse(text) as unknown;
+    return JSON.parse(stripCodeFences(text)) as unknown;
   } catch {
     return undefined;
   }

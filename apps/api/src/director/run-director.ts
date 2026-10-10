@@ -16,7 +16,14 @@ import { makeDailySeed } from '../levels/daily-seed';
 import { createDirectorDeadline } from './deadline';
 import { LLM_REPAIR_MIN_REMAINING_MS } from './director.constants';
 import { isTimeoutError } from './errors';
-import { tryParseLlmPlan } from './parse-plan';
+import {
+  emptyValidationTrace,
+  traceIssues,
+  type RepairStage,
+  type ValidationTrace,
+} from './issue-trace';
+import { localRepairPlan } from './local-repair';
+import { expandSlimCandidate, tryParseLlmPlan } from './parse-plan';
 import {
   buildRepairMessage,
   buildUserMessage,
@@ -24,7 +31,11 @@ import {
   SYSTEM_PREFIX,
 } from './prompts';
 import { isQuotaError, type LlmQuotaBreaker } from './quota-breaker';
-import { structuredCandidate, type StructuredChat } from './structured-chat';
+import {
+  structuredCandidate,
+  textFromRaw,
+  type StructuredChat,
+} from './structured-chat';
 import {
   logLlmCall,
   tokensFromRaw,
@@ -36,6 +47,12 @@ import {
 export interface DirectorOutcome {
   response: LevelResponse;
   telemetry: LlmCallTelemetry[];
+  validation: ValidationTrace;
+  repairedBy: RepairStage | null;
+  /** Compact first-try candidate (parsed object or recovered JSON). */
+  firstTryPlan: unknown;
+  /** Raw first-try model text when structured parse failed. */
+  firstTryRawText: string | null;
 }
 
 export interface RunDirectorOptions {
@@ -56,6 +73,7 @@ interface AttemptOk {
   valid: boolean;
   plan?: LevelPlan;
   raw: unknown;
+  rawText: string | null;
   issues: Issue[];
 }
 
@@ -64,6 +82,24 @@ interface AttemptFail {
 }
 
 type Attempt = AttemptOk | AttemptFail;
+
+function withTrace(
+  outcome: Pick<DirectorOutcome, 'response' | 'telemetry'>,
+  extras?: Partial<
+    Pick<
+      DirectorOutcome,
+      'validation' | 'repairedBy' | 'firstTryPlan' | 'firstTryRawText'
+    >
+  >
+): DirectorOutcome {
+  return {
+    ...outcome,
+    validation: extras?.validation ?? emptyValidationTrace(),
+    repairedBy: extras?.repairedBy ?? null,
+    firstTryPlan: extras?.firstTryPlan ?? null,
+    firstTryRawText: extras?.firstTryRawText ?? null,
+  };
+}
 
 /**
  * Bind a procedural plan to the request graph: generate, validate, repair,
@@ -94,7 +130,7 @@ export function proceduralOutcome(
   fallbackReason?: FallbackReason
 ): DirectorOutcome {
   const bound = bindPlanToGraph(request);
-  return {
+  return withTrace({
     response: LevelResponse.parse({
       plan: bound.plan,
       source: 'procedural',
@@ -110,7 +146,7 @@ export function proceduralOutcome(
       ...(fallbackReason === undefined ? {} : { fallbackReason }),
     }),
     telemetry,
-  };
+  });
 }
 
 function llmOutcome(
@@ -123,7 +159,7 @@ function llmOutcome(
   telemetry: LlmCallTelemetry[],
   promptVersion: string,
   now: () => number
-): DirectorOutcome {
+): Pick<DirectorOutcome, 'response' | 'telemetry'> {
   return {
     response: LevelResponse.parse({
       plan,
@@ -150,12 +186,13 @@ function repairAsPlan(
   if (fallback !== undefined) {
     return fallback;
   }
-  return raw as LevelPlan;
+  return expandSlimCandidate(raw) as LevelPlan;
 }
 
 /**
- * Live director loop: Gemini → validate → local repair → one Gemini repair →
- * procedural. Never throws for provider/timeout/invalid output.
+ * Live director loop: Gemini → validate → local repair (+ snap hook) →
+ * validate → one Gemini repair → procedural. Never throws for
+ * provider/timeout/invalid output.
  */
 export async function runDirector(
   request: LevelRequest,
@@ -166,6 +203,7 @@ export async function runDirector(
   const repairMin =
     options.llmRepairMinRemainingMs ?? LLM_REPAIR_MIN_REMAINING_MS;
   const promptVersion = options.promptVersion ?? PROMPT_VERSION;
+  const seed = makeDailySeed(request.graph.roomHash, request.date);
   const telemetry: LlmCallTelemetry[] = [];
   const quotaFallback = (): DirectorOutcome =>
     proceduralOutcome(
@@ -192,7 +230,8 @@ export async function runDirector(
     chat: StructuredChat,
     callStarted: number,
     outcome: LlmCallOutcome,
-    raw?: unknown
+    raw?: unknown,
+    ttftMs?: number | null
   ): void => {
     const tokens = tokensFromRaw(raw);
     const row: LlmCallTelemetry = {
@@ -200,7 +239,10 @@ export async function runDirector(
       model: chat.model,
       inputTokens: tokens.inputTokens,
       outputTokens: tokens.outputTokens,
+      thinkingTokens: tokens.thinkingTokens,
+      thoughtsTokenCount: tokens.thoughtsTokenCount,
       latencyMs: Math.max(0, now() - callStarted),
+      ttftMs: ttftMs ?? null,
       outcome,
     };
     telemetry.push(row);
@@ -220,7 +262,12 @@ export async function runDirector(
     try {
       const call = await chat.invokeStructured(messages, deadline.signal);
       const candidate = structuredCandidate(call);
-      const parsedPlan = tryParseLlmPlan(candidate);
+      const rawText = textFromRaw(call.raw) ?? null;
+      const parsedPlan = tryParseLlmPlan(candidate, {
+        seed,
+        graph: request.graph,
+        tier: request.tier,
+      });
       if (parsedPlan.plan !== undefined) {
         const validation = validatePlan(parsedPlan.plan, request.graph);
         if (validation.ok) {
@@ -228,30 +275,34 @@ export async function runDirector(
             chat,
             callStarted,
             phase === 'repair' ? 'repaired' : 'ok',
-            call.raw
+            call.raw,
+            call.ttftMs
           );
           return {
             kind: 'plan',
             valid: true,
             plan: parsedPlan.plan,
             raw: candidate,
+            rawText,
             issues: [],
           };
         }
-        record(chat, callStarted, 'invalid', call.raw);
+        record(chat, callStarted, 'invalid', call.raw, call.ttftMs);
         return {
           kind: 'plan',
           valid: false,
           plan: parsedPlan.plan,
           raw: candidate,
+          rawText,
           issues: validation.issues,
         };
       }
-      record(chat, callStarted, 'invalid', call.raw);
+      record(chat, callStarted, 'invalid', call.raw, call.ttftMs);
       return {
         kind: 'plan',
         valid: false,
         raw: candidate,
+        rawText,
         issues: [
           {
             code: 'SCHEMA_INVALID',
@@ -278,7 +329,6 @@ export async function runDirector(
   };
 
   try {
-    const seed = makeDailySeed(request.graph.roomHash, request.date);
     const draftMessages = [
       new SystemMessage(SYSTEM_PREFIX),
       new HumanMessage(
@@ -308,35 +358,66 @@ export async function runDirector(
       );
     }
 
+    const firstTryPlan = draft.raw ?? null;
+    const firstTryIssues = traceIssues(draft.issues);
+    const firstTryRawText = draft.plan === undefined ? draft.rawText : null;
+    const draftTrace = {
+      firstTryPlan,
+      firstTryRawText,
+    };
+
     if (draft.valid && draft.plan !== undefined) {
-      return llmOutcome(
-        request,
-        draft.plan,
-        'llm',
-        chat.model,
-        [],
-        startedMs,
-        telemetry,
-        promptVersion,
-        now
+      return withTrace(
+        llmOutcome(
+          request,
+          draft.plan,
+          'llm',
+          chat.model,
+          [],
+          startedMs,
+          telemetry,
+          promptVersion,
+          now
+        ),
+        {
+          validation: {
+            firstTry: [],
+            afterLocal: null,
+            afterLlmRepair: null,
+          },
+          repairedBy: null,
+          ...draftTrace,
+        }
       );
     }
 
-    const local = repairPlan(
+    const local = localRepairPlan(
       repairAsPlan(draft.raw, draft.plan),
       request.graph
     );
+    const afterLocal = traceIssues(local.result.issues);
     if (local.result.ok) {
-      return llmOutcome(
-        request,
-        local.plan,
-        'llm_repaired',
-        chat.model,
-        local.repairs,
-        startedMs,
-        telemetry,
-        promptVersion,
-        now
+      return withTrace(
+        llmOutcome(
+          request,
+          local.plan,
+          'llm_repaired',
+          chat.model,
+          local.repairs,
+          startedMs,
+          telemetry,
+          promptVersion,
+          now
+        ),
+        {
+          validation: {
+            firstTry: firstTryIssues,
+            afterLocal,
+            afterLlmRepair: null,
+          },
+          repairedBy: 'local',
+          ...draftTrace,
+        }
       );
     }
 
@@ -344,12 +425,23 @@ export async function runDirector(
       options.logger.debug(
         `director.skip_llm_repair remainingForLlm=${String(deadline.remainingForLlm())} min=${String(repairMin)}`
       );
-      return proceduralOutcome(
-        request,
-        startedMs,
-        telemetry,
-        promptVersion,
-        now
+      return withTrace(
+        proceduralOutcome(
+          request,
+          startedMs,
+          telemetry,
+          promptVersion,
+          now
+        ),
+        {
+          validation: {
+            firstTry: firstTryIssues,
+            afterLocal,
+            afterLlmRepair: null,
+          },
+          repairedBy: null,
+          ...draftTrace,
+        }
       );
     }
 
@@ -363,44 +455,98 @@ export async function runDirector(
     const repaired = await attempt(chat, repairMessages, 'repair');
 
     if (repaired.kind === 'quota') {
-      return quotaFallback();
+      return withTrace(quotaFallback(), {
+        validation: {
+          firstTry: firstTryIssues,
+          afterLocal,
+          afterLlmRepair: null,
+        },
+        repairedBy: null,
+        ...draftTrace,
+      });
     }
 
     if (repaired.kind === 'plan' && repaired.valid && repaired.plan) {
-      return llmOutcome(
-        request,
-        repaired.plan,
-        'llm_repaired',
-        chat.model,
-        [...local.repairs, 'llm-repair'],
-        startedMs,
-        telemetry,
-        promptVersion,
-        now
-      );
-    }
-
-    if (repaired.kind === 'plan') {
-      const second = repairPlan(
-        repairAsPlan(repaired.raw, repaired.plan),
-        request.graph
-      );
-      if (second.result.ok) {
-        return llmOutcome(
+      return withTrace(
+        llmOutcome(
           request,
-          second.plan,
+          repaired.plan,
           'llm_repaired',
           chat.model,
-          [...local.repairs, ...second.repairs, 'llm-repair'],
+          [...local.repairs, 'llm-repair'],
           startedMs,
           telemetry,
           promptVersion,
           now
-        );
-      }
+        ),
+        {
+          validation: {
+            firstTry: firstTryIssues,
+            afterLocal,
+            afterLlmRepair: [],
+          },
+          repairedBy: 'llm',
+          ...draftTrace,
+        }
+      );
     }
 
-    return proceduralOutcome(request, startedMs, telemetry, promptVersion, now);
+    if (repaired.kind === 'plan') {
+      const second = localRepairPlan(
+        repairAsPlan(repaired.raw, repaired.plan),
+        request.graph
+      );
+      const afterLlmRepair = traceIssues(second.result.issues);
+      if (second.result.ok) {
+        return withTrace(
+          llmOutcome(
+            request,
+            second.plan,
+            'llm_repaired',
+            chat.model,
+            [...local.repairs, ...second.repairs, 'llm-repair'],
+            startedMs,
+            telemetry,
+            promptVersion,
+            now
+          ),
+          {
+            validation: {
+              firstTry: firstTryIssues,
+              afterLocal,
+              afterLlmRepair,
+            },
+            repairedBy: 'llm',
+            ...draftTrace,
+          }
+        );
+      }
+      return withTrace(
+        proceduralOutcome(request, startedMs, telemetry, promptVersion, now),
+        {
+          validation: {
+            firstTry: firstTryIssues,
+            afterLocal,
+            afterLlmRepair,
+          },
+          repairedBy: null,
+          ...draftTrace,
+        }
+      );
+    }
+
+    return withTrace(
+      proceduralOutcome(request, startedMs, telemetry, promptVersion, now),
+      {
+        validation: {
+          firstTry: firstTryIssues,
+          afterLocal,
+          afterLlmRepair: null,
+        },
+        repairedBy: null,
+        ...draftTrace,
+      }
+    );
   } finally {
     deadline.dispose();
   }

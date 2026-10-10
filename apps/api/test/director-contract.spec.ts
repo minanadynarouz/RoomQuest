@@ -62,6 +62,13 @@ function dirtyLocalRepairJson(): string {
 
 function startEqualsGoalJson(): string {
   const dirty: LevelPlan = structuredClone(SYNTHETIC_LIVING_ROOM_PLAN);
+  const hut = dirty.placements.find((item) => item.piece === 'village_hut');
+  const shrine = dirty.placements.find(
+    (item) => item.piece === 'crystal_shrine'
+  );
+  if (hut && shrine) {
+    shrine.surface = hut.surface;
+  }
   dirty.goal = dirty.start;
   return planToLlmJson(dirty);
 }

@@ -268,6 +268,18 @@ describe('API contract (B-02)', () => {
       );
     });
 
+    it('exposes X-Request-Id on a CORS request from an allowed origin', async () => {
+      const res = await request(httpServer(app))
+        .get('/api/health')
+        .set('Origin', 'https://localhost:5173')
+        .expect(200);
+
+      const header = res.headers['access-control-expose-headers'];
+      const exposed = (typeof header === 'string' ? header : '').toLowerCase();
+      expect(exposed).toContain('x-request-id');
+      expect(exposed).toContain('retry-after');
+    });
+
     it('allows a Vercel preview origin', async () => {
       const origin = 'https://feat-b02-api-roomquest-minanadynarouz.vercel.app';
       const res = await request(httpServer(app))

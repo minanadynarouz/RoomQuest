@@ -8,3 +8,5 @@
 
 export { generatePlan } from './generate-plan';
 export type { GeneratePlanOptions } from './generate-plan';
+export { buildDialogue, pickTheme, pickTitle } from './dialogue';
+export { createRng, hashString } from './prng';

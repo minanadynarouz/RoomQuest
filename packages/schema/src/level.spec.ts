@@ -313,129 +313,81 @@ describe('Level schemas', () => {
 
   describe('LevelPlanLLM', () => {
     const validPlanLLM = {
-      seed: 'r7f2-2026-10-14',
-      theme: 'forest' as const,
-      title: 'The Fallen Sun Crystal',
-      start: 's1',
-      goal: 's4',
-      parTimeMs: 240000, // 4 minutes
-      placements: [
+      th: 'forest' as const,
+      pl: [
         {
-          id: 'p1',
-          piece: 'village_hut' as const,
-          surface: 's1',
-          to: null,
+          i: 'p1',
+          pc: 'village_hut' as const,
+          s: 's1',
+          t: null,
           u: 0.3,
           v: 0.5,
-          playerBuilt: false,
-          links: [],
+          lk: [],
         },
         {
-          id: 'p2',
-          piece: 'plank_bridge' as const,
-          surface: 's1',
-          to: 's4',
+          i: 'p2',
+          pc: 'plank_bridge' as const,
+          s: 's1',
+          t: 's4',
           u: 1,
           v: 0.5,
-          playerBuilt: true,
-          links: [],
+          lk: [],
         },
         {
-          id: 'p3',
-          piece: 'gate' as const,
-          surface: 's4',
-          to: null,
+          i: 'p3',
+          pc: 'gate' as const,
+          s: 's4',
+          t: null,
           u: 0.2,
           v: 0.5,
-          playerBuilt: false,
-          links: [],
+          lk: ['p4'],
         },
         {
-          id: 'p4',
-          piece: 'crystal_shrine' as const,
-          surface: 's4',
-          to: null,
+          i: 'p4',
+          pc: 'crystal_shrine' as const,
+          s: 's4',
+          t: null,
           u: 0.8,
           v: 0.5,
-          playerBuilt: false,
-          links: [],
-        },
-      ],
-      beats: [
-        { goal: 'Bridge the gap to the couch', uses: ['p2'] },
-        { goal: 'Open the gate', uses: ['p3'] },
-      ],
-      dialogue: [
-        {
-          trigger: 'intro' as const,
-          line: 'The sun crystal fell onto the couch. Help me get there!',
+          lk: [],
         },
       ],
     };
 
-    it('accepts valid LLM plan', () => {
+    it('accepts a compact LLM plan', () => {
       const result = LevelPlanLLM.parse(validPlanLLM);
-      expect(result.seed).toBe('r7f2-2026-10-14');
+      expect(result.th).toBe('forest');
+      expect(result.pl).toHaveLength(4);
     });
 
-    it('requires all fields (no defaults)', () => {
-      const missingPlayerBuilt = {
-        ...validPlanLLM,
-        placements: [
-          {
-            id: 'p1',
-            piece: 'village_hut' as const,
-            surface: 's1',
-            to: null,
-            u: 0.3,
-            v: 0.5,
-            // playerBuilt: missing
-            links: [],
-          },
-        ],
-      };
-      expect(() => PlacementLLM.parse(missingPlayerBuilt.placements[0])).toThrow();
+    it('requires all compact placement fields (no defaults)', () => {
+      expect(() =>
+        PlacementLLM.parse({
+          i: 'p1',
+          pc: 'village_hut' as const,
+          s: 's1',
+          t: null,
+          u: 0.3,
+          v: 0.5,
+        }),
+      ).toThrow();
     });
 
-    it('validates parTimeMs in LevelPlanLLM (integer >= 1, no upper bound)', () => {
-      // Valid in range
-      expect(() => LevelPlanLLM.parse(validPlanLLM)).not.toThrow();
-
-      // Valid out of range (will be clamped by level-core)
+    it('rejects dropped free-text / derivable fields as unknown extras only via parse of compact shape', () => {
       expect(() =>
-        LevelPlanLLM.parse({ ...validPlanLLM, parTimeMs: 500000 }),
-      ).not.toThrow();
-      expect(() =>
-        LevelPlanLLM.parse({ ...validPlanLLM, parTimeMs: 1000 }),
-      ).not.toThrow();
-
-      // Zero (should fail - min 1)
-      expect(() =>
-        LevelPlanLLM.parse({ ...validPlanLLM, parTimeMs: 0 }),
+        LevelPlanLLM.parse({ th: 'forest' }),
       ).toThrow();
-
-      // Negative (should fail)
-      expect(() =>
-        LevelPlanLLM.parse({ ...validPlanLLM, parTimeMs: -1000 }),
-      ).toThrow();
-
-      // Non-integer
-      expect(() =>
-        LevelPlanLLM.parse({ ...validPlanLLM, parTimeMs: 120000.5 }),
-      ).toThrow();
-
-      // Missing (should fail because required)
-      const { parTimeMs: _parTimeMs, ...withoutPar } = validPlanLLM;
-      expect(() => LevelPlanLLM.parse(withoutPar)).toThrow();
+      const { th: _th, ...withoutTheme } = validPlanLLM;
+      expect(() => LevelPlanLLM.parse(withoutTheme)).toThrow();
     });
 
-    it('uses null for optional fields instead of undefined', () => {
-      const placement = validPlanLLM.placements[0];
+    it('uses null for the second surface instead of undefined', () => {
+      const placement = validPlanLLM.pl[0];
       expect(placement).toBeDefined();
-      expect(placement?.to).toBe(null);
+      expect(placement?.t).toBe(null);
       if (placement) {
         const result = PlacementLLM.parse(placement);
-        expect(result.to).toBe(null);
+        expect(result.t).toBe(null);
       }
     });
   });
@@ -450,33 +402,23 @@ describe('Level schemas', () => {
       expect(jsonSchema.$schema).toBeDefined();
     });
 
-    it('contains all top-level LevelPlan fields', () => {
+    it('contains only compact top-level fields', () => {
       const jsonSchema = toJsonSchema(LevelPlanLLM);
 
-      // Should be an object type
       expect(jsonSchema.type).toBe('object');
-
-      // Should have properties object
       expect(jsonSchema.properties).toBeDefined();
       const properties = jsonSchema.properties as Record<string, unknown>;
 
-      // All top-level fields must be present
-      const requiredFields = [
-        'seed',
-        'theme',
-        'title',
-        'start',
-        'goal',
-        'placements',
-        'beats',
-        'dialogue',
-        'parTimeMs',
-      ];
+      const requiredFields = ['th', 'pl'];
       requiredFields.forEach((field) => {
         expect(properties[field]).toBeDefined();
       });
+      expect(properties.seed).toBeUndefined();
+      expect(properties.title).toBeUndefined();
+      expect(properties.beats).toBeUndefined();
+      expect(properties.dialogue).toBeUndefined();
+      expect(properties.parTimeMs).toBeUndefined();
 
-      // Should have required array
       expect(Array.isArray(jsonSchema.required)).toBe(true);
       const required = jsonSchema.required as string[];
       requiredFields.forEach((field) => {
@@ -489,15 +431,14 @@ describe('Level schemas', () => {
       const properties = jsonSchema.properties as Record<string, unknown>;
 
       // Theme should have enum values
-      const theme = properties.theme as Record<string, unknown>;
+      const theme = properties.th as Record<string, unknown>;
       expect(theme.enum).toBeDefined();
       expect(theme.enum).toEqual(['forest', 'desert', 'snow', 'sky']);
 
-      // Placements should have piece enum in nested structure
-      const placements = properties.placements as Record<string, unknown>;
+      const placements = properties.pl as Record<string, unknown>;
       const items = placements.items as Record<string, unknown>;
       const itemProps = items.properties as Record<string, unknown>;
-      const piece = itemProps.piece as Record<string, unknown>;
+      const piece = itemProps.pc as Record<string, unknown>;
 
       expect(piece.enum).toBeDefined();
       expect(piece.enum).toEqual([
@@ -517,40 +458,35 @@ describe('Level schemas', () => {
     it('has correct Placement item shape nested under placements', () => {
       const jsonSchema = toJsonSchema(LevelPlanLLM);
       const properties = jsonSchema.properties as Record<string, unknown>;
-      const placements = properties.placements as Record<string, unknown>;
+      const placements = properties.pl as Record<string, unknown>;
 
-      // Should be array with min/max
       expect(placements.type).toBe('array');
       expect(placements.minItems).toBe(4);
       expect(placements.maxItems).toBe(14);
 
-      // Should have items object
       expect(placements.items).toBeDefined();
       const items = placements.items as Record<string, unknown>;
       expect(items.type).toBe('object');
 
-      // Should have all placement fields
       const itemProps = items.properties as Record<string, unknown>;
-      expect(itemProps.id).toBeDefined();
-      expect(itemProps.piece).toBeDefined();
-      expect(itemProps.surface).toBeDefined();
-      expect(itemProps.to).toBeDefined();
+      expect(itemProps.i).toBeDefined();
+      expect(itemProps.pc).toBeDefined();
+      expect(itemProps.s).toBeDefined();
+      expect(itemProps.t).toBeDefined();
       expect(itemProps.u).toBeDefined();
       expect(itemProps.v).toBeDefined();
-      expect(itemProps.playerBuilt).toBeDefined();
-      expect(itemProps.links).toBeDefined();
+      expect(itemProps.lk).toBeDefined();
+      expect(itemProps.playerBuilt).toBeUndefined();
 
-      // Should have all fields required
       expect(Array.isArray(items.required)).toBe(true);
       const required = items.required as string[];
-      expect(required).toContain('id');
-      expect(required).toContain('piece');
-      expect(required).toContain('surface');
-      expect(required).toContain('to');
+      expect(required).toContain('i');
+      expect(required).toContain('pc');
+      expect(required).toContain('s');
+      expect(required).toContain('t');
       expect(required).toContain('u');
       expect(required).toContain('v');
-      expect(required).toContain('playerBuilt');
-      expect(required).toContain('links');
+      expect(required).toContain('lk');
     });
 
     it('is LLM-safe (no prefixItems, pattern, anyOf, oneOf, default)', () => {

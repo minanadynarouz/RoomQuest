@@ -4,6 +4,9 @@ import { DIRECTOR_BUDGET_MS } from '../src/director/director.constants';
 /** Cap on room fixtures (architecture B-07: 5 rooms × 4 seeds × 2 tiers). */
 export const EVAL_MAX_ROOMS = 5;
 
+/** Default director invocations (`--runs`). */
+export const EVAL_DEFAULT_RUNS = 20;
+
 /**
  * Dates mixed into `makeDailySeed(roomHash, date)`. Four distinct days so
  * each seed is unique without inventing a second seed channel.
