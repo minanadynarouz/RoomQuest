@@ -1,3 +1,4 @@
+import { compactGraphForPrompt } from '@roomquest/level-core';
 import type { SurfaceGraph, Theme, Tier } from '@roomquest/schema';
 
 export function buildUserMessage(input: {
@@ -7,7 +8,7 @@ export function buildUserMessage(input: {
   recentThemes?: Theme[];
 }): string {
   return JSON.stringify({
-    graph: input.graph,
+    graph: compactGraphForPrompt(input.graph),
     seed: input.seed,
     tier: input.tier,
     recentThemes: input.recentThemes ?? [],
@@ -18,9 +19,7 @@ export function buildRepairMessage(
   issues: readonly { code: string; message: string }[],
   previous: unknown
 ): string {
-  const lines = issues.map(
-    (issue) => `- ${issue.code}: ${issue.message}`
-  );
+  const lines = issues.map((issue) => `- ${issue.code}: ${issue.message}`);
   return [
     'The previous plan failed validation. Return a complete corrected LevelPlan that fixes every issue.',
     'Issues:',

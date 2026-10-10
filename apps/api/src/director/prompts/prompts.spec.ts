@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import {
+  compactGraphForPrompt,
+  promptGraphJsonBytes,
+} from '@roomquest/level-core';
 import { KIT_CATALOG, PIECE_IDS } from '@roomquest/schema';
 import { PROMPT_VERSION } from './version';
 import { SYSTEM_PREFIX } from './system-prefix';
@@ -46,6 +50,26 @@ describe('director prompts', () => {
       ['graph', 'recentThemes', 'seed', 'tier'].sort()
     );
     expect(user).not.toContain('Roomquest game director');
+  });
+
+  it('sends compactGraphForPrompt output, not the raw SurfaceGraph', () => {
+    const user = buildUserMessage({
+      graph: SYNTHETIC_LIVING_ROOM,
+      seed: 'f1a2b3c4d5e6-2026-10-14',
+      tier: 'easy',
+    });
+    const parsed = JSON.parse(user) as { graph: unknown };
+    expect(parsed.graph).toEqual(compactGraphForPrompt(SYNTHETIC_LIVING_ROOM));
+    expect(parsed.graph).not.toHaveProperty('version');
+    expect(parsed.graph).not.toHaveProperty('roomHash');
+    expect(parsed.graph).not.toHaveProperty('floorY');
+    const nodes = (parsed.graph as { nodes: Record<string, unknown>[] }).nodes;
+    expect(nodes[0]).not.toHaveProperty('kind');
+    expect(nodes[0]).not.toHaveProperty('yaw');
+
+    const full = promptGraphJsonBytes(SYNTHETIC_LIVING_ROOM);
+    const compact = promptGraphJsonBytes(parsed.graph);
+    expect(compact).toBeLessThan(full);
   });
 
   it('includes issue messages in the repair follow-up', () => {

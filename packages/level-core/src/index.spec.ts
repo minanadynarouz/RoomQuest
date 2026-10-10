@@ -11,6 +11,8 @@ import {
   tickSlime,
   stunSlime,
   canExplorerPassSlime,
+  compactGraphForPrompt,
+  promptGraphJsonBytes,
 } from './index';
 import { findNearestSnapTarget, SNAP_RADIUS_M } from './snap';
 import {
@@ -59,6 +61,11 @@ describe('level-core', () => {
     expect(tickSlime).toBeTypeOf('function');
     expect(stunSlime).toBeTypeOf('function');
     expect(canExplorerPassSlime).toBeTypeOf('function');
+  });
+
+  it('exports compactGraphForPrompt for the director user message', () => {
+    expect(compactGraphForPrompt).toBeTypeOf('function');
+    expect(promptGraphJsonBytes).toBeTypeOf('function');
   });
 });
 
