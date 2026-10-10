@@ -7,6 +7,13 @@ import {
   type SurfaceNode,
 } from '@roomquest/schema';
 import {
+  graphCanSeparateHutAndShrine,
+  graphHasCatalogHut,
+  graphHasPlayableView,
+  graphHasTableLike,
+  isTableLike,
+} from './graph-capacity';
+import {
   findEdge,
   formatNum,
   GEOM_EPS_M,
@@ -34,7 +41,7 @@ export function checkConstraints(
   const counts = new Map<string, number>();
 
   checkStartGoalSurfaces(plan, nodes, issues);
-  checkHutAndShrine(plan, nodes, issues);
+  checkHutAndShrine(plan, graph, nodes, issues);
 
   for (const placement of plan.placements) {
     counts.set(placement.piece, (counts.get(placement.piece) ?? 0) + 1);
@@ -92,6 +99,7 @@ function checkStartGoalSurfaces(
 
 function checkHutAndShrine(
   plan: LevelPlan,
+  graph: SurfaceGraph,
   nodes: NodeIndex,
   issues: Issue[]
 ): void {
@@ -139,7 +147,7 @@ function checkHutAndShrine(
     }
   }
 
-  if (hut && shrine) {
+  if (hut && shrine && graphCanSeparateHutAndShrine(graph)) {
     const from = nodes.get(hut.surface);
     const to = nodes.get(shrine.surface);
     if (from && to && hut.surface !== shrine.surface) {
@@ -176,7 +184,7 @@ function checkPlacement(
       )
     );
   } else {
-    checkSurfaceFits(placement, surface, catalog, issues);
+    checkSurfaceFits(placement, surface, catalog, graph, issues);
   }
 
   if (catalog.requiresSecondSurface && !placement.to) {
@@ -210,7 +218,7 @@ function checkPlacement(
       );
     } else if (surface) {
       checkPair(placement, surface, toNode, graph, catalog, issues);
-      if (placement.piece === 'portal') {
+      if (placement.piece === 'portal' && graphHasPlayableView(graph)) {
         checkInView(placement, toNode, issues);
       }
     }
@@ -234,8 +242,24 @@ function checkSurfaceFits(
   placement: Placement,
   surface: SurfaceNode,
   catalog: (typeof KIT_CATALOG)[keyof typeof KIT_CATALOG],
+  graph: SurfaceGraph,
   issues: Issue[]
 ): void {
+  const degradeHut =
+    placement.piece === 'village_hut' && !graphHasCatalogHut(graph);
+  if (degradeHut) {
+    if (graphHasTableLike(graph) && !isTableLike(surface)) {
+      issues.push(
+        issue(
+          'LABEL_NOT_ALLOWED',
+          `${placement.piece} ${placement.id} cannot sit on ${surface.label} ${surface.id} (allowed: ${catalog.allowedSurfaces?.join('/') ?? 'any'})`,
+          { placementId: placement.id, surfaceId: surface.id }
+        )
+      );
+    }
+    return;
+  }
+
   if (
     catalog.allowedSurfaces &&
     !catalog.allowedSurfaces.includes(surface.label)

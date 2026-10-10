@@ -7,6 +7,7 @@ import {
   type SurfaceGraph,
   type SurfaceNode,
 } from '@roomquest/schema';
+import { pickHutSurface } from '../validate/graph-capacity';
 import { clampParTimeMs } from '../validate/clamp-par';
 import {
   bfsReachable,
@@ -83,6 +84,7 @@ function repairPlanInner(plan: LevelPlan, graph: SurfaceGraph): RepairResult {
   next = clampUv(next, repairs);
   next = clampPar(next, repairs);
   next = dropInvalid(next, graph, repairs);
+  next = ensureHut(next, graph, repairs);
   next = insertPlanks(next, graph, repairs);
   next = pruneRefs(next);
 
@@ -399,6 +401,52 @@ function pruneRefs(plan: LevelPlan): LevelPlan {
     uses: beat.uses.filter((id) => ids.has(id)),
   }));
   return { ...plan, placements, beats };
+}
+
+function ensureHut(
+  plan: LevelPlan,
+  graph: SurfaceGraph,
+  repairs: string[]
+): LevelPlan {
+  const hutNode = pickHutSurface(graph.nodes);
+  if (!hutNode) {
+    return plan;
+  }
+  const hut = plan.placements.find((placement) => placement.piece === 'village_hut');
+  if (hut && hut.surface === hutNode.id && plan.start === hutNode.id) {
+    return plan;
+  }
+
+  const withoutHut = plan.placements.filter(
+    (placement) => placement.piece !== 'village_hut'
+  );
+  const id = hut?.id ?? nextPlacementId({ ...plan, placements: withoutHut });
+  const nextHut: Placement = {
+    id,
+    piece: 'village_hut',
+    surface: hutNode.id,
+    u: hut?.u ?? 0.5,
+    v: hut?.v ?? 0.5,
+    playerBuilt: false,
+    links: [],
+  };
+  let goal = plan.goal;
+  if (goal === hutNode.id) {
+    const other = [...graph.nodes]
+      .filter((node) => node.id !== hutNode.id)
+      .sort((a, b) => a.id.localeCompare(b.id))[0];
+    if (other) {
+      goal = other.id;
+    }
+  }
+  const placements = [nextHut, ...withoutHut].map((placement) => {
+    if (placement.piece === 'crystal_shrine' && placement.surface !== goal) {
+      return { ...placement, surface: goal };
+    }
+    return placement;
+  });
+  repairs.push(`placed village_hut ${id} on ${hutNode.id}`);
+  return pruneRefs({ ...plan, start: hutNode.id, goal, placements });
 }
 
 function insertPlanks(
