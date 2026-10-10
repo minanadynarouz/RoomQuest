@@ -8,6 +8,7 @@
 
 export { compactGraphForPrompt, promptGraphJsonBytes } from './compact-graph';
 export type {
+  CompactGraphOptions,
   CompactPromptEdge,
   CompactPromptGraph,
   CompactPromptNode,

@@ -13,6 +13,7 @@ import {
   canExplorerPassSlime,
   compactGraphForPrompt,
   promptGraphJsonBytes,
+  snapPlacementsToSlots,
   orderSurfacesByArea,
   tickRoomReading,
   wanderPath,
@@ -69,6 +70,10 @@ describe('level-core', () => {
   it('exports compactGraphForPrompt for the director user message', () => {
     expect(compactGraphForPrompt).toBeTypeOf('function');
     expect(promptGraphJsonBytes).toBeTypeOf('function');
+  });
+
+  it('exports snapPlacementsToSlots as a local geometry repair', () => {
+    expect(snapPlacementsToSlots).toBeTypeOf('function');
   });
 
   it('exports room-reading order, wander, and sequencer', () => {
