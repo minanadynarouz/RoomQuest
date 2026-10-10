@@ -12,6 +12,7 @@ import {
   type DirectorRuntime,
 } from './models';
 import { PROMPT_VERSION } from './prompts';
+import { LLM_DAILY_USAGE, type LlmDailyUsage } from './daily-usage';
 import { LLM_QUOTA_BREAKER, type LlmQuotaBreaker } from './quota-breaker';
 import {
   proceduralOutcome,
@@ -30,6 +31,9 @@ export class DirectorService {
     @Optional()
     @Inject(LLM_QUOTA_BREAKER)
     private readonly quotaBreaker?: LlmQuotaBreaker,
+    @Optional()
+    @Inject(LLM_DAILY_USAGE)
+    private readonly dailyUsage?: LlmDailyUsage,
     @Optional()
     @Inject(DIRECTOR_RUNTIME)
     private readonly runtime?: DirectorRuntime
@@ -67,6 +71,20 @@ export class DirectorService {
         now,
         'llm-quota'
       );
+    }
+
+    if (this.dailyUsage !== undefined) {
+      const slot = await this.dailyUsage.consume();
+      if (slot !== 'ok') {
+        return proceduralOutcome(
+          request,
+          startedMs,
+          [],
+          promptVersion,
+          now,
+          'llm-quota'
+        );
+      }
     }
 
     const directorModel = this.config.get('DIRECTOR_MODEL', { infer: true });

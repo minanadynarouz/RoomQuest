@@ -24,6 +24,8 @@ services:
         sync: false
       - key: GOOGLE_API_KEY
         sync: false
+      - key: LLM_DAILY_MAX
+        value: '150'
       - key: DIRECTOR_MODE
         sync: false
       - key: DIRECTOR_MODEL
@@ -54,6 +56,8 @@ services:
         sync: false
       - key: GOOGLE_API_KEY
         sync: false
+      - key: LLM_DAILY_MAX
+        value: '150'
       - key: DIRECTOR_MODE
         sync: false
       - key: DIRECTOR_MODEL

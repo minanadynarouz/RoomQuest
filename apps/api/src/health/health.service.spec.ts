@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { describe, expect, it, vi } from 'vitest';
 import { validateEnv } from '../config/env';
+import { LLM_DAILY_USAGE } from '../director/daily-usage';
 import { LLM_QUOTA_BREAKER } from '../director/quota-breaker';
 import { PrismaService } from '../prisma/prisma.service';
 import { HealthService, type HealthResponse } from './health.service';
@@ -11,6 +12,7 @@ async function healthWith(options: {
   gitSha?: string;
   env?: Record<string, string>;
   quotaOpen?: boolean;
+  llmToday?: { used: number; max: number; failClosed?: boolean };
 }): Promise<HealthResponse> {
   const moduleRef = await Test.createTestingModule({
     imports: [
@@ -40,6 +42,29 @@ async function healthWith(options: {
             {
               provide: LLM_QUOTA_BREAKER,
               useValue: { isOpen: () => options.quotaOpen },
+            },
+          ]),
+      ...(options.llmToday === undefined
+        ? []
+        : [
+            {
+              provide: LLM_DAILY_USAGE,
+              useValue: (() => {
+                const today = options.llmToday;
+                return {
+                  snapshot: () =>
+                    Promise.resolve({
+                      used: today.used,
+                      max: today.max,
+                      failClosed: today.failClosed ?? false,
+                    }),
+                  today: () =>
+                    Promise.resolve({
+                      used: today.used,
+                      max: today.max,
+                    }),
+                };
+              })(),
             },
           ]),
     ],
@@ -104,5 +129,33 @@ describe('HealthService', () => {
       quotaOpen: true,
     });
     expect(body.llm).toBe('quota-cooldown');
+  });
+
+  it('reports llmToday used/max and quota-cooldown while the daily cap is hit', async () => {
+    const body = await healthWith({
+      db: 'up',
+      env: { GOOGLE_API_KEY: 'test-google-key', LLM_DAILY_MAX: '20' },
+      llmToday: { used: 20, max: 20 },
+    });
+    expect(body.llm).toBe('quota-cooldown');
+    expect(body.llmToday).toEqual({ used: 20, max: 20 });
+  });
+
+  it("reports llm:'quota-cooldown' when the daily counter is fail-closed", async () => {
+    const body = await healthWith({
+      db: 'down',
+      env: { GOOGLE_API_KEY: 'test-google-key' },
+      llmToday: { used: 0, max: 150, failClosed: true },
+    });
+    expect(body.llm).toBe('quota-cooldown');
+    expect(body.llmToday).toEqual({ used: 0, max: 150 });
+  });
+
+  it('defaults llmToday.max from LLM_DAILY_MAX when no counter is injected', async () => {
+    const body = await healthWith({
+      db: 'disabled',
+      env: { LLM_DAILY_MAX: '40' },
+    });
+    expect(body.llmToday).toEqual({ used: 0, max: 40 });
   });
 });

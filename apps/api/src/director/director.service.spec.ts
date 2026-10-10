@@ -11,6 +11,7 @@ import { validateEnv } from '../config/env';
 import { DirectorService } from './director.service';
 import { DIRECTOR_CHAT_FACTORY, type DirectorChatFactory } from './models';
 import { PROMPT_VERSION } from './prompts';
+import { LLM_DAILY_USAGE, type LlmDailyConsumeResult } from './daily-usage';
 import { LLM_QUOTA_BREAKER } from './quota-breaker';
 import { planToLlmJson } from './test-fakes';
 
@@ -23,7 +24,8 @@ const request = LevelRequest.parse({
 async function serviceWithEnv(
   env: Record<string, string>,
   factory?: DirectorChatFactory,
-  quotaOpen = false
+  quotaOpen = false,
+  consume?: () => Promise<LlmDailyConsumeResult>
 ): Promise<DirectorService> {
   const moduleRef = await Test.createTestingModule({
     imports: [
@@ -48,6 +50,14 @@ async function serviceWithEnv(
         provide: LLM_QUOTA_BREAKER,
         useValue: { isOpen: () => quotaOpen },
       },
+      ...(consume === undefined
+        ? []
+        : [
+            {
+              provide: LLM_DAILY_USAGE,
+              useValue: { consume },
+            },
+          ]),
     ],
   }).compile();
   return moduleRef.get(DirectorService);
@@ -105,6 +115,41 @@ describe('DirectorService', () => {
     );
     const response = await director.plan(request);
     const parsed = LevelResponse.parse(response);
+    expect(parsed.source).toBe('procedural');
+    expect(parsed.fallbackReason).toBe('llm-quota');
+    expect(createPrimary).not.toHaveBeenCalled();
+  });
+
+  it('skips Gemini and returns procedural llm-quota when the daily cap is exhausted', async () => {
+    const createPrimary = vi.fn(() => {
+      throw new Error('must not construct a live model when the daily cap is hit');
+    });
+    const consume = vi.fn(() => Promise.resolve('capped' as const));
+    const director = await serviceWithEnv(
+      { DIRECTOR_MODE: 'live', GOOGLE_API_KEY: 'test-google-key' },
+      { createPrimary },
+      false,
+      consume
+    );
+    const response = await director.plan(request);
+    const parsed = LevelResponse.parse(response);
+    expect(parsed.source).toBe('procedural');
+    expect(parsed.fallbackReason).toBe('llm-quota');
+    expect(consume).toHaveBeenCalledOnce();
+    expect(createPrimary).not.toHaveBeenCalled();
+  });
+
+  it('skips Gemini and returns procedural llm-quota when the daily counter is unavailable', async () => {
+    const createPrimary = vi.fn(() => {
+      throw new Error('must not construct a live model when the counter is down');
+    });
+    const director = await serviceWithEnv(
+      { DIRECTOR_MODE: 'live', GOOGLE_API_KEY: 'test-google-key' },
+      { createPrimary },
+      false,
+      () => Promise.resolve('unavailable' as const)
+    );
+    const parsed = LevelResponse.parse(await director.plan(request));
     expect(parsed.source).toBe('procedural');
     expect(parsed.fallbackReason).toBe('llm-quota');
     expect(createPrimary).not.toHaveBeenCalled();
