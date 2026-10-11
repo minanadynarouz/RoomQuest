@@ -48,9 +48,9 @@ const FEW_SHOT_1_AI = JSON.stringify({
   twistBeat: '2',
   hazards: [{ beat: '2', type: 'slime' }],
   lines: [
-    { beat: '0', text: "Whoa, the sofa mountains! Let's climb!" },
-    { beat: '2', text: 'Eep, a slime by the bookshelf! Can you make it sleepy?' },
-    { beat: '3', text: 'The crystal! We crossed the whole living room together!' },
+    { beat: '0', text: "Whoa, let's climb the sofa mountains!" },
+    { beat: '2', text: 'Eep, can you make that slime by the bookshelf sleepy?' },
+    { beat: '3', text: 'We crossed the whole living room to the crystal together!' },
   ],
 });
 
@@ -67,9 +67,9 @@ const FEW_SHOT_2_AI = JSON.stringify({
   twistBeat: '3',
   hazards: [{ beat: '1', type: 'slime' }],
   lines: [
-    { beat: '0', text: 'Brr! The desk plateau looks like a snowy cliff!' },
-    { beat: '1', text: "A slime is napping on the table. Let's tiptoe past it." },
-    { beat: '3', text: 'The floating ledge wobbles! Hold it steady for me?' },
+    { beat: '0', text: 'Brr, the desk plateau looks like a snowy cliff!' },
+    { beat: '1', text: "A slime is napping on the table, so let's tiptoe past!" },
+    { beat: '3', text: 'Can you hold this wobbly floating ledge steady for me?' },
   ],
 });
 
