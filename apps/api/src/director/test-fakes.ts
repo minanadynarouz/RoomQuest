@@ -16,10 +16,15 @@ export const silentLogger = {
 
 export function planToLlmJson(plan: LevelPlan): string {
   return JSON.stringify({
-    ...plan,
-    placements: plan.placements.map((placement) => ({
-      ...placement,
-      to: placement.to ?? null,
+    th: plan.theme,
+    pl: plan.placements.map((placement) => ({
+      i: placement.id,
+      pc: placement.piece,
+      s: placement.surface,
+      t: placement.to ?? null,
+      u: placement.u,
+      v: placement.v,
+      lk: placement.links,
     })),
   });
 }
@@ -180,6 +185,11 @@ export class UsageFakeListChatModel extends FakeListChatModel {
           input_tokens: 12,
           output_tokens: 34,
           total_tokens: 46,
+        },
+        response_metadata: {
+          usageMetadata: {
+            thoughtsTokenCount: 5,
+          },
         },
       }),
       text,

@@ -118,61 +118,34 @@ export const LevelPlan = z.object({
 export type LevelPlan = z.infer<typeof LevelPlan>;
 
 /**
- * LLM-safe level plan schema
- * Architecture §5, B-05 ticket notes
+ * Compact Gemini output schema (B-08).
  *
- * This schema is designed for LangChain withStructuredOutput on Google Gemini:
- * - No .default() or .transform() (applied after parsing)
+ * Designed for LangChain `withStructuredOutput` on Google Gemini:
+ * - Short field names (output tokens dominate latency)
+ * - Ids only — no nested surface objects, no free-text (title/beats/dialogue
+ *   /reasons). level-core fills those after parse.
+ * - No .default() or .transform()
  * - All fields required
- * - No z.tuple() (use arrays with min/max)
- * - No regex patterns
- * - No unions or discriminated unions
- * - Flat objects with primitives, enums, strings, numbers, and simple arrays
- * - parTimeMs uses `.min(1)` (not `.positive()`) so JSON Schema emits `minimum`
+ * - No z.tuple(), regex, or unions
  * - Send `LevelPlanLLMGeminiSchema` on the wire; still parse with this zod schema
  *
- * Parse LLM output with LevelPlanLLM, then use LevelPlan.parse() to normalize.
+ * Keys: `th` theme, `pl` placements; each placement `i` id, `pc` piece, `s`
+ * surface, `t` second surface (null when unused), `u`/`v`, `lk` links.
  */
 export const PlacementLLM = z.object({
-  id: z.string(),
-  piece: PieceId,
-  surface: z.string(),
-  to: z.string().nullable(),
+  i: z.string(),
+  pc: PieceId,
+  s: z.string(),
+  t: z.string().nullable(),
   u: z.number().min(0).max(1),
   v: z.number().min(0).max(1),
-  playerBuilt: z.boolean(),
-  links: z.array(z.string()),
+  lk: z.array(z.string()),
 });
 export type PlacementLLM = z.infer<typeof PlacementLLM>;
 
-export const BeatLLM = z.object({
-  goal: z.string(),
-  uses: z.array(z.string()),
-});
-export type BeatLLM = z.infer<typeof BeatLLM>;
-
-export const DialogueLLM = z.object({
-  trigger: DialogueTrigger,
-  line: z.string(),
-});
-export type DialogueLLM = z.infer<typeof DialogueLLM>;
-
 export const LevelPlanLLM = z.object({
-  seed: z.string(),
-  theme: Theme,
-  title: z.string(),
-  start: z.string(),
-  goal: z.string(),
-  placements: z.array(PlacementLLM).min(4).max(14),
-  beats: z.array(BeatLLM).min(2).max(4),
-  dialogue: z.array(DialogueLLM).max(12),
-  parTimeMs: z
-    .number()
-    .int()
-    .min(1)
-    .describe(
-      'Par completion time in milliseconds for 3-star rating (target: 1-8 minutes)'
-    ),
+  th: Theme,
+  pl: z.array(PlacementLLM).min(4).max(14),
 });
 export type LevelPlanLLM = z.infer<typeof LevelPlanLLM>;
 

@@ -42,6 +42,8 @@ Set these in the Render Dashboard. They are declared with `sync: false` so `rend
 | `GOOGLE_API_KEY` | Gemini key | Gemini key |
 | `DIRECTOR_MODE` | `live` | `live` |
 | `DIRECTOR_MODEL` | `gemini-3.8-flash` | `gemini-3.8-flash` |
+| `DIRECTOR_THINKING` | `low` | `low` |
+| `LLM_QUOTA_COOLDOWN_S` | `600` | `600` |
 | `CORS_ORIGINS` | staging client origins (Vercel preview / `revision_branch` URL) | prod Vercel domain, GitHub Pages origin |
 | `NODE_ENV` | `production` | `production` |
 | `GIT_SHA` | git sha of the deployed commit (set by the deploy workflow) | same |
@@ -87,7 +89,7 @@ BASE_URL=https://roomquest-api-staging.onrender.com pnpm --filter api smoke
 | Check | Notes |
 | --- | --- |
 | `GET /api/health` | 200 with a non-empty `version` and `db:"up"` |
-| `POST /api/v1/levels` | Fixture graphs from `@roomquest/fixtures` (and `packages/fixtures/rooms/*.json` when present). Body parses as `LevelResponse`; `level-core.validatePlan` must succeed; `latencyMs` ≤ 7 s |
+| `POST /api/v1/levels` | `synthetic_living_room` from `@roomquest/fixtures` (mock director plan only validates on that graph). Body parses as `LevelResponse`; `level-core.validatePlan` must succeed; `latencyMs` ≤ 7 s |
 | Repeat `/levels` | `source:"cache"` |
 | `POST /api/v1/levels/:cacheKey/result` | 201 `{id}` using the returned `cacheKey` |
 | Proc result | 201 using `procLevelKey(seed, tier)` with `planSource:"procedural"` |

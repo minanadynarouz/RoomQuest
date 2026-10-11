@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       mock:
-        description: Run with --mock (FakeListChatModel; no live LLM keys)
+        description: Always mock (live Gemini is disabled — billing cap)
         type: boolean
-        default: false
+        default: true
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -18,8 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      DIRECTOR_MODE: live
-      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      DIRECTOR_MODE: mock
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -54,25 +53,8 @@ jobs:
       - name: Build workspace packages
         run: pnpm turbo run build --filter=api...
 
-      - name: Require GOOGLE_API_KEY for live eval
-        if: ${{ inputs.mock != true }}
-        run: |
-          if [ -z "$GOOGLE_API_KEY" ]; then
-            echo "GOOGLE_API_KEY repository secret is missing."
-            echo "Add it under Settings → Secrets and variables → Actions."
-            echo "Re-run with mock=true to exercise FakeListChatModel."
-            exit 1
-          fi
-
-      - name: Run director eval
-        env:
-          DIRECTOR_MODEL: ${{ vars.DIRECTOR_MODEL }}
-        run: |
-          if [ "${{ inputs.mock }}" = "true" ]; then
-            pnpm --filter api eval -- --mock
-          else
-            pnpm --filter api eval
-          fi
+      - name: Run director eval (mock only — no live Gemini)
+        run: pnpm --filter api eval -- --mock
 
       - name: Upload eval report
         uses: actions/upload-artifact@v4

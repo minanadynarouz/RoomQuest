@@ -5,80 +5,20 @@ exports[`Level schemas > LevelPlanLLM JSON schema > matches the expected JSON sc
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "beats": {
+    "pl": {
       "items": {
         "additionalProperties": false,
         "properties": {
-          "goal": {
+          "i": {
             "type": "string",
           },
-          "uses": {
+          "lk": {
             "items": {
               "type": "string",
             },
             "type": "array",
           },
-        },
-        "required": [
-          "goal",
-          "uses",
-        ],
-        "type": "object",
-      },
-      "maxItems": 4,
-      "minItems": 2,
-      "type": "array",
-    },
-    "dialogue": {
-      "items": {
-        "additionalProperties": false,
-        "properties": {
-          "line": {
-            "type": "string",
-          },
-          "trigger": {
-            "enum": [
-              "intro",
-              "beat",
-              "stuck",
-              "win",
-              "gaze",
-            ],
-            "type": "string",
-          },
-        },
-        "required": [
-          "trigger",
-          "line",
-        ],
-        "type": "object",
-      },
-      "maxItems": 12,
-      "type": "array",
-    },
-    "goal": {
-      "type": "string",
-    },
-    "parTimeMs": {
-      "description": "Par completion time in milliseconds for 3-star rating (target: 1-8 minutes)",
-      "maximum": 9007199254740991,
-      "minimum": 1,
-      "type": "integer",
-    },
-    "placements": {
-      "items": {
-        "additionalProperties": false,
-        "properties": {
-          "id": {
-            "type": "string",
-          },
-          "links": {
-            "items": {
-              "type": "string",
-            },
-            "type": "array",
-          },
-          "piece": {
+          "pc": {
             "enum": [
               "village_hut",
               "crystal_shrine",
@@ -93,13 +33,10 @@ exports[`Level schemas > LevelPlanLLM JSON schema > matches the expected JSON sc
             ],
             "type": "string",
           },
-          "playerBuilt": {
-            "type": "boolean",
-          },
-          "surface": {
+          "s": {
             "type": "string",
           },
-          "to": {
+          "t": {
             "type": [
               "string",
               "null",
@@ -117,14 +54,13 @@ exports[`Level schemas > LevelPlanLLM JSON schema > matches the expected JSON sc
           },
         },
         "required": [
-          "id",
-          "piece",
-          "surface",
-          "to",
+          "i",
+          "pc",
+          "s",
+          "t",
           "u",
           "v",
-          "playerBuilt",
-          "links",
+          "lk",
         ],
         "type": "object",
       },
@@ -132,13 +68,7 @@ exports[`Level schemas > LevelPlanLLM JSON schema > matches the expected JSON sc
       "minItems": 4,
       "type": "array",
     },
-    "seed": {
-      "type": "string",
-    },
-    "start": {
-      "type": "string",
-    },
-    "theme": {
+    "th": {
       "enum": [
         "forest",
         "desert",
@@ -147,20 +77,10 @@ exports[`Level schemas > LevelPlanLLM JSON schema > matches the expected JSON sc
       ],
       "type": "string",
     },
-    "title": {
-      "type": "string",
-    },
   },
   "required": [
-    "seed",
-    "theme",
-    "title",
-    "start",
-    "goal",
-    "placements",
-    "beats",
-    "dialogue",
-    "parTimeMs",
+    "th",
+    "pl",
   ],
   "type": "object",
 }

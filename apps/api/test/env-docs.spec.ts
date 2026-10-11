@@ -20,6 +20,7 @@ const NEST_ENV_KEYS = [
   'DATABASE_URL',
   'DIRECT_URL',
   'DIRECTOR_MODEL',
+  'DIRECTOR_THINKING',
   'LLM_DAILY_MAX',
 ] as const;
 
