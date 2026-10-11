@@ -33,6 +33,7 @@ describe('debug overlay format', () => {
     expect(block).toContain('repaired snap');
     expect(block).toContain('relaxed  minPath');
     expect(block).toContain('lines    2');
+    expect(block).toContain('route    -');
     expect(formatLatency(null)).toBe('-');
     expect(formatDebugLines(EMPTY_PERF_STATS).map((line) => line.id)).toEqual([
       'debug-fps',
@@ -49,7 +50,15 @@ describe('debug overlay format', () => {
       'debug-repaired',
       'debug-relaxed',
       'debug-lines',
+      'debug-route',
     ]);
+  });
+
+  it('shows route id, or - when absent', () => {
+    expect(formatDebugBlock(EMPTY_PERF_STATS)).toContain('route    -');
+    expect(
+      formatDebugBlock({ ...EMPTY_PERF_STATS, route: 'r-table-bridge' })
+    ).toContain('route    r-table-bridge');
   });
 
   it('shows repairedBy repairRoute', () => {

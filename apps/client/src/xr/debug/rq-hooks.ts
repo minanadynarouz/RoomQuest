@@ -64,6 +64,8 @@ export interface RqHooks {
   director?: () => DirectorRequestState & {
     /** Count of server Pip lines kept for the current level. */
     lines?: number;
+    /** Server-chosen route id for the current level (null when absent). */
+    routeId?: string | null;
   };
   autoSolve?: () => Promise<void>;
   /** Debug/e2e: force the synthetic living-room plan into `playing`. */

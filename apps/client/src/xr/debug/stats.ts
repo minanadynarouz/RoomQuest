@@ -34,6 +34,8 @@ export interface RqPerfStats {
   relaxed: readonly RelaxedRule[];
   /** Server Pip lines kept for the current level. */
   lines: number;
+  /** Server-chosen route id for the current level (null when absent). */
+  route: string | null;
 }
 
 export const EMPTY_PERF_STATS: RqPerfStats = {
@@ -51,6 +53,7 @@ export const EMPTY_PERF_STATS: RqPerfStats = {
   repairedBy: null,
   relaxed: [],
   lines: 0,
+  route: null,
 };
 
 export function readRendererInfo(
@@ -78,6 +81,7 @@ export interface PerfStatsInput {
   repairedBy?: RepairedBy | null;
   relaxed?: readonly RelaxedRule[];
   lines?: number;
+  route?: string | null;
 }
 
 export function collectPerfStats(input: PerfStatsInput): RqPerfStats {
@@ -99,6 +103,7 @@ export function collectPerfStats(input: PerfStatsInput): RqPerfStats {
     repairedBy: input.repairedBy ?? null,
     relaxed: input.relaxed ?? [],
     lines: input.lines ?? 0,
+    route: input.route ?? null,
   };
 }
 
@@ -117,6 +122,7 @@ export function copyPerfStats(from: RqPerfStats, into: RqPerfStats): void {
   into.repairedBy = from.repairedBy;
   into.relaxed = from.relaxed;
   into.lines = from.lines;
+  into.route = from.route;
 }
 
 export function perfSignature(stats: RqPerfStats): string {
@@ -135,5 +141,6 @@ export function perfSignature(stats: RqPerfStats): string {
     stats.repairedBy ?? '',
     stats.relaxed.join(','),
     stats.lines,
+    stats.route ?? '',
   ].join('|');
 }

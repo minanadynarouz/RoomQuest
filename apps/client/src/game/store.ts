@@ -121,6 +121,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
   const tier = signal<Tier | null>(null);
   const directorRequest = signal<DirectorRequestState>(IDLE_DIRECTOR_REQUEST);
   const levelLines = signal<LevelLinesMap>(EMPTY_LINES);
+  const levelRouteId = signal<string | null>(null);
 
   // Computed values
   const state = computed<GameState>(() => ({
@@ -141,7 +142,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
     retryAfterS: retryAfterS.value,
     validationIssues: validationIssues.value,
     tier: tier.value,
-    level: { lines: levelLines.value },
+    level: { lines: levelLines.value, routeId: levelRouteId.value },
     directorRequest: directorRequest.value,
   }));
 
@@ -452,7 +453,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
     },
     /** Director extras for the current level; `level.lines` is beat → text. */
     get level() {
-      return { lines: levelLines.value };
+      return { lines: levelLines.value, routeId: levelRouteId.value };
     },
     /** Store clock reading (HUD speech-card timing). */
     get nowMs() {
@@ -482,6 +483,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
     }) {
       plan.value = null;
       levelLines.value = EMPTY_LINES;
+      levelRouteId.value = null;
       fallbackReason.value = ROOM_UNPLAYABLE;
       validationIssues.value = info?.issues ?? [];
       if (info?.latencyMs !== undefined) {
@@ -518,6 +520,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
       validationIssues.value = options?.issues ?? [];
       tier.value = options?.tier ?? DEFAULT_TIER;
       levelLines.value = toLevelLinesMap(options?.lines);
+      levelRouteId.value = options?.routeId ? options.routeId : null;
       events.value = [];
       gemsCollected.value = 0;
       beatTimings.value = [];
@@ -593,6 +596,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
       validationIssues.value = [];
       tier.value = null;
       levelLines.value = EMPTY_LINES;
+      levelRouteId.value = null;
       events.value = [];
       gemsCollected.value = 0;
       beatTimings.value = [];

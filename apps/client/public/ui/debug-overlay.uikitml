@@ -57,5 +57,6 @@
     <div id="debug-repaired" class="row">repaired   -</div>
     <div id="debug-relaxed" class="row">relaxed    -</div>
     <div id="debug-lines" class="row">lines      0</div>
+    <div id="debug-route" class="row">route      -</div>
   </div>
 </Panel>
