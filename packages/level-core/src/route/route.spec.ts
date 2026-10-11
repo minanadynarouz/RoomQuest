@@ -150,6 +150,40 @@ describe('candidateRoutes over IWER rooms × tiers × 20 seeds', () => {
   });
 });
 
+describe('hazard options sweep', () => {
+  it('counts routes with zero hazard options; hazards [] and every offered option stay valid', () => {
+    let zero = 0;
+    let total = 0;
+    for (const [room, graph, tier, seed] of cases()) {
+      for (const route of routesFor(room, graph, seed, tier)) {
+        total += 1;
+        if (route.options.hazards.length === 0) {
+          zero += 1;
+        }
+        const twistBeat = route.options.twistBeats[0] ?? '0';
+        const none = applyDecoration(route, {
+          routeId: route.id, theme: route.plan.theme, twistBeat, hazards: [],
+        });
+        expect(none.ok && validatePlan(none.plan, graph).ok).toBe(true);
+        for (const h of route.options.hazards) {
+          for (const type of h.types) {
+            const one = applyDecoration(route, {
+              routeId: route.id, theme: route.plan.theme, twistBeat,
+              hazards: [{ beat: h.beat, type }],
+            });
+            expect(one.ok && validatePlan(one.plan, graph).ok).toBe(true);
+            if (one.ok) {
+              expect(one.replaced.some((r) => r.includes(`beat ${h.beat}`))).toBe(false);
+            }
+          }
+        }
+      }
+    }
+    console.log(`[hazards] routes with zero hazard options: ${String(zero)}/${String(total)}`);
+    expect(zero).toBe(0);
+  }, SWEEP_MS);
+});
+
 describe('repairRoute', () => {
   function breakConnector(plan: LevelPlan): LevelPlan | null {
     const conn = plan.placements.find((p) => p.to !== undefined);
