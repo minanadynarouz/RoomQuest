@@ -63,8 +63,8 @@ import {
   ROOM_UNPLAYABLE,
   isRoomUnplayableResponse,
   mergeRelaxed,
-  type RelaxedRule,
-} from './schema-pending.js';
+} from './relaxed.js';
+import type { RelaxedRule } from '@roomquest/schema';
 
 function unplayablePlaceholder(seed: string): LevelPlan {
   return {

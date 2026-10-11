@@ -52,5 +52,5 @@ export {
   ROOM_UNPLAYABLE,
   mergeRelaxed,
   readRelaxed,
-} from './schema-pending.js';
-export type { RoomUnplayableReason } from './schema-pending.js';
+} from './relaxed.js';
+export type { RoomUnplayableReason } from './relaxed.js';

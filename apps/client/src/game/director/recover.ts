@@ -11,7 +11,8 @@ import {
   type SnapResult,
 } from '@roomquest/level-core';
 import type { LevelPlan, SurfaceGraph } from '@roomquest/schema';
-import { mergeRelaxed, type RelaxedRule } from './schema-pending.js';
+import type { RelaxedRule } from '@roomquest/schema';
+import { mergeRelaxed } from './relaxed.js';
 import type { RepairFn, RepairedBy, SnapFn, ValidateFn } from './types.js';
 
 export interface RecoverPlanOptions {

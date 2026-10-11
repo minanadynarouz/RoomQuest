@@ -6,7 +6,7 @@
 import type { Issue } from '@roomquest/level-core';
 import type { ErrorCode, LevelPlan, PlanSource, Tier } from '@roomquest/schema';
 import type { FallbackReason, RepairedBy } from './director/types.js';
-import type { RelaxedRule } from './director/schema-pending.js';
+import type { RelaxedRule } from '@roomquest/schema';
 import type { StarCount } from './stars.js';
 
 /** In-flight director POST, for the room-reading animation. */
