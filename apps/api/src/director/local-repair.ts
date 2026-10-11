@@ -33,9 +33,11 @@ export function localRepairPlan(
   const repairs = repaired.repairs.includes('snap-to-slots')
     ? repaired.repairs
     : [...repaired.repairs, 'snap-to-slots'];
+  const result = validatePlan(snapped.plan, graph);
   return {
     plan: snapped.plan,
     repairs,
-    result: validatePlan(snapped.plan, graph),
+    result,
+    relaxed: result.relaxed,
   };
 }
