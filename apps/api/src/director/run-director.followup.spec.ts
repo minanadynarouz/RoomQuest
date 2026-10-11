@@ -208,7 +208,7 @@ describe('runDirector fallback reasons (no blank reasons)', () => {
     expectProcedural(outcome, 'director-error', 'director');
   });
 
-  it('never serves the repairPlan stub as an LLM plan for unparseable output', async () => {
+  it('never serves a placeholder plan for unparseable output', async () => {
     const primary: StructuredChat = {
       provider: 'google',
       model: 'gemini-3.8-flash',
@@ -221,8 +221,8 @@ describe('runDirector fallback reasons (no blank reasons)', () => {
     });
     expect(outcome.response.source).toBe('procedural');
     expect(outcome.response.plan.title).not.toBe('Unrepaired');
-    expect(outcome.validation.afterLocal).toEqual([
-      { code: 'SCHEMA_INVALID', path: 'local:stub-plan' },
+    expect(outcome.validation.afterLocal?.map((i) => i.code)).toEqual([
+      'SCHEMA_INVALID',
     ]);
   });
 

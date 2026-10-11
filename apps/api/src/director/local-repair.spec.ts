@@ -10,7 +10,15 @@ import {
   localRepairPlan,
   repairRoute,
   trySnapPlacementsToSlots,
+  type LocalRepairOutcome,
 } from './local-repair';
+
+function planOf(result: LocalRepairOutcome): LevelPlan {
+  if (!result.ok) {
+    throw new Error('local repair failed');
+  }
+  return result.plan;
+}
 
 vi.mock('@roomquest/level-core', async (importOriginal) => {
   const actual = await importOriginal<typeof levelCore>();
@@ -50,9 +58,9 @@ describe('localRepairPlan', () => {
     // surface instead of being dropped.
     expect(result.fixedBy).toBe('snap');
     expect(result.repairs).toEqual(['snap-to-slots']);
-    const slime = result.plan.placements.find((p) => p.id === 'p-slime');
+    const slime = planOf(result).placements.find((p) => p.id === 'p-slime');
     expect(slime?.surface).not.toBe('s5');
-    expect(validatePlan(result.plan, SYNTHETIC_LIVING_ROOM).ok).toBe(true);
+    expect(validatePlan(planOf(result), SYNTHETIC_LIVING_ROOM).ok).toBe(true);
   });
 
   it('runs snap → repairRoute → repairPlan in order and reports the fixing stage', () => {
@@ -83,7 +91,7 @@ describe('localRepairPlan', () => {
     }
     expect(result.result.ok).toBe(true);
     expect(['repair-route', 'repair-plan']).toContain(result.fixedBy);
-    expect(result.plan.placements.some((p) => p.id === 'p-ghost')).toBe(false);
+    expect(planOf(result).placements.some((p) => p.id === 'p-ghost')).toBe(false);
   });
 
   it('repairRoute leaves a valid plan unchanged', () => {
@@ -99,6 +107,20 @@ describe('localRepairPlan', () => {
       SYNTHETIC_LIVING_ROOM
     );
     expect(result.result.ok).toBe(false);
+    expect(result.ok).toBe(false);
+    expect(result.plan).toBeUndefined();
     expect(result.fixedBy).toBeNull();
+  });
+
+  it('fails plan-less (no placeholder) on non-object input', () => {
+    const result = localRepairPlan(
+      null as unknown as LevelPlan,
+      SYNTHETIC_LIVING_ROOM
+    );
+    expect(result.ok).toBe(false);
+    expect(result.plan).toBeUndefined();
+    if (!result.ok) {
+      expect(result.unrecoverable).toBe(true);
+    }
   });
 });

@@ -77,7 +77,7 @@ export function repairRoute(
         return finish(plan, snapped, graph, 'kept');
       }
       const repaired = repairPlan(snapped, graph);
-      if (repaired.result.ok && repaired.plan.goal === ends.goal) {
+      if (repaired.ok && repaired.plan.goal === ends.goal) {
         return finish(plan, repaired.plan, graph, 'kept');
       }
     }

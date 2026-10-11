@@ -24,16 +24,33 @@ import type { IssueCode, ValidationResult } from '../validate/types';
 import { validatePlan } from '../validate/validate-plan';
 
 /**
- * Result of {@link repairPlan}. `repairs` is copied into
- * `LevelResponse.repairs` by the director API. `relaxed` is the same
- * waiver list as `result.relaxed`.
+ * {@link repairPlan} produced a plan that passes {@link validatePlan}.
+ * `repairs` is copied into `LevelResponse.repairs` by the director API.
+ * `relaxed` is the same waiver list as `result.relaxed`.
  */
-export interface RepairResult {
+export interface RepairSuccess {
+  ok: true;
   plan: LevelPlan;
   repairs: string[];
   result: ValidationResult;
   relaxed: RelaxedRule[];
 }
+
+/**
+ * {@link repairPlan} could not produce a valid plan. There is deliberately
+ * no `plan`: callers go to their own fallback (procedural on the server,
+ * the client's next step) instead of serving a placeholder. `result`
+ * carries the remaining issues (e.g. for an LLM repair prompt).
+ */
+export interface RepairFailure {
+  ok: false;
+  plan?: never;
+  repairs: string[];
+  result: ValidationResult;
+  relaxed: RelaxedRule[];
+}
+
+export type RepairResult = RepairSuccess | RepairFailure;
 
 const DROP_CODES: ReadonlySet<IssueCode> = new Set([
   'UNKNOWN_SURFACE',
@@ -65,27 +82,47 @@ const LINK_PIECES = new Set(['plank_bridge', 'ramp', 'portal']);
  * 4. Clamp `parTimeMs` via {@link clampParTimeMs}
  * 5. Re-run {@link validatePlan}
  *
- * Pure and isomorphic. Never throws on bad input — a stub plan is returned
- * and `result.ok` is false.
+ * Pure and isomorphic. Never throws and never invents a placeholder plan:
+ * when the input cannot be turned into a valid plan it returns
+ * `{ ok: false }` with no `plan`.
  */
 export function repairPlan(plan: LevelPlan, graph: SurfaceGraph): RepairResult {
   try {
     return repairPlanInner(plan, graph);
   } catch {
-    const fallback = emptyPlan();
-    const result = safeValidate(fallback, graph);
-    return {
-      plan: fallback,
-      repairs: ['gave up on unrecoverable input'],
-      result,
-      relaxed: result.relaxed,
-    };
+    return failure(
+      ['gave up on unrecoverable input'],
+      'repairPlan threw on unrecoverable input',
+      graph
+    );
   }
+}
+
+function failure(
+  repairs: string[],
+  message: string,
+  graph: SurfaceGraph
+): RepairFailure {
+  const relaxed = relaxedForGraph(graph);
+  return {
+    ok: false,
+    repairs,
+    result: {
+      ok: false,
+      issues: [{ code: 'SCHEMA_INVALID', message }],
+      relaxed,
+    },
+    relaxed,
+  };
 }
 
 function repairPlanInner(plan: LevelPlan, graph: SurfaceGraph): RepairResult {
   const repairs: string[] = [];
-  let next = coercePlan(plan, repairs);
+  const coerced = coercePlan(plan, repairs);
+  if (!coerced) {
+    return failure(repairs, 'plan is not an object', graph);
+  }
+  let next = coerced;
 
   next = clampUv(next, repairs);
   next = clampPar(next, repairs);
@@ -95,7 +132,10 @@ function repairPlanInner(plan: LevelPlan, graph: SurfaceGraph): RepairResult {
   next = pruneRefs(next);
 
   const result = safeValidate(next, graph);
-  return { plan: next, repairs, result, relaxed: result.relaxed };
+  if (!result.ok) {
+    return { ok: false, repairs, result, relaxed: result.relaxed };
+  }
+  return { ok: true, plan: next, repairs, result, relaxed: result.relaxed };
 }
 
 function safeValidate(plan: LevelPlan, graph: SurfaceGraph): ValidationResult {
@@ -123,48 +163,10 @@ function relaxedForGraph(graph: SurfaceGraph): RelaxedRule[] {
   }
 }
 
-function emptyPlan(): LevelPlan {
-  return {
-    seed: 'repair',
-    theme: 'forest',
-    title: 'Unrepaired',
-    start: 's1',
-    goal: 's2',
-    placements: [
-      stubPlacement('p1', 'village_hut', 's1'),
-      stubPlacement('p2', 'crystal_shrine', 's2'),
-      stubPlacement('p3', 'gem', 's1'),
-      stubPlacement('p4', 'gem', 's2'),
-    ],
-    beats: [
-      { goal: 'Repair failed', uses: ['p3'] },
-      { goal: 'Repair failed', uses: ['p4'] },
-    ],
-    dialogue: [],
-    parTimeMs: PAR_TIME_MIN_MS,
-  };
-}
-
-function stubPlacement(
-  id: string,
-  piece: Placement['piece'],
-  surface: string
-): Placement {
-  return {
-    id,
-    piece,
-    surface,
-    u: 0.5,
-    v: 0.5,
-    playerBuilt: false,
-    links: [],
-  };
-}
-
-function coercePlan(input: unknown, repairs: string[]): LevelPlan {
+function coercePlan(input: unknown, repairs: string[]): LevelPlan | null {
   if (typeof input !== 'object' || input === null) {
-    repairs.push('replaced non-object plan with a stub');
-    return emptyPlan();
+    repairs.push('rejected non-object plan');
+    return null;
   }
   const rec = input as Record<string, unknown>;
   const parsed = LevelPlan.safeParse(input);

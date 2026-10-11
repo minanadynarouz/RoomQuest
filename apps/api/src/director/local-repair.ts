@@ -3,28 +3,50 @@ import {
   repairRoute as levelCoreRepairRoute,
   snapPlacementsToSlots,
   validatePlan,
-  type RepairResult,
   type ValidationResult,
 } from '@roomquest/level-core';
-import { LevelPlan, type SurfaceGraph, type Tier } from '@roomquest/schema';
+import {
+  LevelPlan,
+  type RelaxedRule,
+  type SurfaceGraph,
+  type Tier,
+} from '@roomquest/schema';
 
 /** Local deterministic stage that turned an invalid plan valid. */
 export type LocalRepairStage = 'snap' | 'repair-route' | 'repair-plan';
 
-export interface LocalRepairOutcome extends RepairResult {
-  /** First local stage after which `validatePlan` passed; null if none. */
-  fixedBy: LocalRepairStage | null;
-  /**
-   * `repairPlan` replaced unrecoverable input with its built-in stub plan.
-   * That stub can validate on some graphs but is not the model's level, so
-   * callers must treat it as a local-repair failure.
-   */
-  usedStub: boolean;
+interface LocalRepairBase {
+  repairs: string[];
+  result: ValidationResult;
+  relaxed: RelaxedRule[];
 }
 
-/** `repairPlan` repair strings that mean "input discarded, stub returned". */
-const STUB_REPAIRS = [
-  'replaced non-object plan with a stub',
+/**
+ * Local repair outcome. Failure is explicit and plan-less (level-core
+ * `repairPlan` no longer returns a placeholder), so the caller goes to
+ * its LLM-repair / procedural fallback.
+ */
+export type LocalRepairOutcome =
+  | (LocalRepairBase & {
+      ok: true;
+      plan: LevelPlan;
+      /** First local stage after which `validatePlan` passed. */
+      fixedBy: LocalRepairStage;
+    })
+  | (LocalRepairBase & {
+      ok: false;
+      plan?: never;
+      fixedBy: null;
+      /**
+       * repairPlan could not even coerce the input into a plan, so its
+       * issues describe the input shape, not the model's level.
+       */
+      unrecoverable: boolean;
+    });
+
+/** repairPlan repair strings meaning "input could not be coerced". */
+const UNRECOVERABLE_REPAIRS = [
+  'rejected non-object plan',
   'gave up on unrecoverable input',
 ] as const;
 
@@ -116,12 +138,12 @@ export function localRepairPlan(
         const afterSnap = safeValidate(current, graph);
         if (afterSnap?.ok === true) {
           return {
+            ok: true,
             plan: current,
             repairs,
             result: afterSnap,
             relaxed: afterSnap.relaxed,
             fixedBy: 'snap',
-            usedStub: false,
           };
         }
       }
@@ -143,12 +165,12 @@ export function localRepairPlan(
       const afterRoute = safeValidate(current, graph);
       if (afterRoute?.ok === true) {
         return {
+          ok: true,
           plan: current,
           repairs,
           result: afterRoute,
           relaxed: afterRoute.relaxed,
           fixedBy: 'repair-route',
-          usedStub: false,
         };
       }
     }
@@ -158,16 +180,35 @@ export function localRepairPlan(
   for (const label of repaired.repairs) {
     addRepair(repairs, label);
   }
+  if (!repaired.ok) {
+    return {
+      ok: false,
+      repairs,
+      result: repaired.result,
+      relaxed: repaired.relaxed,
+      fixedBy: null,
+      unrecoverable: repaired.repairs.some((label) =>
+        (UNRECOVERABLE_REPAIRS as readonly string[]).includes(label)
+      ),
+    };
+  }
   const result = safeValidate(repaired.plan, graph) ?? repaired.result;
-  const usedStub = repaired.repairs.some((label) =>
-    (STUB_REPAIRS as readonly string[]).includes(label)
-  );
+  if (!result.ok) {
+    return {
+      ok: false,
+      repairs,
+      result,
+      relaxed: result.relaxed,
+      fixedBy: null,
+      unrecoverable: false,
+    };
+  }
   return {
+    ok: true,
     plan: repaired.plan,
     repairs,
     result,
     relaxed: result.relaxed,
-    fixedBy: result.ok && !usedStub ? 'repair-plan' : null,
-    usedStub,
+    fixedBy: 'repair-plan',
   };
 }

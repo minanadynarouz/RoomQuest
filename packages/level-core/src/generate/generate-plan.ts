@@ -287,7 +287,7 @@ export function planAlongPath(
   };
 
   const repaired = repairPlan(plan, graph);
-  return repaired.result.ok ? repaired.plan : plan;
+  return repaired.ok ? repaired.plan : plan;
 }
 
 export function pickStart(nodes: readonly SurfaceNode[]): SurfaceNode {
