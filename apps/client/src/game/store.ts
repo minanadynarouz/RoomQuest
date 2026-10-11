@@ -354,7 +354,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
         fallbackReason?: string;
         durationMs: number;
         requestId?: string;
-        repairedBy?: 'snap' | 'repairPlan';
+        repairedBy?: 'snap' | 'repairRoute' | 'repairPlan';
         relaxed?: RelaxedRule[];
       }
     | { type: 'roomUnplayable' }
@@ -616,7 +616,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
       source: DirectorRequestSource;
       fallbackReason?: string;
       requestId?: string;
-      repairedBy?: 'snap' | 'repairPlan';
+      repairedBy?: 'snap' | 'repairRoute' | 'repairPlan';
       relaxed?: RelaxedRule[];
     }) {
       const now = clock.now();

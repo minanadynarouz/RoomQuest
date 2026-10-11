@@ -255,7 +255,9 @@ describe('directorRequest transitions', () => {
     const { store, director } = wired(fetchFn);
     const result = await director.requestPlan(GRAPH);
     expect(
-      result.repairedBy === 'snap' || result.repairedBy === 'repairPlan'
+      result.repairedBy === 'snap' ||
+        result.repairedBy === 'repairRoute' ||
+        result.repairedBy === 'repairPlan'
     ).toBe(true);
     expect(store.directorRequest.value.repairedBy).toBe(result.repairedBy);
   });

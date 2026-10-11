@@ -1,5 +1,5 @@
 /**
- * generatePlan + snap + repairPlan on every IWER room.
+ * generatePlan + snap + repairRoute + repairPlan on every IWER room.
  * No live Gemini / staging /levels — director=off and mocked fetch.
  */
 
@@ -25,7 +25,7 @@ function isFixturePlan(plan: { title: string; seed: string }): boolean {
   );
 }
 
-describe('IWER generatePlan + snap + repairPlan', () => {
+describe('IWER generatePlan + snap + repairRoute + repairPlan', () => {
   it('plays a generated plan (not the fixture) in all 5 rooms × 2 tiers', async () => {
     const fetchFn = vi.fn<FetchLike>(() => {
       throw new Error('live /levels must not be called');
