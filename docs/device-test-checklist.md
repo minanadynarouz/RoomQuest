@@ -1,6 +1,6 @@
 # Device test checklist
 
-A single ~20-minute pass on a **real Meta Quest** (Quest 3 or 3S) against the staging HTTPS build.
+A single ~25-minute pass on a **real Meta Quest** (Quest 3 or 3S) against the staging HTTPS build.
 
 You do **not** need the GitHub repo, a computer, Node, or any developer tools. A friend or community member with a Quest can run this.
 
@@ -168,15 +168,69 @@ Fixed foveation is turned on by this build. You do not toggle it.
 
 ---
 
-## AI director (~1 min)
+## AI director (~5 min)
 
-Do this while the debug overlay is still visible (first session is fine).
+Do this while the debug overlay is still visible (first session is fine). Make sure you woke the staging API in Setup first.
+
+- [ ] **Time from Enter to a playable level.** Count (or use a phone stopwatch) from the moment you tap **Enter your room** until the level pieces appear and you can play. Write the seconds in Notes. Also copy the overlay's `fallback` line exactly (`-` means no fallback; anything else, e.g. `llm-timeout` or `room-unplayable`, write it down).
+
+  | Pass / Fail | Notes (seconds, `fallback` value) |
+  | --- | --- |
+  | | |
 
 - [ ] **Director source, if live mode is on.** On the overlay, read the line that starts with `source`. Write the exact value in Notes (`llm`, `llm_repaired`, `cache`, or `procedural`). If it is `llm`, `llm_repaired`, or `cache`, live mode is on. `procedural` means the fallback generator ran — still note it.
 
   | Pass / Fail | Notes (`source` value) |
   | --- | --- |
   | | |
+
+- [ ] **Route mode: the AI level fits your real furniture.** Pass if the overlay shows `source` as `llm` (or `llm_repaired`) with a `lines` number above 0, and the hut, shrine, and bridges sit on furniture that is really in your room. The overlay does not show the route id yet, so write the `source`, `director`, and `lines` values in Notes.
+
+  | Pass / Fail | Notes (`source`, `director`, `lines`) |
+  | --- | --- |
+  | | |
+
+- [ ] **The room-reading sweep plays while you wait.** Right after Enter, while the level is still loading, a soft highlight should sweep across your furniture and Pip (the explorer) should hop or sniff around. It should stop once the level appears.
+
+  | Pass / Fail | Notes |
+  | --- | --- |
+  | | |
+
+- [ ] **Pip's speech cards.** When a new beat (step of the level) starts, a short card with Pip's line should appear **above Pip**. Pass if: you can read it at arm's length; it names furniture that is really in your room (e.g. "the couch", "the desk"); it **hides** when you pinch **Pause**; and it is **gone** on the win panel. Not every beat has a line, which is fine.
+
+  | Pass / Fail | Notes |
+  | --- | --- |
+  | | |
+
+- [ ] **A soft chirp with each line.** Each time a speech card appears you should hear one short, quiet chirp that rises in pitch and sounds like it comes **from Pip** (lean left/right to check). On a beat with **no** card there should be **no** chirp.
+
+  | Pass / Fail | Notes |
+  | --- | --- |
+  | | |
+
+- [ ] **Unplayable room: Pip looks around, shrugs, and points.** Only if the game shows **Show me more of your room!** (it can happen in very small or bare rooms). Pass if Pip looks left and right, does a little shrug, then turns and leans toward the biggest open patch of floor, and the card offers a **Rescan** button that starts a new scan when pinched. If you never see this card, write "not seen" in Notes. That is not a Fail.
+
+  | Pass / Fail | Notes |
+  | --- | --- |
+  | | |
+
+- [ ] **Comparison: director off.** Exit to the landing page, then open `https://roomquest-client-staging.onrender.com?debug=1&director=off` and Enter. You should still get a full, winnable level, the overlay `source` should be `procedural`, and there should be **no** speech cards or chirps (`lines` is `0`). Write the Enter-to-playable time in Notes too.
+
+  | Pass / Fail | Notes |
+  | --- | --- |
+  | | |
+
+---
+
+## Bugs found (X-11)
+
+One row per bug, even small ones. Add a screenshot when you can.
+
+| # | What happened | Steps to make it happen | Room (short description) | URL used (with flags) | Overlay `source` / `fallback` |
+| --- | --- | --- | --- | --- | --- |
+| 1 | | | | | |
+| 2 | | | | | |
+| 3 | | | | | |
 
 ---
 
@@ -187,4 +241,5 @@ Confirm you sent:
 - [ ] Filled Pass / Fail + Notes for every item
 - [ ] Tester block (headset, OS, browser, room)
 - [ ] Screenshots for every Fail
+- [ ] The Bugs found (X-11) table, if you hit any bugs
 - [ ] The bundle to the person who asked you to test
