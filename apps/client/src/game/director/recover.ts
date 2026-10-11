@@ -1,10 +1,12 @@
 /**
  * Local geometry repair before `repairPlan`.
- * validate → snapPlacementsToSlots → validate → repairPlan → validate.
+ * validate → snapPlacementsToSlots → validate → repairRoute → validate →
+ * repairPlan → validate. `repairPlan` failure never yields a placeholder.
  */
 
 import {
   repairPlan,
+  repairRoute,
   snapPlacementsToSlots,
   validatePlan,
   type Issue,
@@ -13,12 +15,20 @@ import {
 import type { LevelPlan, SurfaceGraph } from '@roomquest/schema';
 import type { RelaxedRule } from '@roomquest/schema';
 import { mergeRelaxed } from './relaxed.js';
-import type { RepairFn, RepairedBy, SnapFn, ValidateFn } from './types.js';
+import type {
+  RepairFn,
+  RepairedBy,
+  RouteRepairFn,
+  SnapFn,
+  ValidateFn,
+} from './types.js';
 
 export interface RecoverPlanOptions {
   validate?: ValidateFn;
   snap?: SnapFn;
   repair?: RepairFn;
+  /** Route rebuild between snap and repairPlan. Default `repairRoute`. */
+  route?: RouteRepairFn;
 }
 
 export interface RecoveredPlan {
@@ -59,6 +69,10 @@ export async function recoverPlan(
   const validate = options.validate ?? validatePlan;
   const snap = options.snap ?? snapPlacementsToSlots;
   const repair = options.repair ?? repairPlan;
+  const route: RouteRepairFn =
+    options.route ??
+    ((candidate, pinned) =>
+      repairRoute(candidate, pinned, { seed: candidate.seed }));
 
   const first = await validate(plan, graph);
   if (first.ok) {
@@ -87,6 +101,36 @@ export async function recoverPlan(
     );
   }
 
+  const routed = await route(snapped.plan, graph);
+  // A `skeleton` result is a fresh generatePlan path, not a repair of this
+  // plan; leave it to the caller's own fallback so it is not labelled
+  // `llm_repaired` (keeps B-02 fixture ids → graph-mismatch).
+  if (routed.changed && routed.strategy !== 'skeleton') {
+    const afterRoute = await validate(routed.plan, graph);
+    if (afterRoute.ok) {
+      return withRelaxed(
+        {
+          plan: routed.plan,
+          ok: true,
+          repairedBy: 'repairRoute',
+          repairs: [
+            ...snapRepairLines(snapped),
+            `repairRoute: ${routed.strategy}`,
+          ],
+          issues: first.issues,
+        },
+        plan,
+        first,
+        snapped.plan,
+        afterSnap,
+        routed.plan,
+        afterRoute
+      );
+    }
+  }
+
+  // repairRoute did not produce a valid plan; repairPlan starts from the
+  // snapped candidate (not a half-rebuilt route).
   const repaired = await repair(snapped.plan, graph);
   if (repaired.ok) {
     const afterRepair = repaired.result.ok

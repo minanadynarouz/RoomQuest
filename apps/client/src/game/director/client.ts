@@ -4,7 +4,7 @@
  * Starts POST /api/v1/levels and the local generator together. Accepts the
  * API plan only if it arrives within the budget, parses as LevelResponse,
  * and passes local re-validation against the scanned graph. An invalid
- * server plan is offered to `snapPlacementsToSlots`, then `repairPlan`;
+ * server plan is offered to `snapPlacementsToSlots`, `repairRoute`, then `repairPlan`;
  * only if both fail does the client keep the racing `generatePlan` result.
  * When snap + repair still fail — or the API returns 422 ROOM_UNPLAYABLE —
  * the client does not play the fixture plan (`fallbackReason: 'room-unplayable'`).
@@ -324,6 +324,7 @@ export function createDirectorClient(
   const validate = options.validate ?? validatePlan;
   const repair = options.repair ?? repairPlan;
   const snap = options.snap ?? snapPlacementsToSlots;
+  const route = options.route;
   const allowFixtureFallback = options.allowFixtureFallback === true;
   const defaultMode: DirectorMode = options.directorMode ?? 'live';
   const defaultTier = options.tier ?? DEFAULT_TIER;
@@ -421,6 +422,7 @@ export function createDirectorClient(
       const recovered = await recoverPlan(plan, postedGraph, {
         validate,
         snap,
+        route,
         repair,
       });
       const relaxed = mergeRelaxed(extras?.relaxed, recovered.relaxed);
@@ -532,11 +534,13 @@ export function createDirectorClient(
     logGraphDrift(graph, postedGraph);
 
     // Re-validate against the POSTed snapshot, not a later rebuild of
-    // `graph`. Order: validate → snap → validate → repairPlan → validate.
+    // `graph`. Order: validate → snap → validate → repairRoute → validate →
+    // repairPlan → validate; a failed repairPlan never yields a stub.
     // B-02 fixture ids still miss snap/repair → generatePlan (`graph-mismatch`).
     const recovered = await recoverPlan(parsed.data.plan, postedGraph, {
       validate,
       snap,
+      route,
       repair,
     });
     if (recovered.ok && recovered.repairedBy) {

@@ -24,6 +24,7 @@ import type {
   GenerateFn,
   KvStore,
   RepairFn,
+  RouteRepairFn,
   SnapFn,
 } from './types.js';
 
@@ -319,6 +320,13 @@ describe('createDirectorClient', () => {
     resetHealthPrewarmForTests();
   });
 
+  const noopRoute: RouteRepairFn = (plan) => ({
+    plan,
+    changed: false,
+    issues: [],
+    strategy: 'none',
+  });
+
   function client(
     fetchFn: FetchLike,
     extra?: Partial<Parameters<typeof createDirectorClient>[0]>
@@ -498,9 +506,11 @@ describe('createDirectorClient', () => {
     expect(result.source).toBe('llm_repaired');
     expect(result.fallbackReason).toBe('repaired');
     expect(result.usedFallback).toBe(true);
-    expect(result.repairedBy === 'snap' || result.repairedBy === 'repairPlan').toBe(
-      true
-    );
+    expect(
+      result.repairedBy === 'snap' ||
+        result.repairedBy === 'repairRoute' ||
+        result.repairedBy === 'repairPlan'
+    ).toBe(true);
     expect(result.plan.start).toBe('s1');
     expect(result.cacheKey).toBe('abcd1234abcd1234');
     expect(console.warn).not.toHaveBeenCalled();
@@ -524,12 +534,50 @@ describe('createDirectorClient', () => {
       )
     );
 
-    const result = await client(fetchFn, { snap, repair }).requestPlan(GRAPH);
+    const result = await client(fetchFn, { snap, route: noopRoute, repair }).requestPlan(GRAPH);
 
     expect(result.usedFallback).toBe(true);
     expect(result.source).toBe('procedural');
     expect(result.fallbackReason).toBe('graph-mismatch');
     expect(result.plan.placements.some((p) => p.surface === 's1')).toBe(true);
+    expect(result.plan.title).not.toBe('The Living Room Quest');
+  });
+
+  it('never plays a stub when repairPlan returns ok:false (s1/s2 graph)', async () => {
+    const snap: SnapFn = (plan) => ({ plan, changes: [] });
+    const repair = vi.fn<RepairFn>(() => ({
+      ok: false,
+      repairs: ['gave up'],
+      result: {
+        ok: false,
+        issues: [{ code: 'GOAL_UNREACHABLE', message: 'no path' }],
+        relaxed: [],
+      },
+      relaxed: [],
+    }));
+    const generated = generatePlan(GRAPH, 'gen-after-repair-fail', 'normal');
+    const generate = vi.fn<GenerateFn>(() => generated);
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve(
+        jsonResponse(apiResponse({ plan: slimeOnFloor(apiPlan()) }))
+      )
+    );
+
+    const result = await client(fetchFn, {
+      snap,
+      route: noopRoute,
+      repair,
+      generate,
+    }).requestPlan(GRAPH);
+
+    expect(repair).toHaveBeenCalledTimes(1);
+    expect(result.source).toBe('procedural');
+    expect(result.usedFallback).toBe(true);
+    expect(result.repairedBy).toBeUndefined();
+    expect(result.plan).toEqual(generated);
+    expect(result.plan.title).not.toBe('Unrepaired');
+    expect(result.plan.title).not.toBe('Rescan');
+    expect(result.plan.placements.length).toBeGreaterThan(0);
     expect(result.plan.title).not.toBe('The Living Room Quest');
   });
 

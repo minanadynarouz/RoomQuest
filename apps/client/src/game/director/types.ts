@@ -7,6 +7,7 @@ import type {
   GeneratePlanOptions,
   Issue,
   RepairResult,
+  RepairRouteResult,
   SnapResult,
   ValidationResult,
 } from '@roomquest/level-core';
@@ -93,7 +94,12 @@ export type SnapFn = (
   graph: SurfaceGraph
 ) => SnapResult | Promise<SnapResult>;
 
-export type RepairedBy = 'snap' | 'repairPlan';
+export type RouteRepairFn = (
+  plan: LevelPlan,
+  graph: SurfaceGraph
+) => RepairRouteResult | Promise<RepairRouteResult>;
+
+export type RepairedBy = 'snap' | 'repairRoute' | 'repairPlan';
 
 export type { RelaxedRule } from '@roomquest/schema';
 export type { RoomUnplayableReason } from './relaxed.js';
@@ -136,6 +142,8 @@ export interface DirectorClientOptions {
   generate?: GenerateFn;
   validate?: ValidateFn;
   repair?: RepairFn;
+  /** Route rebuild between snap and repairPlan (tests). */
+  route?: RouteRepairFn;
   snap?: SnapFn;
   /**
    * Use the synthetic fixture plan when snap + repair still fail.

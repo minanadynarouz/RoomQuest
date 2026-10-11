@@ -48,4 +48,12 @@ describe('debug overlay format', () => {
       'debug-relaxed',
     ]);
   });
+
+  it('shows repairedBy repairRoute', () => {
+    const block = formatDebugBlock({
+      ...EMPTY_PERF_STATS,
+      repairedBy: 'repairRoute',
+    });
+    expect(block).toContain('repaired repairRoute');
+  });
 });
