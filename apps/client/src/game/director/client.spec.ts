@@ -1153,3 +1153,144 @@ describe('applyDirectorResult', () => {
     expect(store.state.error).toBeNull();
   });
 });
+
+describe('director lines (Pip speech cards)', () => {
+  const LINES = [
+    { beat: '0', text: 'Ooh, a table bridge!' },
+    { beat: '1', text: 'Mind the slime.' },
+  ];
+
+  beforeEach(() => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    resetHealthPrewarmForTests();
+  });
+
+  function linesClient(
+    fetchFn: FetchLike,
+    extra?: Partial<Parameters<typeof createDirectorClient>[0]>
+  ) {
+    return createDirectorClient({
+      fetch: fetchFn,
+      apiBaseUrl: 'http://localhost:3000',
+      deviceId: '11111111-2222-4333-8444-555555555555',
+      clientVersion: '0.1.0',
+      date: '2026-10-09',
+      ...extra,
+    });
+  }
+
+  function surveyingStore() {
+    const store = createGameStore();
+    store.requestLevel();
+    store.startSurveying();
+    return store;
+  }
+
+  it('keeps lines from a server-resolved plan into level.lines', async () => {
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve(jsonResponse(apiResponse({ lines: LINES })))
+    );
+    const result = await linesClient(fetchFn).requestPlan(GRAPH);
+    expect(result.usedFallback).toBe(false);
+    expect(result.lines).toEqual(LINES);
+
+    const store = surveyingStore();
+    applyDirectorResult(store, result);
+    expect(store.level.lines).toEqual({
+      '0': 'Ooh, a table bridge!',
+      '1': 'Mind the slime.',
+    });
+    expect(store.state.level.lines['1']).toBe('Mind the slime.');
+  });
+
+  it('keeps lines when the server plan is locally repaired', async () => {
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve(
+        jsonResponse(
+          apiResponse({ plan: slimeOnFloor(apiPlan()), lines: LINES })
+        )
+      )
+    );
+    const result = await linesClient(fetchFn).requestPlan(GRAPH);
+    expect(result.source).toBe('llm_repaired');
+    expect(result.lines).toEqual(LINES);
+  });
+
+  it('drops lines on procedural fallback', async () => {
+    const snap: SnapFn = (plan) => ({ plan, changes: [] });
+    const repair: RepairFn = (plan) => ({
+      plan,
+      repairs: [],
+      result: {
+        ok: false,
+        issues: [{ code: 'GOAL_UNREACHABLE', message: 'no path' }],
+        relaxed: [],
+      },
+      relaxed: [],
+    });
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve(
+        jsonResponse(
+          apiResponse({ plan: slimeOnFloor(apiPlan()), lines: LINES })
+        )
+      )
+    );
+    const result = await linesClient(fetchFn, { snap, repair }).requestPlan(
+      GRAPH
+    );
+    expect(result.source).toBe('procedural');
+    expect(result.lines).toBeUndefined();
+
+    const store = surveyingStore();
+    applyDirectorResult(store, result);
+    expect(store.level.lines).toEqual({});
+  });
+
+  it('drops lines on network and 429 fallbacks', async () => {
+    const down = await linesClient(
+      vi.fn<FetchLike>(() => Promise.reject(new Error('offline')))
+    ).requestPlan(GRAPH);
+    expect(down.usedFallback).toBe(true);
+    expect(down.lines).toBeUndefined();
+
+    const limited = await linesClient(
+      vi.fn<FetchLike>(() =>
+        Promise.resolve(jsonResponse({ retryAfterS: 60, lines: LINES }, 429))
+      )
+    ).requestPlan(GRAPH);
+    expect(limited.fallbackReason).toBe('rate-limited');
+    expect(limited.lines).toBeUndefined();
+  });
+
+  it('clears lines left from a previous server level', () => {
+    const store = surveyingStore();
+    applyDirectorResult(store, {
+      plan: localPlan(),
+      source: 'llm',
+      cacheKey: 'k',
+      promptVersion: 'v1',
+      latencyMs: 1,
+      repairs: [],
+      usedFallback: false,
+      lines: LINES,
+    });
+    expect(Object.keys(store.level.lines)).toHaveLength(2);
+    store.exit();
+    expect(store.level.lines).toEqual({});
+  });
+
+  it('works without lines (older servers / other arms)', async () => {
+    const result = await linesClient(
+      vi.fn<FetchLike>(() => Promise.resolve(jsonResponse(apiResponse())))
+    ).requestPlan(GRAPH);
+    expect(result.lines).toBeUndefined();
+    const store = surveyingStore();
+    applyDirectorResult(store, result);
+    expect(store.level.lines).toEqual({});
+  });
+});

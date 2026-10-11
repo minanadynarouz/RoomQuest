@@ -123,6 +123,7 @@ const statsGetter = createStatsGetter(() =>
     requestId: gameStore.directorRequest.value.requestId ?? null,
     repairedBy: gameStore.directorRequest.value.repairedBy ?? null,
     relaxed: gameStore.directorRequest.value.relaxed ?? [],
+    lines: Object.keys(gameStore.level.lines).length,
   })
 );
 
@@ -251,7 +252,10 @@ function exposeHooks(
       platform: latestPlatform,
       slime: latestSlime,
       stats: statsGetter,
-      director: () => gameStore.directorRequest.value,
+      director: () => ({
+        ...gameStore.directorRequest.value,
+        lines: Object.keys(gameStore.level.lines).length,
+      }),
       playSynthetic: playSyntheticLevel,
     },
     { flags: clientFlags, isDev: import.meta.env.DEV }

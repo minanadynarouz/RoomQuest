@@ -31,5 +31,6 @@ export function applyDirectorResult(
     retryAfterS: result.retryAfterS,
     issues: result.issues,
     tier: result.tier,
+    lines: result.lines,
   });
 }

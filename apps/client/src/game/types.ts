@@ -4,7 +4,13 @@
  */
 
 import type { Issue } from '@roomquest/level-core';
-import type { ErrorCode, LevelPlan, PlanSource, Tier } from '@roomquest/schema';
+import type {
+  ErrorCode,
+  LevelLine,
+  LevelPlan,
+  PlanSource,
+  Tier,
+} from '@roomquest/schema';
 import type { FallbackReason, RepairedBy } from './director/types.js';
 import type { RelaxedRule } from '@roomquest/schema';
 import type { StarCount } from './stars.js';
@@ -50,6 +56,16 @@ export interface StartBuildingOptions {
   issues?: Issue[];
   /** Difficulty used for procedural result keys (`proc:<seed>:<tier>`). */
   tier?: Tier;
+  /** Pip lines from a server-resolved plan (omit for local plans). */
+  lines?: readonly LevelLine[];
+}
+
+/** Beat index (string, as in `LevelLine.beat`) → Pip line text. */
+export type LevelLinesMap = Readonly<Record<LevelLine['beat'], LevelLine['text']>>;
+
+/** Per-level director extras kept next to the plan. */
+export interface LevelExtras {
+  lines: LevelLinesMap;
 }
 
 /**
@@ -153,7 +169,15 @@ export type GameEvent =
       timestamp: number;
       beatIndex: number;
     }
-  | { type: 'roomUnplayable'; timestamp: number; beatIndex: number };
+  | { type: 'roomUnplayable'; timestamp: number; beatIndex: number }
+  | {
+      /** A beat with a server Pip line became active. */
+      type: 'pipLine';
+      beat: LevelLine['beat'];
+      text: LevelLine['text'];
+      timestamp: number;
+      beatIndex: number;
+    };
 
 /** Reasons the explorer waits. X-07 adds `unalignedPlatform`. */
 export type ExplorerBlockReason =
@@ -248,6 +272,8 @@ export interface GameState {
   validationIssues: Issue[];
   /** Difficulty used when posting `proc:<seed>:<tier>` (F-07). */
   tier: Tier | null;
+  /** Director extras for the current level (`level.lines`). */
+  level: LevelExtras;
   /** In-flight / last director `/levels` request (room-reading). */
   directorRequest: DirectorRequestState;
 }

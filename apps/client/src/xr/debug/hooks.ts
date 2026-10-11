@@ -50,6 +50,7 @@ export function writeLatestPerfStats(stats: RqPerfStats): void {
   latestStats.requestId = stats.requestId;
   latestStats.repairedBy = stats.repairedBy;
   latestStats.relaxed = stats.relaxed;
+  latestStats.lines = stats.lines;
   hasOverlaySample = true;
 }
 
@@ -71,6 +72,7 @@ export function resetLatestPerfStats(): void {
   latestStats.requestId = EMPTY_PERF_STATS.requestId;
   latestStats.repairedBy = EMPTY_PERF_STATS.repairedBy;
   latestStats.relaxed = EMPTY_PERF_STATS.relaxed;
+  latestStats.lines = EMPTY_PERF_STATS.lines;
   hasOverlaySample = false;
   overlayReady = false;
 }

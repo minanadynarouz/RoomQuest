@@ -26,6 +26,7 @@ import {
   ApiError,
   LevelResponse,
   type ErrorCode,
+  type LevelLine,
   type LevelPlan,
   type PlanSource,
   type SurfaceGraph,
@@ -267,6 +268,8 @@ function localResult(
     requestId?: string;
     repairedBy?: RepairedBy;
     relaxed?: RelaxedRule[];
+    /** Only for a server plan repaired locally (`llm_repaired`). */
+    lines?: LevelLine[];
   }
 ): DirectorResult {
   return {
@@ -286,6 +289,7 @@ function localResult(
     requestId: extras?.requestId,
     repairedBy: extras?.repairedBy,
     relaxed: extras?.relaxed,
+    ...(extras?.lines && extras.lines.length > 0 ? { lines: extras.lines } : {}),
   };
 }
 
@@ -564,6 +568,7 @@ export function createDirectorClient(
           requestId: api.requestId,
           repairedBy: recovered.repairedBy,
           relaxed: recovered.relaxed,
+          lines: parsed.data.lines,
         }
       );
       logDirectorResult(result);
@@ -599,6 +604,9 @@ export function createDirectorClient(
       tier,
       requestId: api.requestId,
       relaxed: recovered.relaxed,
+      ...(parsed.data.lines && parsed.data.lines.length > 0
+        ? { lines: parsed.data.lines }
+        : {}),
     };
     logDirectorResult(result);
     return finish(result);

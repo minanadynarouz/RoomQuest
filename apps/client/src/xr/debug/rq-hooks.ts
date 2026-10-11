@@ -61,7 +61,10 @@ export interface RqHooks {
   platform?: PlatformDebugApi | null;
   stats?: () => RqPerfStats;
   /** In-flight director `/levels` state for room-reading / debug. */
-  director?: () => DirectorRequestState;
+  director?: () => DirectorRequestState & {
+    /** Count of server Pip lines kept for the current level. */
+    lines?: number;
+  };
   autoSolve?: () => Promise<void>;
   /** Debug/e2e: force the synthetic living-room plan into `playing`. */
   playSynthetic?: () => boolean;

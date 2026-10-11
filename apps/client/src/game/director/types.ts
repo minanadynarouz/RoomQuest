@@ -12,6 +12,7 @@ import type {
 } from '@roomquest/level-core';
 import type {
   ErrorCode,
+  LevelLine,
   LevelPlan,
   PlanSource,
   SurfaceGraph,
@@ -191,6 +192,11 @@ export interface DirectorResult {
   repairedBy?: RepairedBy;
   /** Relaxed validation rule ids, when the plan or validator reports them. */
   relaxed?: RelaxedRule[];
+  /**
+   * Pip lines from the server response (any placement arm). Only set when
+   * the played plan came from the server; dropped on procedural/local fallback.
+   */
+  lines?: LevelLine[];
 }
 
 export interface DirectorClient {
