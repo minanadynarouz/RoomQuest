@@ -2,7 +2,8 @@ import { FakeListChatModel } from '@langchain/core/utils/testing';
 import { AIMessage } from '@langchain/core/messages';
 import type { BaseLanguageModelInput } from '@langchain/core/language_models/base';
 import { RunnableLambda } from '@langchain/core/runnables';
-import type { LevelPlan } from '@roomquest/schema';
+import { listHintedSlots } from '@roomquest/level-core';
+import type { LevelPlan, SurfaceGraph } from '@roomquest/schema';
 import { abortableDelay } from './errors';
 import { wrapJsonChatModel } from './models';
 import type { StructuredChat } from './structured-chat';
@@ -195,4 +196,46 @@ export class UsageFakeListChatModel extends FakeListChatModel {
       text,
     };
   }
+}
+
+/**
+ * Slot-mode mock answer: map each placement to an unused hinted slot that
+ * fits the piece (same surface first). Returns uv JSON when the graph
+ * offers no hinted slots.
+ */
+export function planToSlotLlmJson(
+  plan: LevelPlan,
+  graph: SurfaceGraph,
+  seed: string
+): string {
+  const slots = listHintedSlots(graph, { seed });
+  if (slots.length === 0) {
+    return planToLlmJson(plan);
+  }
+  const used = new Set<string>();
+  return JSON.stringify({
+    th: plan.theme,
+    pl: plan.placements.map((placement) => {
+      const free = slots.filter((slot) => !used.has(slot.id));
+      const pick =
+        free.find(
+          (slot) =>
+            slot.surfaceId === placement.surface &&
+            slot.fits.includes(placement.piece)
+        ) ??
+        free.find((slot) => slot.fits.includes(placement.piece)) ??
+        free[0] ??
+        slots[0];
+      if (pick !== undefined) {
+        used.add(pick.id);
+      }
+      return {
+        i: placement.id,
+        pc: placement.piece,
+        slot: pick?.id ?? '',
+        t: placement.to ?? null,
+        lk: placement.links,
+      };
+    }),
+  });
 }

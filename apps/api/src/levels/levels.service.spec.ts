@@ -38,7 +38,7 @@ const WARM_HIT_LOOKUP_MS = 12;
 function directorResponse(
   plan: LevelPlan,
   source: 'procedural' | 'llm' = 'procedural',
-  fallbackReason?: 'llm-quota'
+  fallbackReason?: 'llm-quota' | 'llm-timeout' | 'llm-error'
 ): LevelResponse {
   return LevelResponse.parse({
     plan,
@@ -221,6 +221,35 @@ describe('LevelsService cache + limiter', () => {
     expect(persist).not.toHaveBeenCalled();
   });
 
+  it.each(['llm-timeout', 'llm-error'] as const)(
+    'does not cache a procedural %s fallback',
+    async (reason) => {
+      const persist = vi.fn(() => Promise.resolve(undefined));
+      const directorPlan = vi.fn(() =>
+        Promise.resolve(directorResponse(validPlan, 'procedural', reason))
+      );
+      const moduleRef = await Test.createTestingModule({
+        providers: [
+          LevelsService,
+          CacheMissLimiter,
+          { provide: DirectorService, useValue: { plan: directorPlan } },
+          {
+            provide: LevelCacheRepository,
+            useValue: {
+              lookup: vi.fn(() => Promise.resolve(null)),
+              persist,
+            },
+          },
+        ],
+      }).compile();
+      const service = moduleRef.get(LevelsService);
+      const response = await service.create(request, `device-${reason}`);
+      expect(response.source).toBe('procedural');
+      expect(response.fallbackReason).toBe(reason);
+      expect(persist).not.toHaveBeenCalled();
+    }
+  );
+
   it('throws ROOM_UNPLAYABLE instead of returning an invalid director plan', async () => {
     const invalid: LevelPlan = {
       ...SYNTHETIC_LIVING_ROOM_PLAN,
@@ -231,9 +260,9 @@ describe('LevelsService cache + limiter', () => {
       cached: null,
       plan: invalid,
     });
-    await expect(service.create(request, 'device-unplayable')).rejects.toBeInstanceOf(
-      RoomUnplayableException
-    );
+    await expect(
+      service.create(request, 'device-unplayable')
+    ).rejects.toBeInstanceOf(RoomUnplayableException);
     expect(persist).not.toHaveBeenCalled();
   });
 

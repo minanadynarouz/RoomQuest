@@ -57,6 +57,33 @@ describe('validateEnv', () => {
     ).toBe('default');
   });
 
+  it('defaults LLM_REPAIR_MIN_REMAINING_MS to 3500 and validates it', () => {
+    expect(validateEnv({ NODE_ENV: 'test' }).LLM_REPAIR_MIN_REMAINING_MS).toBe(
+      3500
+    );
+    expect(
+      validateEnv({ NODE_ENV: 'test', LLM_REPAIR_MIN_REMAINING_MS: '4200' })
+        .LLM_REPAIR_MIN_REMAINING_MS
+    ).toBe(4200);
+    expect(() =>
+      validateEnv({ NODE_ENV: 'test', LLM_REPAIR_MIN_REMAINING_MS: '-1' })
+    ).toThrow(/LLM_REPAIR_MIN_REMAINING_MS/);
+    expect(() =>
+      validateEnv({ NODE_ENV: 'test', LLM_REPAIR_MIN_REMAINING_MS: 'soon' })
+    ).toThrow(/LLM_REPAIR_MIN_REMAINING_MS/);
+  });
+
+  it('defaults DIRECTOR_PLACEMENT to uv and accepts slot', () => {
+    expect(validateEnv({ NODE_ENV: 'test' }).DIRECTOR_PLACEMENT).toBe('uv');
+    expect(
+      validateEnv({ NODE_ENV: 'test', DIRECTOR_PLACEMENT: ' SLOT ' })
+        .DIRECTOR_PLACEMENT
+    ).toBe('slot');
+    expect(() =>
+      validateEnv({ NODE_ENV: 'test', DIRECTOR_PLACEMENT: 'grid' })
+    ).toThrow(/DIRECTOR_PLACEMENT/);
+  });
+
   it('rejects unknown DIRECTOR_THINKING', () => {
     expect(() =>
       validateEnv({ NODE_ENV: 'test', DIRECTOR_THINKING: 'budget0' })

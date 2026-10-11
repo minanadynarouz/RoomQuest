@@ -81,7 +81,7 @@ export class LevelsService {
       relaxed: validation.relaxed,
     });
 
-    if (body.fallbackReason !== 'llm-quota') {
+    if (!isTransientLlmFallback(body.fallbackReason)) {
       await this.cache.persist(
         {
           key: cacheKey,
@@ -101,4 +101,15 @@ export class LevelsService {
 
     return body;
   }
+}
+
+/** Transient LLM failures: never cache the procedural fallback so the next request can retry the LLM. */
+const TRANSIENT_LLM_FALLBACKS: ReadonlySet<string> = new Set([
+  'llm-quota',
+  'llm-timeout',
+  'llm-error',
+]);
+
+function isTransientLlmFallback(reason: string | undefined): boolean {
+  return reason !== undefined && TRANSIENT_LLM_FALLBACKS.has(reason);
 }

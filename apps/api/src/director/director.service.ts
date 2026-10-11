@@ -17,6 +17,7 @@ import {
   runDirector,
   type DirectorOutcome,
 } from './run-director';
+import type { DirectorFailurePoint } from './issue-trace';
 import { resolveDirectorThinkingId, thinkingConfigForId } from './thinking';
 
 @Injectable()
@@ -49,8 +50,16 @@ export class DirectorService {
     const mode = this.config.get('DIRECTOR_MODE', { infer: true });
     const promptVersion = PROMPT_VERSION;
 
+    const procedural = (
+      reason: 'director-mock' | 'llm-unconfigured' | 'llm-quota',
+      failedAt: DirectorFailurePoint
+    ): DirectorOutcome => ({
+      ...proceduralOutcome(request, startedMs, [], promptVersion, now, reason),
+      failedAt,
+    });
+
     if (mode === 'mock') {
-      return proceduralOutcome(request, startedMs, [], promptVersion, now);
+      return procedural('director-mock', 'mode');
     }
 
     const googleKey = this.config.get('GOOGLE_API_KEY', { infer: true });
@@ -58,31 +67,17 @@ export class DirectorService {
       this.logger.warn(
         'DIRECTOR_MODE=live but GOOGLE_API_KEY is unset; falling back to a procedural plan'
       );
-      return proceduralOutcome(request, startedMs, [], promptVersion, now);
+      return procedural('llm-unconfigured', 'mode');
     }
 
     if (this.quotaBreaker?.isOpen()) {
-      return proceduralOutcome(
-        request,
-        startedMs,
-        [],
-        promptVersion,
-        now,
-        'llm-quota'
-      );
+      return procedural('llm-quota', 'quota-precheck');
     }
 
     if (this.dailyUsage !== undefined) {
       const slot = await this.dailyUsage.consume();
       if (slot !== 'ok') {
-        return proceduralOutcome(
-          request,
-          startedMs,
-          [],
-          promptVersion,
-          now,
-          'llm-quota'
-        );
+        return procedural('llm-quota', 'quota-precheck');
       }
     }
 
@@ -108,7 +103,10 @@ export class DirectorService {
       promptVersion,
       logger: this.logger,
       budgetMs: this.runtime?.budgetMs,
-      llmRepairMinRemainingMs: this.runtime?.llmRepairMinRemainingMs,
+      llmRepairMinRemainingMs:
+        this.runtime?.llmRepairMinRemainingMs ??
+        this.config.get('LLM_REPAIR_MIN_REMAINING_MS', { infer: true }),
+      placement: this.config.get('DIRECTOR_PLACEMENT', { infer: true }),
       proceduralReserveMs: this.runtime?.proceduralReserveMs,
       now,
       startedMs,

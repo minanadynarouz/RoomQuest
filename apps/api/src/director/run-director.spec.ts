@@ -160,10 +160,13 @@ describe('runDirector', () => {
     expect(validatePlan(outcome.response.plan, request.graph).ok).toBe(true);
     expect(outcome.telemetry).toHaveLength(1);
     expect(outcome.telemetry[0]?.outcome).toBe('invalid');
+    // Snap runs first and moves the floor slime onto a legal surface.
     expect(
-      outcome.response.plan.placements.some((p) => p.id === 'p-slime')
-    ).toBe(false);
+      outcome.response.plan.placements.find((p) => p.id === 'p-slime')?.surface
+    ).not.toBe('s5');
     expect(outcome.repairedBy).toBe('local');
+    expect(outcome.stage).toBe('snap');
+    expect(outcome.response.fallbackReason).toBeUndefined();
     expect(outcome.validation.afterLocal).toEqual([]);
     expect(outcome.validation.afterLlmRepair).toBeNull();
   });
@@ -182,9 +185,10 @@ describe('runDirector', () => {
     expect(outcome.telemetry).toHaveLength(1);
     expect(outcome.telemetry[0]?.outcome).toBe('invalid');
     expect(
-      outcome.response.plan.placements.some((p) => p.id === 'p-slime')
-    ).toBe(false);
+      outcome.response.plan.placements.find((p) => p.id === 'p-slime')?.surface
+    ).not.toBe('s5');
     expect(outcome.repairedBy).toBe('local');
+    expect(outcome.stage).toBe('snap');
   });
 
   it('uses one LLM repair call when local repair is not enough', async () => {

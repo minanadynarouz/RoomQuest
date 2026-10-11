@@ -16,6 +16,7 @@ import { PROMPT_VERSION } from '../src/director/prompts';
 import { runDirector } from '../src/director/run-director';
 import {
   planToLlmJson,
+  planToSlotLlmJson,
   silentLogger,
   structuredFromFake,
   UsageFakeListChatModel,
@@ -84,17 +85,22 @@ function resolveKey(
   return nonEmpty(process.env[envName]);
 }
 
+/** Gemini bills thinking tokens at the output rate. */
 function runCost(telemetry: readonly LlmCallTelemetry[]): number {
   let usd = 0;
   for (const row of telemetry) {
-    usd += estimateCallCostUsd(
-      row.model,
-      row.inputTokens,
-      row.outputTokens
-    ).usd;
+    const thoughts = row.thoughtsTokenCount ?? row.thinkingTokens ?? 0;
+    const output =
+      row.outputTokens === null ? null : row.outputTokens + thoughts;
+    usd += estimateCallCostUsd(row.model, row.inputTokens, output).usd;
   }
   return usd;
 }
+
+export const LIVE_FLAG_REQUIRED_REASON = [
+  'Live eval needs an explicit --live flag (it spends the Gemini budget).',
+  'Pass --mock to exercise the director pipeline with FakeListChatModel (no keys required).',
+].join('\n');
 
 function classifySource(source: EvalRunRecord['source']): {
   validBeforeRepair: boolean;
@@ -152,6 +158,18 @@ export async function runEvalHarness(
     'GOOGLE_API_KEY'
   );
 
+  if (options.mock && options.live === true) {
+    throw new Error('Pass either --mock or --live, not both');
+  }
+
+  if (!options.mock && options.live !== true) {
+    return {
+      status: 'skipped',
+      reason: LIVE_FLAG_REQUIRED_REASON,
+      missingKeys: [],
+    };
+  }
+
   if (!options.mock && googleApiKey === undefined) {
     const missingKeys = ['GOOGLE_API_KEY'];
     return {
@@ -194,15 +212,25 @@ export async function runEvalHarness(
         )
       : undefined;
 
+  const placements = options.placements ?? ['uv'];
+  if (placements.length === 0) {
+    throw new Error('Eval harness needs at least one placement arm');
+  }
+
+  // Round-robin: rooms vary fastest, then tiers, then seeds, then placement
+  // arms, so a short `--runs N` still spreads across every room.
   const cells: {
     room: (typeof rooms)[number];
     date: string;
     tier: (typeof tiers)[number];
+    placement: 'uv' | 'slot';
   }[] = [];
-  for (const room of rooms) {
-    for (const tier of tiers) {
-      for (const date of seedDates) {
-        cells.push({ room, date, tier });
+  for (const placement of placements) {
+    for (const date of seedDates) {
+      for (const tier of tiers) {
+        for (const room of rooms) {
+          cells.push({ room, date, tier, placement });
+        }
       }
     }
   }
@@ -218,7 +246,7 @@ export async function runEvalHarness(
     if (cell === undefined) {
       throw new Error('Eval harness: run matrix index out of range');
     }
-    const { room, date, tier } = cell;
+    const { room, date, tier, placement } = cell;
     const seed = makeDailySeed(room.graph.roomHash, date);
     const request = LevelRequest.parse({
       graph: room.graph,
@@ -229,7 +257,15 @@ export async function runEvalHarness(
     const primary = options.mock
       ? structuredFromFake(
           new UsageFakeListChatModel({
-            responses: [planToLlmJson(generatePlan(room.graph, seed, tier))],
+            responses: [
+              placement === 'slot'
+                ? planToSlotLlmJson(
+                    generatePlan(room.graph, seed, tier),
+                    room.graph,
+                    seed
+                  )
+                : planToLlmJson(generatePlan(room.graph, seed, tier)),
+            ],
           }),
           'google',
           directorModel
@@ -244,7 +280,18 @@ export async function runEvalHarness(
       primary,
       now,
       logger,
+      placement,
     });
+
+    const fallbackReason =
+      outcome.response.source === 'procedural'
+        ? outcome.response.fallbackReason
+        : 'none';
+    if (fallbackReason === undefined || fallbackReason.length === 0) {
+      throw new Error(
+        `Eval harness: procedural run without fallbackReason (room=${room.id} tier=${tier} date=${date} placement=${placement})`
+      );
+    }
 
     const flags = classifySource(outcome.response.source);
     const ttfts = outcome.telemetry
@@ -282,6 +329,11 @@ export async function runEvalHarness(
       issuesAfterLocal: outcome.validation.afterLocal,
       issuesAfterLlmRepair: outcome.validation.afterLlmRepair,
       repairedBy: outcome.repairedBy,
+      placement: outcome.placement,
+      requestedPlacement: placement,
+      fallbackReason,
+      stage: outcome.stage,
+      failedAt: outcome.failedAt,
       ...liveFirstTry,
     });
   }
@@ -297,6 +349,7 @@ export async function runEvalHarness(
     roomIds: rooms.map((room) => room.id),
     seedDates: [...seedDates],
     tiers: [...tiers],
+    placements: [...placements],
     bar: evaluateBar(aggregate),
     aggregate,
     runs,
@@ -310,8 +363,14 @@ export async function runEvalHarness(
   mkdirSync(outDir, { recursive: true });
   const stamp = generatedAt.slice(0, 10);
   const thinkingFileId = thinkingVariant?.id ?? DEFAULT_DIRECTOR_THINKING_ID;
+  const placementSuffix =
+    placements.length === 1 && placements[0] === 'uv'
+      ? ''
+      : `-${placements.join('+')}`;
   const suffix =
-    thinkingFileId === DEFAULT_DIRECTOR_THINKING_ID ? '' : `-${thinkingFileId}`;
+    (thinkingFileId === DEFAULT_DIRECTOR_THINKING_ID
+      ? ''
+      : `-${thinkingFileId}`) + placementSuffix;
   const markdownPath = join(outDir, `${stamp}${suffix}.md`);
   const jsonPath = join(outDir, `${stamp}${suffix}.json`);
   writeFileSync(markdownPath, renderMarkdown(report), 'utf8');

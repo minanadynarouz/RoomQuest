@@ -7,7 +7,33 @@ import { LevelPlan, Theme, Tier, PlanSource } from './level.js';
  * client could not play the room. Response-only — never part of
  * LevelPlanLLM (Gemini structured output).
  */
-export const FallbackReason = z.enum(['llm-quota', 'room-unplayable']);
+/**
+ * Why a response is procedural (or, for `room-unplayable`, rejected).
+ * Every procedural path in the API director sets one of these:
+ * - `llm-quota`: 429 breaker open / daily cap hit / quota error.
+ * - `llm-invalid`: Gemini answered but the plan stayed invalid after local
+ *   repair, and the LLM repair was skipped by the time gate or also invalid.
+ * - `llm-parse-failed`: Gemini output never parsed into a plan.
+ * - `llm-timeout`: the director deadline aborted a Gemini call.
+ * - `llm-error`: provider/network error (non-quota).
+ * - `slot-resolve-failed`: `DIRECTOR_PLACEMENT=slot` output referenced
+ *   unknown slot ids.
+ * - `llm-unconfigured`: live mode without GOOGLE_API_KEY.
+ * - `director-mock`: DIRECTOR_MODE=mock (procedural by design).
+ * - `director-error`: unexpected exception inside the director loop.
+ */
+export const FallbackReason = z.enum([
+  'llm-quota',
+  'room-unplayable',
+  'llm-invalid',
+  'llm-parse-failed',
+  'llm-timeout',
+  'llm-error',
+  'slot-resolve-failed',
+  'llm-unconfigured',
+  'director-mock',
+  'director-error',
+]);
 export type FallbackReason = z.infer<typeof FallbackReason>;
 
 /**

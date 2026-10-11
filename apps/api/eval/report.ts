@@ -5,6 +5,10 @@ import {
   Tier,
 } from '@roomquest/schema';
 import { z } from 'zod';
+import {
+  DIRECTOR_FAILURE_POINTS,
+  DIRECTOR_STAGES,
+} from '../src/director/issue-trace';
 import { EVAL_BAR_P95_MS, EVAL_BAR_VALID_AFTER_REPAIR_PCT } from './constants';
 import { priceForModel } from './prices';
 import { meanPairwiseJaccard, unionSetsByRoom } from './variety';
@@ -19,6 +23,14 @@ const LlmCallTelemetrySchema = z.object({
   latencyMs: z.number(),
   ttftMs: z.number().nullable(),
   outcome: z.enum(['ok', 'invalid', 'repaired', 'timeout', 'error']),
+});
+
+const PlacementArm = z.enum(['uv', 'slot']);
+
+const RelaxedPctSchema = z.object({
+  minPath: z.number(),
+  hutTable: z.number(),
+  portalFov: z.number(),
 });
 
 const IssueTraceSchema = z.object({
@@ -51,6 +63,13 @@ export const EvalRunRecordSchema = z.object({
   issuesAfterLocal: z.array(IssueTraceSchema).nullable(),
   issuesAfterLlmRepair: z.array(IssueTraceSchema).nullable(),
   repairedBy: z.enum(['local', 'llm']).nullable(),
+  /** Placement arm actually used (`slot` degrades to `uv` without hints). */
+  placement: PlacementArm,
+  requestedPlacement: PlacementArm,
+  /** Specific FallbackReason for procedural runs; `none` otherwise. Never blank. */
+  fallbackReason: z.string().min(1),
+  stage: z.enum(DIRECTOR_STAGES),
+  failedAt: z.enum(DIRECTOR_FAILURE_POINTS).nullable(),
   firstTryPlan: z.unknown().optional(),
   firstTryRawText: z.string().nullable().optional(),
 });
@@ -80,11 +99,13 @@ export const EvalAggregateSchema = z.object({
   meanPairwiseSurfaceLabelJaccard: z.number(),
   missingUsageCalls: z.number().int(),
   unknownModelCalls: z.number().int(),
-  relaxedPct: z.object({
-    minPath: z.number(),
-    hutTable: z.number(),
-    portalFov: z.number(),
-  }),
+  relaxedPct: RelaxedPctSchema,
+  /** relaxedPct within each placement arm (percent of that arm's runs). */
+  relaxedPctByPlacement: z.record(z.string(), RelaxedPctSchema),
+  fallbackReasonCounts: z.record(z.string(), z.number()),
+  stageCounts: z.record(z.string(), z.number()),
+  failedAtCounts: z.record(z.string(), z.number()),
+  placementCounts: z.record(z.string(), z.number()),
   issueCounts: z.object({
     firstTry: z.record(z.string(), z.number()),
     afterLocal: z.record(z.string(), z.number()),
@@ -114,6 +135,7 @@ export const EvalReportSchema = z.object({
   roomIds: z.array(z.string()),
   seedDates: z.array(z.string()),
   tiers: z.array(Tier),
+  placements: z.array(PlacementArm).default(['uv']),
   bar: EvalBarSchema,
   aggregate: EvalAggregateSchema,
   runs: z.array(EvalRunRecordSchema),
@@ -124,14 +146,18 @@ export function matrixLabel(report: {
   roomIds: readonly string[];
   seedDates: readonly string[];
   tiers: readonly string[];
+  placements?: readonly string[];
   aggregate: { runCount: number };
 }): string {
   const rooms = report.roomIds.length;
   const tiers = report.tiers.length;
   const seeds = report.seedDates.length;
-  const cells = rooms * tiers * seeds;
+  const arms = report.placements?.length ?? 1;
+  const cells = rooms * tiers * seeds * arms;
   const runs = report.aggregate.runCount;
-  const shape = `${String(rooms)} rooms × ${String(tiers)} tiers × ${String(seeds)} seeds`;
+  const armLabel =
+    arms > 1 ? ` × ${String(arms)} placement arms` : '';
+  const shape = `${String(rooms)} rooms × ${String(tiers)} tiers × ${String(seeds)} seeds${armLabel}`;
   if (runs === cells) {
     return `${shape} = ${String(runs)} runs`;
   }
@@ -174,6 +200,34 @@ export function percentile(values: readonly number[], p: number): number {
   const a = sorted[lo] ?? 0;
   const b = sorted[hi] ?? a;
   return a + (b - a) * (idx - lo);
+}
+
+function countBy(
+  runs: readonly EvalRunRecord[],
+  key: (run: EvalRunRecord) => string
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const run of runs) {
+    const k = key(run);
+    counts[k] = (counts[k] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function relaxedPctOf(
+  runs: readonly EvalRunRecord[]
+): z.infer<typeof RelaxedPctSchema> {
+  const counts = { minPath: 0, hutTable: 0, portalFov: 0 };
+  for (const run of runs) {
+    for (const rule of run.relaxed) {
+      counts[rule] += 1;
+    }
+  }
+  return {
+    minPath: roundPct(counts.minPath, runs.length),
+    hutTable: roundPct(counts.hutTable, runs.length),
+    portalFov: roundPct(counts.portalFov, runs.length),
+  };
 }
 
 export function aggregateRuns(runs: readonly EvalRunRecord[]): EvalAggregate {
@@ -287,6 +341,16 @@ export function aggregateRuns(runs: readonly EvalRunRecord[]): EvalAggregate {
       hutTable: roundPct(relaxedCounts.hutTable, total),
       portalFov: roundPct(relaxedCounts.portalFov, total),
     },
+    relaxedPctByPlacement: Object.fromEntries(
+      Object.keys(countBy(runs, (run) => run.placement)).map((arm) => [
+        arm,
+        relaxedPctOf(runs.filter((run) => run.placement === arm)),
+      ])
+    ),
+    fallbackReasonCounts: countBy(runs, (run) => run.fallbackReason),
+    stageCounts: countBy(runs, (run) => run.stage),
+    failedAtCounts: countBy(runs, (run) => run.failedAt ?? 'none'),
+    placementCounts: countBy(runs, (run) => run.placement),
     issueCounts: {
       firstTry: countIssueCodes(runs, 'issuesFirstTry'),
       afterLocal: countIssueCodes(runs, 'issuesAfterLocal'),
@@ -338,6 +402,16 @@ function issueCodeRows(aggregate: EvalAggregate): string {
     .join('\n');
 }
 
+function countRows<T>(
+  record: Record<string, T>,
+  cell: (value: T) => string
+): string {
+  const rows = Object.entries(record)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `| ${key} | ${cell(value)} |`);
+  return rows.length > 0 ? rows.join('\n') : '| — | 0 |';
+}
+
 export function renderMarkdown(report: EvalReport): string {
   const modeLine = report.mock
     ? '**Mode:** mock (`FakeListChatModel`; not a live LLM run). Pipeline exercise only — do not treat the bar as a production quality signal.'
@@ -356,7 +430,7 @@ export function renderMarkdown(report: EvalReport): string {
     .map((run) => {
       const model = run.model ?? '—';
       const ttft = run.ttftMs === null ? '—' : run.ttftMs.toFixed(1);
-      return `| ${run.roomId} | ${run.date} | ${run.tier} | ${run.source} | ${model} | ${run.validBeforeRepair ? 'yes' : 'no'} | ${run.validAfterRepair ? 'yes' : 'no'} | ${run.fallbackToProcedural ? 'yes' : 'no'} | ${run.latencyMs.toFixed(1)} | ${ttft} | ${String(run.distinctSurfaces)} | ${String(run.distinctPieceTypes)} | ${formatUsd(run.estimatedCostUsd)} |`;
+      return `| ${run.roomId} | ${run.date} | ${run.tier} | ${run.placement} | ${run.source} | ${run.fallbackReason} | ${run.stage} | ${model} | ${run.validBeforeRepair ? 'yes' : 'no'} | ${run.validAfterRepair ? 'yes' : 'no'} | ${run.fallbackToProcedural ? 'yes' : 'no'} | ${run.latencyMs.toFixed(1)} | ${ttft} | ${String(run.distinctSurfaces)} | ${String(run.distinctPieceTypes)} | ${formatUsd(run.estimatedCostUsd)} |`;
     })
     .join('\n');
 
@@ -377,6 +451,7 @@ ${modeLine}
 | Rooms | ${report.roomIds.join(', ')} |
 | Seeds (dates) | ${report.seedDates.join(', ')} |
 | Tiers | ${report.tiers.join(', ')} |
+| Placement arms | ${report.placements.join(', ')} |
 | Matrix | ${matrixLabel(report)} |
 
 ## Bar
@@ -415,6 +490,32 @@ ${RELAXED_RULE_ORDER.map(
       `| ${rule} | ${formatPct(report.aggregate.relaxedPct[rule])} |`
   ).join('\n')}
 
+### Relaxed rules by placement arm
+
+| Arm | ${RELAXED_RULE_ORDER.join(' | ')} |
+| --- | ${RELAXED_RULE_ORDER.map(() => '---').join(' | ')} |
+${countRows(report.aggregate.relaxedPctByPlacement, (pct) =>
+    RELAXED_RULE_ORDER.map((rule) => formatPct(pct[rule])).join(' | ')
+  )}
+
+### Fallback reason (procedural runs; \`none\` = LLM plan served)
+
+| fallbackReason | Runs |
+| --- | --- |
+${countRows(report.aggregate.fallbackReasonCounts, String)}
+
+### Final stage
+
+| stage | Runs |
+| --- | --- |
+${countRows(report.aggregate.stageCounts, String)}
+
+### Where the LLM path stopped
+
+| failedAt | Runs |
+| --- | --- |
+${countRows(report.aggregate.failedAtCounts, String)}
+
 ### Which model answered
 
 | Model | Runs |
@@ -439,8 +540,8 @@ ${issueCodeRows(report.aggregate)}
 
 ## Per run
 
-| room | date | tier | source | model | valid before | valid after | procedural | latency ms | TTFT ms | surfaces | pieces | cost |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| room | date | tier | arm | source | fallbackReason | stage | model | valid before | valid after | procedural | latency ms | TTFT ms | surfaces | pieces | cost |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 ${runRows}
 
 Live reports also store each run's raw first-try LLM plan (\`firstTryPlan\`) and, when structured parse failed, \`firstTryRawText\` in the JSON next to the issue traces.
@@ -465,6 +566,12 @@ export function printSummary(report: EvalReport): void {
       (rule) =>
         `${rule}=${report.aggregate.relaxedPct[rule].toFixed(1)}%`
     ).join(', ')}`,
+    `fallbackReason: ${Object.entries(report.aggregate.fallbackReasonCounts)
+      .map(([reason, count]) => `${reason}=${String(count)}`)
+      .join(', ')}`,
+    `stage: ${Object.entries(report.aggregate.stageCounts)
+      .map(([stage, count]) => `${stage}=${String(count)}`)
+      .join(', ')}`,
     `models: ${Object.entries(report.aggregate.models)
       .map(([model, count]) => `${model}=${String(count)}`)
       .join(', ')}`,

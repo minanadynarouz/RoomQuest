@@ -50,6 +50,29 @@ function parseTiers(raw: string | undefined): readonly Tier[] | undefined {
   return tiers;
 }
 
+function parsePlacements(
+  raw: string | undefined
+): readonly ('uv' | 'slot')[] | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (raw === 'both' || raw === 'all') {
+    return ['uv', 'slot'];
+  }
+  const arms: ('uv' | 'slot')[] = [];
+  for (const part of raw.split(',').map((item) => item.trim())) {
+    if (part !== 'uv' && part !== 'slot') {
+      throw new Error(
+        `Unknown placement "${part}" (use uv, slot, uv,slot, or both)`
+      );
+    }
+    if (!arms.includes(part)) {
+      arms.push(part);
+    }
+  }
+  return arms;
+}
+
 export function parseEvalArgs(argv: string[]): EvalHarnessOptions {
   const args = argv.filter((item) => item !== '--');
   const rooms = parsePositiveInt(flagValue(args, '--rooms'), '--rooms');
@@ -57,6 +80,8 @@ export function parseEvalArgs(argv: string[]): EvalHarnessOptions {
   const runs = parsePositiveInt(flagValue(args, '--runs'), '--runs');
   return {
     mock: args.includes('--mock'),
+    live: args.includes('--live'),
+    placements: parsePlacements(flagValue(args, '--placement')),
     roomLimit: rooms,
     seedLimit: seeds,
     tiers: parseTiers(flagValue(args, '--tiers')),

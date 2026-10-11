@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { DEFAULT_DIRECTOR_MODEL } from '../director/director.constants';
+import {
+  DEFAULT_DIRECTOR_MODEL,
+  LLM_REPAIR_MIN_REMAINING_MS,
+} from '../director/director.constants';
 
 const optionalKey = z
   .string()
@@ -55,6 +58,31 @@ export const envSchema = z.object({
       return value.trim().toLowerCase();
     })
     .pipe(z.enum(['minimal', 'low', 'default'])),
+  /**
+   * Only attempt the second (LLM repair) Gemini call when at least this many
+   * ms of the director's LLM window remain; otherwise go procedural with
+   * fallbackReason `llm-invalid`.
+   */
+  LLM_REPAIR_MIN_REMAINING_MS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(60_000)
+    .default(LLM_REPAIR_MIN_REMAINING_MS),
+  /**
+   * `uv` (default): Gemini returns surface+u+v. `slot`: Gemini picks one of
+   * the per-request hinted slot ids; the server resolves them to surface+u+v.
+   */
+  DIRECTOR_PLACEMENT: z
+    .string()
+    .optional()
+    .transform((value) => {
+      if (value === undefined || value.trim().length === 0) {
+        return 'uv';
+      }
+      return value.trim().toLowerCase();
+    })
+    .pipe(z.enum(['uv', 'slot'])),
   /** Seconds to skip Gemini after 429 / RESOURCE_EXHAUSTED when the error has no Retry-After. */
   LLM_QUOTA_COOLDOWN_S: z.coerce.number().int().min(1).default(600),
   /** Global UTC daily cap on live Gemini calls. Cache hits do not count. */

@@ -40,6 +40,10 @@ describe('createDirectorDeadline', () => {
     expect(deadline.remainingMs()).toBe(3000);
     expect(deadline.remainingForLlm()).toBe(2750);
     expect(deadline.canStartLlm(3000)).toBe(false);
+    expect(deadline.canStartLlm(2750)).toBe(true);
+    // 3.5 s default repair gate: 2.75 s left is not enough for a repair call.
+    expect(deadline.canStartLlm(LLM_REPAIR_MIN_REMAINING_MS)).toBe(false);
+    t = 1000 + DIRECTOR_LLM_WINDOW_MS - LLM_REPAIR_MIN_REMAINING_MS;
     expect(deadline.canStartLlm(LLM_REPAIR_MIN_REMAINING_MS)).toBe(true);
   });
 

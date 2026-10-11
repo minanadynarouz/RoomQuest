@@ -84,8 +84,37 @@ function stripUnsupportedThinking(model: BaseChatModel): void {
  * wrapper retries once without thinkingConfig and remembers it. `maxRetries`
  * stays 0 — the director owns the 7 s AbortSignal budget.
  */
+/**
+ * Dummy keys used by specs that stub `client.generateContent` (no network).
+ * Real Gemini keys never start with this prefix.
+ */
+export const TEST_DUMMY_KEY_PREFIX = 'test-';
+
+/**
+ * Refuse to build a real Gemini client under Vitest / NODE_ENV=test unless
+ * RQ_ALLOW_LIVE_LLM=1 — protects the $10 billing cap. Dummy `test-*` keys
+ * are allowed because those specs stub the transport and a dummy key cannot
+ * authenticate anyway.
+ */
+export function assertLiveLlmAllowed(
+  apiKey: string,
+  env: NodeJS.ProcessEnv = process.env
+): void {
+  const underTest = env.NODE_ENV === 'test' || env.VITEST !== undefined;
+  if (!underTest || env.RQ_ALLOW_LIVE_LLM === '1') {
+    return;
+  }
+  if (apiKey.startsWith(TEST_DUMMY_KEY_PREFIX)) {
+    return;
+  }
+  throw new Error(
+    'Refusing to construct ChatGoogleGenerativeAI under test without RQ_ALLOW_LIVE_LLM=1'
+  );
+}
+
 export const defaultDirectorChatFactory: DirectorChatFactory = {
   createPrimary(input: ChatModelParams): BaseChatModel {
+    assertLiveLlmAllowed(input.apiKey);
     const thinkingConfig = thinkingConfigInput(thinkingFromParams(input));
     return new ChatGoogleGenerativeAI({
       model: input.model,
@@ -105,13 +134,16 @@ export function wrapChatModel(
   return {
     provider,
     model: modelId,
-    async invokeStructured(messages, signal) {
+    async invokeStructured(messages, signal, options) {
       stripUnsupportedThinking(model);
-      const structured = model.withStructuredOutput(LevelPlanLLMGeminiSchema, {
-        includeRaw: true,
-        method: 'jsonSchema',
-        name: 'LevelPlanLLM',
-      });
+      const structured = model.withStructuredOutput(
+        options?.responseSchema ?? LevelPlanLLMGeminiSchema,
+        {
+          includeRaw: true,
+          method: 'jsonSchema',
+          name: options?.schemaName ?? 'LevelPlanLLM',
+        }
+      );
       const startedMs = Date.now();
       const firstToken = { ms: null as number | null };
       const callbacks: Partial<BaseCallbackHandler>[] = [

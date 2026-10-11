@@ -245,6 +245,22 @@ describe('API schemas', () => {
       expect(FallbackReason.parse('llm-quota')).toBe('llm-quota');
       expect(FallbackReason.parse('room-unplayable')).toBe('room-unplayable');
       expect(() => FallbackReason.parse('timeout')).toThrow();
+      expect(() => FallbackReason.parse('')).toThrow();
+    });
+
+    it('accepts every specific director fallback reason (no blank reasons)', () => {
+      for (const reason of [
+        'llm-invalid',
+        'llm-parse-failed',
+        'llm-timeout',
+        'llm-error',
+        'slot-resolve-failed',
+        'llm-unconfigured',
+        'director-mock',
+        'director-error',
+      ] as const) {
+        expect(FallbackReason.parse(reason)).toBe(reason);
+      }
     });
   });
 

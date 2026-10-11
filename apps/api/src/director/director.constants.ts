@@ -7,9 +7,16 @@
 export const DIRECTOR_BUDGET_MS = 7000;
 
 /**
- * Skip the LLM repair call when less than this much of the LLM window remains.
+ * Skip the LLM repair call when less than this much of the LLM window remains
+ * (default for env `LLM_REPAIR_MIN_REMAINING_MS`). A gemini-3.8-flash repair
+ * round-trip needs ~3 s at thinking LOW, so starting one with less than
+ * 3.5 s left mostly ends in an abort.
  */
-export const LLM_REPAIR_MIN_REMAINING_MS = 2000;
+export const LLM_REPAIR_MIN_REMAINING_MS = 3500;
+
+export const DIRECTOR_PLACEMENT_MODES = ['uv', 'slot'] as const;
+export type DirectorPlacementMode = (typeof DIRECTOR_PLACEMENT_MODES)[number];
+export const DEFAULT_DIRECTOR_PLACEMENT: DirectorPlacementMode = 'uv';
 
 /**
  * Headroom inside the 7 s budget so generatePlan and the HTTP response finish

@@ -89,6 +89,31 @@ function usageRecord(raw: unknown): Record<string, unknown> | undefined {
   return Object.assign({}, ...parts) as Record<string, unknown>;
 }
 
+/**
+ * `@langchain/google-genai` 2.3.2 `convertUsageMetadata` keeps only
+ * promptTokenCount / candidatesTokenCount / totalTokenCount and drops
+ * `thoughtsTokenCount` (no `output_token_details.reasoning`, nothing in
+ * `response_metadata`). Gemini's totalTokenCount = prompt + candidates +
+ * thoughts (+ toolUsePrompt), so the thinking spend is recoverable as
+ * `total_tokens - input_tokens - output_tokens`.
+ */
+function thoughtsFromTotals(usage: Record<string, unknown>): number | null {
+  const total =
+    asFiniteNumber(usage.total_tokens) ?? asFiniteNumber(usage.totalTokenCount);
+  const input =
+    asFiniteNumber(usage.input_tokens) ??
+    asFiniteNumber(usage.promptTokenCount);
+  const output =
+    asFiniteNumber(usage.output_tokens) ??
+    asFiniteNumber(usage.candidatesTokenCount);
+  if (total === null || input === null || output === null) {
+    return null;
+  }
+  const toolUse = asFiniteNumber(usage.toolUsePromptTokenCount) ?? 0;
+  const derived = total - input - output - toolUse;
+  return derived > 0 ? derived : null;
+}
+
 export function tokensFromRaw(raw: unknown): {
   inputTokens: number | null;
   outputTokens: number | null;
@@ -115,6 +140,9 @@ export function tokensFromRaw(raw: unknown): {
     if (thoughts === null && fromSource !== null) {
       thoughts = fromSource;
     }
+  }
+  if ((thoughts === null || thoughts === 0) && usage !== undefined) {
+    thoughts = thoughtsFromTotals(usage) ?? thoughts;
   }
   return {
     inputTokens:
