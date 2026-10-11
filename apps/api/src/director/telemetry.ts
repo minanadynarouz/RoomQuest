@@ -1,7 +1,7 @@
 export type LlmProvider = 'google';
 
 export type LlmCallOutcome =
-  'ok' | 'invalid' | 'repaired' | 'timeout' | 'error';
+  'ok' | 'invalid' | 'repaired' | 'timeout' | 'error' | 'aborted';
 
 /**
  * One LLM round-trip. B-07 eval can reuse this record. Do not log API keys.
@@ -28,6 +28,10 @@ export interface LlmCallTelemetry {
   cachedTokens?: number | null;
   /** Total characters of the prompt messages sent on this call. */
   promptChars?: number | null;
+  /** Route-arm hedged decoration: which of the two calls this row is. */
+  hedgeRole?: 'first' | 'second';
+  /** Call start, ms after the request started (hedge timing). */
+  startOffsetMs?: number;
 }
 
 export interface DirectorLogger {
@@ -166,28 +170,58 @@ export function tokensFromRaw(raw: unknown): {
       asFiniteNumber(usage?.candidatesTokenCount),
     thinkingTokens: thoughts,
     thoughtsTokenCount: thoughts,
-    cachedTokens: cachedFromUsage(sources),
+    cachedTokens: cachedTokensFromRaw(raw),
   };
 }
 
+function pick(
+  rec: Record<string, unknown> | undefined,
+  keys: readonly string[]
+): unknown {
+  if (rec === undefined) return undefined;
+  for (const key of keys) {
+    if (rec[key] !== undefined) return rec[key];
+  }
+  return undefined;
+}
+
+const USAGE_KEYS = ['usage_metadata', 'usageMetadata'] as const;
+const INPUT_DETAIL_KEYS = ['input_token_details', 'inputTokenDetails'] as const;
+const CACHE_READ_KEYS = ['cache_read', 'cacheRead'] as const;
+const RESPONSE_META_KEYS = ['response_metadata', 'responseMetadata'] as const;
+const CACHED_CONTENT_KEYS = [
+  'cachedContentTokenCount',
+  'cached_content_token_count',
+] as const;
+
 /**
- * Implicit-cache hits: Gemini `cachedContentTokenCount`, or LangChain's
- * `input_token_details.cache_read` when the adapter maps it.
+ * Implicit-cache hits for one call. Order:
+ * 1. `raw.usage_metadata.input_token_details.cache_read` (LangChain
+ *    normalized usage; camelCase variants accepted);
+ * 2. `raw.response_metadata.usageMetadata.cachedContentTokenCount` (Gemini
+ *    usage metadata; snake/camel variants accepted), then the same field on
+ *    a top-level `usageMetadata` / `response.usageMetadata`.
+ * Accepts the `{ parsed, raw }` structured-output wrapper.
  */
-function cachedFromUsage(sources: Record<string, unknown>[]): number | null {
-  for (const source of sources) {
-    const direct =
-      asFiniteNumber(source.cachedContentTokenCount) ??
-      asFiniteNumber(source.cached_content_token_count);
-    if (direct !== null) {
-      return direct;
-    }
-    const details = asRecord(source.input_token_details);
-    const cacheRead =
-      details === undefined ? null : asFiniteNumber(details.cache_read);
-    if (cacheRead !== null) {
-      return cacheRead;
-    }
+export function cachedTokensFromRaw(raw: unknown): number | null {
+  const rec = asRecord(raw);
+  if (rec === undefined) return null;
+  if ('parsed' in rec && rec.raw !== undefined) {
+    return cachedTokensFromRaw(rec.raw);
+  }
+  const usage = asRecord(pick(rec, USAGE_KEYS));
+  const details = asRecord(pick(usage, INPUT_DETAIL_KEYS));
+  const cacheRead = asFiniteNumber(pick(details, CACHE_READ_KEYS));
+  if (cacheRead !== null) return cacheRead;
+  const meta = asRecord(pick(rec, RESPONSE_META_KEYS));
+  const candidates = [
+    asRecord(pick(meta, USAGE_KEYS)),
+    usage,
+    asRecord(pick(asRecord(rec.response), USAGE_KEYS)),
+  ];
+  for (const source of candidates) {
+    const cached = asFiniteNumber(pick(source, CACHED_CONTENT_KEYS));
+    if (cached !== null) return cached;
   }
   return null;
 }

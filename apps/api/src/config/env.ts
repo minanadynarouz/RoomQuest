@@ -74,6 +74,16 @@ export const envSchema = z.object({
     })
     .pipe(z.enum(['minimal', 'low', 'default'])),
   /**
+   * Route arm: fire one identical hedge decoration call when the first has
+   * not returned after this many ms (shared deadline, no extension).
+   * 0 disables hedging.
+   */
+  DIRECTOR_HEDGE_MS: z.preprocess(
+    (value) =>
+      typeof value === 'string' && value.trim().length === 0 ? undefined : value,
+    z.coerce.number().int().min(0).max(60_000).default(3000)
+  ),
+  /**
    * Only attempt the second (LLM repair) Gemini call when at least this many
    * ms of the director's LLM window remain; otherwise go procedural with
    * fallbackReason `llm-invalid`.

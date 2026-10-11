@@ -19,6 +19,7 @@ import {
   thinkingFallbackLevels,
   thinkingVariantById,
 } from '../src/director/thinking';
+import { resolveHedgeMs } from '../src/director/hedge';
 import { PROMPT_VERSION } from '../src/director/prompts';
 import { runDirector } from '../src/director/run-director';
 import {
@@ -344,6 +345,7 @@ export async function runEvalHarness(
       now,
       logger,
       placement,
+      hedge: { delayMs: resolveHedgeMs(process.env.DIRECTOR_HEDGE_MS) },
     });
 
     const fallbackReason =
@@ -406,6 +408,9 @@ export async function runEvalHarness(
       lineCount: outcome.response.lines?.length ?? 0,
       droppedLines: outcome.routeDecoration?.droppedLines ?? 0,
       bannedWordHits: outcome.routeDecoration?.bannedWordHits ?? 0,
+      hedgeFired: outcome.hedge?.hedgeFired ?? false,
+      hedgeWinner: outcome.hedge?.hedgeWinner ?? null,
+      hedgeSkippedReason: outcome.hedge?.hedgeSkippedReason ?? null,
       ...liveFirstTry,
     });
   }
