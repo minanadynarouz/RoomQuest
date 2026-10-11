@@ -72,6 +72,8 @@ export const envSchema = z.object({
   /**
    * `uv` (default): Gemini returns surface+u+v. `slot`: Gemini picks one of
    * the per-request hinted slot ids; the server resolves them to surface+u+v.
+   * `route`: level-core builds candidate routes; Gemini only picks one and
+   * decorates it (one call, no LLM repair).
    */
   DIRECTOR_PLACEMENT: z
     .string()
@@ -82,7 +84,7 @@ export const envSchema = z.object({
       }
       return value.trim().toLowerCase();
     })
-    .pipe(z.enum(['uv', 'slot'])),
+    .pipe(z.enum(['uv', 'slot', 'route'])),
   /** Seconds to skip Gemini after 429 / RESOURCE_EXHAUSTED when the error has no Retry-After. */
   LLM_QUOTA_COOLDOWN_S: z.coerce.number().int().min(1).default(600),
   /** Global UTC daily cap on live Gemini calls. Cache hits do not count. */

@@ -54,16 +54,12 @@ function dirtyLocalRepairJson(): string {
   return planToLlmJson(dirty);
 }
 
-function startEqualsGoalJson(): string {
+/** Invalid in a way snap/repairRoute/repairPlan cannot fix (no shrine). */
+function unfixableLocallyJson(): string {
   const dirty: LevelPlan = structuredClone(SYNTHETIC_LIVING_ROOM_PLAN);
-  const hut = dirty.placements.find((item) => item.piece === 'village_hut');
-  const shrine = dirty.placements.find(
-    (item) => item.piece === 'crystal_shrine'
+  dirty.placements = dirty.placements.filter(
+    (item) => item.piece !== 'crystal_shrine'
   );
-  if (hut && shrine) {
-    shrine.surface = hut.surface;
-  }
-  dirty.goal = dirty.start;
   return planToLlmJson(dirty);
 }
 
@@ -193,7 +189,7 @@ describe('runDirector', () => {
 
   it('uses one LLM repair call when local repair is not enough', async () => {
     const fake = new FakeListChatModel({
-      responses: [startEqualsGoalJson(), validJson],
+      responses: [unfixableLocallyJson(), validJson],
     });
     const outcome = await runDirector(request, {
       primary: structuredFromFake(fake),
@@ -238,7 +234,7 @@ describe('runDirector', () => {
     it('skips the LLM repair call when fewer than 2 s of LLM window remain', async () => {
       let t = 0;
       const fake = new AfterGenerateFakeListChatModel({
-        responses: [startEqualsGoalJson(), validJson],
+        responses: [unfixableLocallyJson(), validJson],
       });
       fake.onAfterGenerate = () => {
         t = DIRECTOR_LLM_WINDOW_MS - LLM_REPAIR_MIN_REMAINING_MS + 1;
@@ -259,7 +255,7 @@ describe('runDirector', () => {
 
     it('returns procedural within the 7 s budget when first and repair calls are both slow', async () => {
       const fake = new SlowFakeListChatModel({
-        responses: [startEqualsGoalJson(), validJson],
+        responses: [unfixableLocallyJson(), validJson],
         delaysMs: [3_000, 10_000],
       });
       const outcome = await settleWithDirectorFakeTime(
@@ -344,7 +340,7 @@ describe('runDirector', () => {
 
   it('falls back to procedural after two invalid LLM plans', async () => {
     const fake = new FakeListChatModel({
-      responses: [startEqualsGoalJson(), startEqualsGoalJson()],
+      responses: [unfixableLocallyJson(), unfixableLocallyJson()],
     });
     const outcome = await runDirector(request, {
       primary: structuredFromFake(fake),

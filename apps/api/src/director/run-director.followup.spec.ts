@@ -44,16 +44,12 @@ const request = LevelRequest.parse({
 const seed = makeDailySeed(request.graph.roomHash, request.date);
 const validJson = planToLlmJson(SYNTHETIC_LIVING_ROOM_PLAN);
 
-/** Invalid in a way snap/repairPlan cannot fix (needs the LLM repair). */
-function startEqualsGoalJson(): string {
+/** Invalid in a way snap/repairRoute/repairPlan cannot fix (no shrine). */
+function unfixableLocallyJson(): string {
   const dirty: LevelPlan = structuredClone(SYNTHETIC_LIVING_ROOM_PLAN);
-  const hut = dirty.placements.find((item) => item.piece === 'village_hut');
-  const shrine = dirty.placements.find(
-    (item) => item.piece === 'crystal_shrine'
+  dirty.placements = dirty.placements.filter(
+    (item) => item.piece !== 'crystal_shrine'
   );
-  if (hut && shrine) {
-    shrine.surface = hut.surface;
-  }
   return planToLlmJson(dirty);
 }
 
@@ -77,7 +73,7 @@ describe('runDirector LLM repair time gate (fake timers)', () => {
     // First call ends 1 ms past the gate: remaining = gate - 1.
     const firstDelay = DIRECTOR_LLM_WINDOW_MS - LLM_REPAIR_MIN_REMAINING_MS + 1;
     const fake = new SlowFakeListChatModel({
-      responses: [startEqualsGoalJson(), validJson],
+      responses: [unfixableLocallyJson(), validJson],
       delaysMs: [firstDelay, 0],
     });
     const outcome = await settleWithDirectorFakeTime(
@@ -96,7 +92,7 @@ describe('runDirector LLM repair time gate (fake timers)', () => {
   it('attempts the repair call when exactly the gate remains', async () => {
     const firstDelay = DIRECTOR_LLM_WINDOW_MS - LLM_REPAIR_MIN_REMAINING_MS;
     const fake = new SlowFakeListChatModel({
-      responses: [startEqualsGoalJson(), validJson],
+      responses: [unfixableLocallyJson(), validJson],
       delaysMs: [firstDelay, 0],
     });
     const outcome = await settleWithDirectorFakeTime(
@@ -116,7 +112,7 @@ describe('runDirector LLM repair time gate (fake timers)', () => {
 
   it('honours a custom llmRepairMinRemainingMs (env LLM_REPAIR_MIN_REMAINING_MS)', async () => {
     const fake = new SlowFakeListChatModel({
-      responses: [startEqualsGoalJson(), validJson],
+      responses: [unfixableLocallyJson(), validJson],
       delaysMs: [1_000, 0],
     });
     const outcome = await settleWithDirectorFakeTime(
@@ -142,7 +138,7 @@ describe('runDirector LLM repair time gate (fake timers)', () => {
 
   it('records llm-timeout at llm-repair when the repair call is aborted', async () => {
     const fake = new SlowFakeListChatModel({
-      responses: [startEqualsGoalJson(), validJson],
+      responses: [unfixableLocallyJson(), validJson],
       delaysMs: [1_000, 60_000],
     });
     const outcome = await settleWithDirectorFakeTime(
@@ -167,7 +163,7 @@ describe('runDirector fallback reasons (no blank reasons)', () => {
 
   it('records llm-invalid after an invalid LLM repair', async () => {
     const fake = new FakeListChatModel({
-      responses: [startEqualsGoalJson(), startEqualsGoalJson()],
+      responses: [unfixableLocallyJson(), unfixableLocallyJson()],
     });
     const outcome = await runDirector(request, {
       primary: structuredFromFake(fake),
@@ -230,7 +226,7 @@ describe('runDirector fallback reasons (no blank reasons)', () => {
     ]);
   });
 
-  it('repairs an unknown-surface piece locally via repairPlan (stage repair-plan)', async () => {
+  it('repairs an unknown-surface piece locally (level-core repairRoute, stage repair-route)', async () => {
     const dirty: LevelPlan = structuredClone(SYNTHETIC_LIVING_ROOM_PLAN);
     dirty.placements.push({
       id: 'p-ghost',
@@ -247,7 +243,8 @@ describe('runDirector fallback reasons (no blank reasons)', () => {
       logger: silentLogger,
     });
     expect(outcome.response.source).toBe('llm_repaired');
-    expect(outcome.stage).toBe('repair-plan');
+    expect(outcome.stage).toBe('repair-route');
+    expect(outcome.response.repairs).toContain('repair-route');
     expect(outcome.repairedBy).toBe('local');
     expect(outcome.telemetry).toHaveLength(1);
   });

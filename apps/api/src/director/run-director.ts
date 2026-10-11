@@ -1,5 +1,7 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import {
+  applyDecoration,
+  candidateRoutes,
   generatePlan,
   repairPlan,
   validatePlan,
@@ -30,6 +32,13 @@ import {
   type ValidationTrace,
 } from './issue-trace';
 import { localRepairPlan } from './local-repair';
+import { buildDecorationMessages, decorationEnums } from './prompts/decoration';
+import {
+  countBannedWordHits,
+  parseRouteDecoration,
+  routeCallOptions,
+  toLangchainMessages,
+} from './route-arm';
 import { expandSlimCandidate, tryParseLlmPlan } from './parse-plan';
 import {
   buildRepairMessage,
@@ -70,10 +79,23 @@ export interface DirectorOutcome {
   failedAt: DirectorFailurePoint | null;
   /** Placement arm actually used for this request (`slot` may degrade to `uv`). */
   placement: DirectorPlacementMode;
+  /** Route arm only: decoration bookkeeping for the eval. */
+  routeDecoration: RouteDecorationTrace | null;
   /** Compact first-try candidate (parsed object or recovered JSON). */
   firstTryPlan: unknown;
   /** Raw first-try model text when structured parse failed. */
   firstTryRawText: string | null;
+}
+
+export interface RouteDecorationTrace {
+  candidateCount: number;
+  routeId: string | null;
+  /** Lines removed by the server sanitizer before parse. */
+  droppedLines: number;
+  /** DECORATION_BANNED_WORDS hits in the served lines. */
+  bannedWordHits: number;
+  /** Options applyDecoration replaced with defaults. */
+  replaced: string[];
 }
 
 export interface RunDirectorOptions {
@@ -118,6 +140,7 @@ type TraceExtras = Partial<
     | 'stage'
     | 'failedAt'
     | 'placement'
+    | 'routeDecoration'
   >
 >;
 
@@ -140,6 +163,8 @@ function withTrace(
     failedAt: extras?.failedAt ?? outcome.failedAt ?? null,
     placement:
       extras?.placement ?? outcome.placement ?? DEFAULT_DIRECTOR_PLACEMENT,
+    routeDecoration:
+      extras?.routeDecoration ?? outcome.routeDecoration ?? null,
     firstTryPlan: extras?.firstTryPlan ?? outcome.firstTryPlan ?? null,
     firstTryRawText: extras?.firstTryRawText ?? outcome.firstTryRawText ?? null,
   };
@@ -293,7 +318,11 @@ export async function runDirector(
     }
   }
   const placement: DirectorPlacementMode =
-    slotContext === undefined ? 'uv' : 'slot';
+    requestedPlacement === 'route'
+      ? 'route'
+      : slotContext === undefined
+        ? 'uv'
+        : 'slot';
 
   const fallback = (
     reason: FallbackReason,
@@ -476,7 +505,180 @@ export async function runDirector(
     }
   };
 
+  /**
+   * Hybrid route arm: level-core builds valid candidate routes, Gemini picks
+   * one and decorates it in ONE call (no LLM repair in this arm).
+   */
+  const runRoute = async (): Promise<DirectorOutcome> => {
+    const chat = options.primary;
+    const candidates = candidateRoutes(request.graph, {
+      seed,
+      tier: request.tier,
+    });
+    if (candidates.length === 0) {
+      return fallback('no-route-candidates', 'route-candidates');
+    }
+    const enums = decorationEnums(candidates);
+    const trace: RouteDecorationTrace = {
+      candidateCount: candidates.length,
+      routeId: null,
+      droppedLines: 0,
+      bannedWordHits: 0,
+      replaced: [],
+    };
+    const messages = toLangchainMessages(
+      buildDecorationMessages(candidates, { seed, tier: request.tier })
+    );
+
+    const callStarted = now();
+    if (!deadline.canStartLlm(1)) {
+      record(chat, callStarted, 'timeout');
+      return fallback('llm-timeout', 'route-decoration', {
+        routeDecoration: trace,
+      });
+    }
+    let call: Awaited<ReturnType<StructuredChat['invokeStructured']>>;
+    try {
+      call = await chat.invokeStructured(
+        messages,
+        deadline.signal,
+        routeCallOptions(enums)
+      );
+    } catch (err) {
+      if (isQuotaError(err)) {
+        options.quotaBreaker?.trip(err);
+        record(chat, callStarted, 'error');
+        return fallback('llm-quota', 'route-decoration', {
+          routeDecoration: trace,
+        });
+      }
+      if (isTimeoutError(err) || deadline.remainingForLlm() <= 0) {
+        record(chat, callStarted, 'timeout');
+        return fallback('llm-timeout', 'route-decoration', {
+          routeDecoration: trace,
+        });
+      }
+      record(chat, callStarted, 'error');
+      options.logger.warn(
+        `director.provider_error phase=route provider=${chat.provider} model=${chat.model} message=${err instanceof Error ? err.message : 'error'}`
+      );
+      return fallback('llm-error', 'route-decoration', {
+        routeDecoration: trace,
+      });
+    }
+
+    const raw = structuredCandidate(call);
+    const rawText = textFromRaw(call.raw) ?? null;
+    const parsed = parseRouteDecoration(raw, enums);
+    trace.droppedLines = parsed.droppedLines;
+    if (parsed.kind === 'parse-failed') {
+      record(chat, callStarted, 'invalid', call.raw, call.ttftMs);
+      return fallback('llm-parse-failed', 'route-decoration', {
+        validation: {
+          firstTry: [{ code: 'SCHEMA_INVALID', path: 'decoration' }],
+          afterLocal: null,
+          afterLlmRepair: null,
+        },
+        routeDecoration: trace,
+        firstTryPlan: raw ?? null,
+        firstTryRawText: rawText,
+      });
+    }
+    trace.routeId = parsed.decoration.routeId;
+    const applied = applyDecoration(candidates, parsed.decoration);
+    if (!applied.ok) {
+      record(chat, callStarted, 'invalid', call.raw, call.ttftMs);
+      options.logger.warn(
+        `director.route_unknown_id routeId=${applied.routeId}`
+      );
+      return fallback('llm-invalid', 'route-decoration', {
+        validation: {
+          firstTry: [{ code: applied.error, path: `route:${applied.routeId}` }],
+          afterLocal: null,
+          afterLlmRepair: null,
+        },
+        routeDecoration: trace,
+        firstTryPlan: raw ?? null,
+      });
+    }
+    trace.replaced = applied.replaced;
+    const chosen = candidates.find(
+      (route) => route.id === parsed.decoration.routeId
+    );
+
+    let plan = applied.plan;
+    let repairs: string[] = [];
+    let stage: DirectorStage = 'route';
+    let firstTry = traceIssues(validatePlan(plan, request.graph).issues);
+    let afterLocal: ReturnType<typeof traceIssues> | null = null;
+    if (firstTry.length > 0) {
+      const local = localRepairPlan(plan, request.graph, {
+        seed,
+        tier: request.tier,
+      });
+      afterLocal = traceIssues(local.result.issues);
+      if (!local.result.ok || local.usedStub) {
+        record(chat, callStarted, 'invalid', call.raw, call.ttftMs);
+        return fallback('llm-invalid', 'route-validate', {
+          validation: { firstTry, afterLocal, afterLlmRepair: null },
+          routeDecoration: trace,
+          firstTryPlan: raw ?? null,
+        });
+      }
+      plan = local.plan;
+      repairs = local.repairs;
+      stage = local.fixedBy ?? 'repair-plan';
+    } else {
+      firstTry = [];
+    }
+    record(
+      chat,
+      callStarted,
+      afterLocal === null ? 'ok' : 'repaired',
+      call.raw,
+      call.ttftMs
+    );
+    trace.bannedWordHits = countBannedWordHits(applied.lines);
+    options.logger.log(
+      `director.plan_fixed stage=${stage} placement=route routeId=${parsed.decoration.routeId} droppedLines=${String(trace.droppedLines)}`
+    );
+    const relaxed =
+      chosen?.relaxed ?? validatePlan(plan, request.graph).relaxed;
+    return withTrace(
+      {
+        response: LevelResponse.parse({
+          plan,
+          source: afterLocal === null ? 'llm' : 'llm_repaired',
+          cacheKey: makeCacheKey(
+            request.graph.roomHash,
+            request.date,
+            request.tier,
+            promptVersion
+          ),
+          model: chat.model,
+          promptVersion,
+          latencyMs: Math.max(0, now() - startedMs),
+          repairs,
+          relaxed,
+          ...(applied.lines.length > 0 ? { lines: applied.lines } : {}),
+        }),
+        telemetry,
+      },
+      {
+        validation: { firstTry, afterLocal, afterLlmRepair: null },
+        repairedBy: afterLocal === null ? null : 'local',
+        stage,
+        placement: 'route',
+        routeDecoration: trace,
+        firstTryPlan: raw ?? null,
+      }
+    );
+  };
+
   try {
+    if (placement === 'route') {
+      return await runRoute();
+    }
     const draftMessages = [
       new SystemMessage(SYSTEM_PREFIX),
       new HumanMessage(
@@ -550,7 +752,8 @@ export async function runDirector(
 
     const local = localRepairPlan(
       repairAsPlan(draft.raw, draft.plan),
-      request.graph
+      request.graph,
+      { seed, tier: request.tier }
     );
     const afterLocal = local.usedStub
       ? [

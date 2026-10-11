@@ -52,18 +52,21 @@ function parseTiers(raw: string | undefined): readonly Tier[] | undefined {
 
 function parsePlacements(
   raw: string | undefined
-): readonly ('uv' | 'slot')[] | undefined {
+): readonly ('uv' | 'slot' | 'route')[] | undefined {
   if (raw === undefined) {
     return undefined;
   }
-  if (raw === 'both' || raw === 'all') {
+  if (raw === 'both') {
     return ['uv', 'slot'];
   }
-  const arms: ('uv' | 'slot')[] = [];
+  if (raw === 'all') {
+    return ['uv', 'slot', 'route'];
+  }
+  const arms: ('uv' | 'slot' | 'route')[] = [];
   for (const part of raw.split(',').map((item) => item.trim())) {
-    if (part !== 'uv' && part !== 'slot') {
+    if (part !== 'uv' && part !== 'slot' && part !== 'route') {
       throw new Error(
-        `Unknown placement "${part}" (use uv, slot, uv,slot, or both)`
+        `Unknown placement "${part}" (use uv, slot, route, a comma list like uv,slot,route, both = uv,slot, or all)`
       );
     }
     if (!arms.includes(part)) {

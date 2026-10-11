@@ -72,16 +72,12 @@ function dirtyLocalRepairJson(): string {
   return planToLlmJson(dirty);
 }
 
-function startEqualsGoalJson(): string {
+/** No goal shrine: repairRoute / repairPlan cannot fix it, so LLM repair runs. */
+function unfixableLocallyJson(): string {
   const dirty: LevelPlan = structuredClone(SYNTHETIC_LIVING_ROOM_PLAN);
-  const hut = dirty.placements.find((item) => item.piece === 'village_hut');
-  const shrine = dirty.placements.find(
-    (item) => item.piece === 'crystal_shrine'
+  dirty.placements = dirty.placements.filter(
+    (item) => item.piece !== 'crystal_shrine'
   );
-  if (hut && shrine) {
-    shrine.surface = hut.surface;
-  }
-  dirty.goal = dirty.start;
   return planToLlmJson(dirty);
 }
 
@@ -179,7 +175,7 @@ describe('POST /api/v1/levels director contract (B-05 live)', () => {
 
   it('LLM-repaired → 200 source llm_repaired', async () => {
     const fake = new FakeListChatModel({
-      responses: [startEqualsGoalJson(), validJson],
+      responses: [unfixableLocallyJson(), validJson],
     });
     const parsed = await expectValid200({
       createPrimary: () => fake,
@@ -221,7 +217,7 @@ describe('POST /api/v1/levels director contract (B-05 live)', () => {
 
   it('invalid twice → 200 source procedural', async () => {
     const fake = new FakeListChatModel({
-      responses: [startEqualsGoalJson(), startEqualsGoalJson()],
+      responses: [unfixableLocallyJson(), unfixableLocallyJson()],
     });
     const parsed = await expectValid200({
       createPrimary: () => fake,
@@ -232,7 +228,7 @@ describe('POST /api/v1/levels director contract (B-05 live)', () => {
 
   it('slow first and repair calls → 200 procedural within the budget', async () => {
     const fake = new SlowFakeListChatModel({
-      responses: [startEqualsGoalJson(), validJson],
+      responses: [unfixableLocallyJson(), validJson],
       delaysMs: [3_000, 10_000],
     });
     const parsed = await expectValid200WithFakeTime({

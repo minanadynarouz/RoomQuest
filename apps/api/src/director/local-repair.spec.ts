@@ -18,6 +18,7 @@ vi.mock('@roomquest/level-core', async (importOriginal) => {
     ...actual,
     snapPlacementsToSlots: vi.fn(actual.snapPlacementsToSlots),
     repairPlan: vi.fn(actual.repairPlan),
+    repairRoute: vi.fn(actual.repairRoute),
   };
 });
 
@@ -58,6 +59,7 @@ describe('localRepairPlan', () => {
     const level = vi.mocked(levelCore);
     level.snapPlacementsToSlots.mockClear();
     level.repairPlan.mockClear();
+    level.repairRoute.mockClear();
     const dirty = structuredClone(SYNTHETIC_LIVING_ROOM_PLAN);
     // An unknown surface: snap cannot fix it, repairPlan drops the piece.
     dirty.placements.push({
@@ -71,18 +73,22 @@ describe('localRepairPlan', () => {
     });
     const result = localRepairPlan(dirty, SYNTHETIC_LIVING_ROOM);
     const snapOrder = level.snapPlacementsToSlots.mock.invocationCallOrder[0];
-    const repairOrder = level.repairPlan.mock.invocationCallOrder[0];
+    const routeOrder = level.repairRoute.mock.invocationCallOrder[0];
     expect(snapOrder).toBeDefined();
-    expect(repairOrder).toBeDefined();
-    expect(snapOrder ?? 0).toBeLessThan(repairOrder ?? 0);
+    expect(routeOrder).toBeDefined();
+    expect(snapOrder ?? 0).toBeLessThan(routeOrder ?? 0);
+    const repairOrder = level.repairPlan.mock.invocationCallOrder[0];
+    if (repairOrder !== undefined) {
+      expect(routeOrder ?? 0).toBeLessThan(repairOrder);
+    }
     expect(result.result.ok).toBe(true);
-    expect(result.fixedBy).toBe('repair-plan');
+    expect(['repair-route', 'repair-plan']).toContain(result.fixedBy);
     expect(result.plan.placements.some((p) => p.id === 'p-ghost')).toBe(false);
   });
 
-  it('keeps repairRoute a pass-through until level-core ships one', () => {
+  it('repairRoute leaves a valid plan unchanged', () => {
     const plan = structuredClone(SYNTHETIC_LIVING_ROOM_PLAN);
-    const routed = repairRoute(plan, SYNTHETIC_LIVING_ROOM);
+    const routed = repairRoute(plan, SYNTHETIC_LIVING_ROOM, { seed: 'x' });
     expect(routed.plan).toBe(plan);
     expect(routed.repairs).toEqual([]);
   });

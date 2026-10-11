@@ -31,6 +31,9 @@ function run(relaxed: EvalRunRecord['relaxed']): EvalRunRecord {
     fallbackReason: 'llm-invalid',
     stage: 'procedural',
     failedAt: 'llm-repair-gate',
+    lineCount: 0,
+    droppedLines: 0,
+    bannedWordHits: 0,
   };
 }
 

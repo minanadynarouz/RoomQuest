@@ -25,7 +25,7 @@ const LlmCallTelemetrySchema = z.object({
   outcome: z.enum(['ok', 'invalid', 'repaired', 'timeout', 'error']),
 });
 
-const PlacementArm = z.enum(['uv', 'slot']);
+const PlacementArm = z.enum(['uv', 'slot', 'route']);
 
 const RelaxedPctSchema = z.object({
   minPath: z.number(),
@@ -70,12 +70,38 @@ export const EvalRunRecordSchema = z.object({
   fallbackReason: z.string().min(1),
   stage: z.enum(DIRECTOR_STAGES),
   failedAt: z.enum(DIRECTOR_FAILURE_POINTS).nullable(),
+  /** Route arm: served lines, sanitizer drops, DECORATION_BANNED_WORDS hits. */
+  lineCount: z.number().int().default(0),
+  droppedLines: z.number().int().default(0),
+  bannedWordHits: z.number().int().default(0),
   firstTryPlan: z.unknown().optional(),
   firstTryRawText: z.string().nullable().optional(),
 });
 export type EvalRunRecord = z.infer<typeof EvalRunRecordSchema>;
 
+/** Per placement arm (uv / slot / route) summary. */
+export const ArmAggregateSchema = z.object({
+  runCount: z.number().int(),
+  validAfterRepairPct: z.number(),
+  fallbackToProceduralPct: z.number(),
+  fallbackReasonCounts: z.record(z.string(), z.number()),
+  p50LatencyMs: z.number(),
+  p95LatencyMs: z.number(),
+  outputTokens: z.number().int(),
+  thinkingTokens: z.number().int(),
+  estimatedCostUsd: z.number(),
+  lineCount: z.number().int(),
+  droppedLines: z.number().int(),
+  bannedWordHits: z.number().int(),
+  meanDistinctSurfaces: z.number(),
+  meanDistinctPieceTypes: z.number(),
+  meanPairwisePieceTypeJaccard: z.number(),
+  meanPairwiseSurfaceLabelJaccard: z.number(),
+});
+export type ArmAggregate = z.infer<typeof ArmAggregateSchema>;
+
 export const EvalAggregateSchema = z.object({
+  byPlacement: z.record(z.string(), ArmAggregateSchema),
   runCount: z.number().int(),
   validBeforeRepairCount: z.number().int(),
   validAfterRepairCount: z.number().int(),
@@ -230,6 +256,60 @@ function relaxedPctOf(
   };
 }
 
+function round1(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+export function aggregateArm(runs: readonly EvalRunRecord[]): ArmAggregate {
+  const total = runs.length;
+  let validAfter = 0;
+  let fallback = 0;
+  let outputTokens = 0;
+  let thinkingTokens = 0;
+  let cost = 0;
+  let lineCount = 0;
+  let droppedLines = 0;
+  let bannedWordHits = 0;
+  let surfaces = 0;
+  let pieces = 0;
+  for (const run of runs) {
+    validAfter += run.validAfterRepair ? 1 : 0;
+    fallback += run.fallbackToProcedural ? 1 : 0;
+    cost += run.estimatedCostUsd;
+    lineCount += run.lineCount;
+    droppedLines += run.droppedLines;
+    bannedWordHits += run.bannedWordHits;
+    surfaces += run.distinctSurfaces;
+    pieces += run.distinctPieceTypes;
+    for (const row of run.telemetry) {
+      outputTokens += row.outputTokens ?? 0;
+      thinkingTokens += row.thoughtsTokenCount ?? row.thinkingTokens ?? 0;
+    }
+  }
+  const sets = unionSetsByRoom(runs);
+  const latencies = runs.map((run) => run.latencyMs);
+  return {
+    runCount: total,
+    validAfterRepairPct: roundPct(validAfter, total),
+    fallbackToProceduralPct: roundPct(fallback, total),
+    fallbackReasonCounts: countBy(runs, (run) => run.fallbackReason),
+    p50LatencyMs: round1(percentile(latencies, 50)),
+    p95LatencyMs: round1(percentile(latencies, 95)),
+    outputTokens,
+    thinkingTokens,
+    estimatedCostUsd: cost,
+    lineCount,
+    droppedLines,
+    bannedWordHits,
+    meanDistinctSurfaces: total === 0 ? 0 : round1(surfaces / total),
+    meanDistinctPieceTypes: total === 0 ? 0 : round1(pieces / total),
+    meanPairwisePieceTypeJaccard: meanPairwiseJaccard(sets.pieceTypeSets),
+    meanPairwiseSurfaceLabelJaccard: meanPairwiseJaccard(
+      sets.surfaceLabelSets
+    ),
+  };
+}
+
 export function aggregateRuns(runs: readonly EvalRunRecord[]): EvalAggregate {
   const total = runs.length;
   let validBefore = 0;
@@ -341,6 +421,12 @@ export function aggregateRuns(runs: readonly EvalRunRecord[]): EvalAggregate {
       hutTable: roundPct(relaxedCounts.hutTable, total),
       portalFov: roundPct(relaxedCounts.portalFov, total),
     },
+    byPlacement: Object.fromEntries(
+      Object.keys(countBy(runs, (run) => run.placement)).map((arm) => [
+        arm,
+        aggregateArm(runs.filter((run) => run.placement === arm)),
+      ])
+    ),
     relaxedPctByPlacement: Object.fromEntries(
       Object.keys(countBy(runs, (run) => run.placement)).map((arm) => [
         arm,
@@ -489,6 +575,33 @@ ${RELAXED_RULE_ORDER.map(
     (rule) =>
       `| ${rule} | ${formatPct(report.aggregate.relaxedPct[rule])} |`
   ).join('\n')}
+
+### Per placement arm
+
+| Arm | runs | valid after repair | procedural | fallback reasons | p50 ms | p95 ms | output tok | thinking tok | cost | lines | lines dropped | banned-word hits | distinct surfaces | distinct pieces | piece Jaccard | surface Jaccard |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+${countRows(report.aggregate.byPlacement, (arm) =>
+    [
+      String(arm.runCount),
+      formatPct(arm.validAfterRepairPct),
+      formatPct(arm.fallbackToProceduralPct),
+      Object.entries(arm.fallbackReasonCounts)
+        .map(([reason, count]) => `${reason}=${String(count)}`)
+        .join(', '),
+      arm.p50LatencyMs.toFixed(1),
+      arm.p95LatencyMs.toFixed(1),
+      String(arm.outputTokens),
+      String(arm.thinkingTokens),
+      formatUsd(arm.estimatedCostUsd),
+      String(arm.lineCount),
+      String(arm.droppedLines),
+      String(arm.bannedWordHits),
+      arm.meanDistinctSurfaces.toFixed(1),
+      arm.meanDistinctPieceTypes.toFixed(1),
+      arm.meanPairwisePieceTypeJaccard.toFixed(3),
+      arm.meanPairwiseSurfaceLabelJaccard.toFixed(3),
+    ].join(' | ')
+  )}
 
 ### Relaxed rules by placement arm
 

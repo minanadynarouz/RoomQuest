@@ -1,4 +1,8 @@
-import { generatePlan, validatePlan } from '@roomquest/level-core';
+import {
+  candidateRoutes,
+  generatePlan,
+  validatePlan,
+} from '@roomquest/level-core';
 import { LevelRequest } from '@roomquest/schema';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -17,6 +21,7 @@ import { runDirector } from '../src/director/run-director';
 import {
   planToLlmJson,
   planToSlotLlmJson,
+  mockDecorationJson,
   silentLogger,
   structuredFromFake,
   UsageFakeListChatModel,
@@ -223,7 +228,7 @@ export async function runEvalHarness(
     room: (typeof rooms)[number];
     date: string;
     tier: (typeof tiers)[number];
-    placement: 'uv' | 'slot';
+    placement: 'uv' | 'slot' | 'route';
   }[] = [];
   for (const placement of placements) {
     for (const date of seedDates) {
@@ -258,7 +263,11 @@ export async function runEvalHarness(
       ? structuredFromFake(
           new UsageFakeListChatModel({
             responses: [
-              placement === 'slot'
+              placement === 'route'
+                ? mockDecorationJson(
+                    candidateRoutes(room.graph, { seed, tier })
+                  )
+                : placement === 'slot'
                 ? planToSlotLlmJson(
                     generatePlan(room.graph, seed, tier),
                     room.graph,
@@ -334,6 +343,9 @@ export async function runEvalHarness(
       fallbackReason,
       stage: outcome.stage,
       failedAt: outcome.failedAt,
+      lineCount: outcome.response.lines?.length ?? 0,
+      droppedLines: outcome.routeDecoration?.droppedLines ?? 0,
+      bannedWordHits: outcome.routeDecoration?.bannedWordHits ?? 0,
       ...liveFirstTry,
     });
   }

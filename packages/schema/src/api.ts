@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { SurfaceGraph } from './surface.js';
 import { LevelPlan, Theme, Tier, PlanSource } from './level.js';
+import {
+  DECORATION_LINE_MAX_CHARS,
+  DECORATION_MAX_LINES,
+} from './decoration.js';
 
 /**
  * Why the API returned a procedural plan instead of Gemini, or why the
@@ -21,6 +25,8 @@ import { LevelPlan, Theme, Tier, PlanSource } from './level.js';
  * - `llm-unconfigured`: live mode without GOOGLE_API_KEY.
  * - `director-mock`: DIRECTOR_MODE=mock (procedural by design).
  * - `director-error`: unexpected exception inside the director loop.
+ * - `no-route-candidates`: `DIRECTOR_PLACEMENT=route` and level-core found
+ *   no candidate route for the graph.
  */
 export const FallbackReason = z.enum([
   'llm-quota',
@@ -33,6 +39,7 @@ export const FallbackReason = z.enum([
   'llm-unconfigured',
   'director-mock',
   'director-error',
+  'no-route-candidates',
 ]);
 export type FallbackReason = z.infer<typeof FallbackReason>;
 
@@ -85,6 +92,13 @@ export type LevelRequest = z.infer<typeof LevelRequest>;
 /**
  * Successful level generation response
  */
+/** One explorer line for a plan beat (`beat` is the beat index as a string). */
+export const LevelLine = z.object({
+  beat: z.string(),
+  text: z.string().min(1).max(DECORATION_LINE_MAX_CHARS),
+});
+export type LevelLine = z.infer<typeof LevelLine>;
+
 export const LevelResponse = z.object({
   /** Generated level plan */
   plan: LevelPlan,
@@ -108,6 +122,12 @@ export const LevelResponse = z.object({
    * servers; treat as `[]`.
    */
   relaxed: z.array(RelaxedRule).optional(),
+  /**
+   * Explorer (Pip) lines for the hybrid route arm (`DIRECTOR_PLACEMENT=route`),
+   * keyed by beat index. Kept next to — not inside — the plan. Omitted by
+   * other arms and older servers.
+   */
+  lines: z.array(LevelLine).max(DECORATION_MAX_LINES).optional(),
 });
 export type LevelResponse = z.infer<typeof LevelResponse>;
 
