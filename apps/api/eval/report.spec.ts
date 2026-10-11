@@ -17,6 +17,15 @@ function run(relaxed: EvalRunRecord['relaxed']): EvalRunRecord {
     relaxed,
     estimatedCostUsd: 0,
     telemetry: [],
+    ttftMs: null,
+    distinctSurfaces: 0,
+    distinctPieceTypes: 0,
+    pieceTypes: [],
+    surfaceLabels: [],
+    issuesFirstTry: [],
+    issuesAfterLocal: null,
+    issuesAfterLlmRepair: null,
+    repairedBy: null,
   };
 }
 

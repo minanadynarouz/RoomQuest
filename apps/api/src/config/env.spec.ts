@@ -41,6 +41,28 @@ describe('validateEnv', () => {
     expect(env.DIRECTOR_MODEL).toBe('gemini-3.5-flash-lite');
   });
 
+  it('defaults DIRECTOR_THINKING to low and accepts minimal/default', () => {
+    expect(validateEnv({ NODE_ENV: 'test' }).DIRECTOR_THINKING).toBe('low');
+    expect(
+      validateEnv({ NODE_ENV: 'test', DIRECTOR_THINKING: '  ' })
+        .DIRECTOR_THINKING
+    ).toBe('low');
+    expect(
+      validateEnv({ NODE_ENV: 'test', DIRECTOR_THINKING: 'LOW' })
+        .DIRECTOR_THINKING
+    ).toBe('low');
+    expect(
+      validateEnv({ NODE_ENV: 'test', DIRECTOR_THINKING: 'default' })
+        .DIRECTOR_THINKING
+    ).toBe('default');
+  });
+
+  it('rejects unknown DIRECTOR_THINKING', () => {
+    expect(() =>
+      validateEnv({ NODE_ENV: 'test', DIRECTOR_THINKING: 'budget0' })
+    ).toThrow(/DIRECTOR_THINKING/);
+  });
+
   it('keeps a non-empty DATABASE_URL', () => {
     const url = 'postgresql://postgres:postgres@localhost:5432/roomquest';
     const env = validateEnv({

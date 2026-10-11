@@ -55,10 +55,10 @@ function placementToSchema(
   schema: Record<string, unknown>
 ): Record<string, unknown> {
   const properties = schema.properties as Record<string, unknown>;
-  const placements = properties.placements as Record<string, unknown>;
+  const placements = properties.pl as Record<string, unknown>;
   const items = placements.items as Record<string, unknown>;
   const itemProps = items.properties as Record<string, unknown>;
-  return itemProps.to as Record<string, unknown>;
+  return itemProps.t as Record<string, unknown>;
 }
 
 describe('toGeminiSchema', () => {
@@ -121,10 +121,13 @@ describe('toGeminiSchema', () => {
     expect(Array.isArray(to.type)).toBe(false);
 
     const properties = gemini.properties as Record<string, unknown>;
-    const parTimeMs = properties.parTimeMs as Record<string, unknown>;
-    expect(parTimeMs.type).toBe('integer');
-    expect(parTimeMs.minimum).toBe(1);
-    expect(parTimeMs.exclusiveMinimum).toBeUndefined();
+    expect(properties.th).toBeDefined();
+    expect(properties.pl).toBeDefined();
+    expect(properties.parTimeMs).toBeUndefined();
+    expect(properties.dialogue).toBeUndefined();
+    expect(properties.beats).toBeUndefined();
+    expect(properties.seed).toBeUndefined();
+    expect(properties.title).toBeUndefined();
   });
 
   it('matches the Gemini LevelPlanLLM schema snapshot', () => {

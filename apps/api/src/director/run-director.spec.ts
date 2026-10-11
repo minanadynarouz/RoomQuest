@@ -1,11 +1,11 @@
-import { AIMessage } from '@langchain/core/messages';
+import { AIMessage, HumanMessage } from '@langchain/core/messages';
 import { FakeListChatModel } from '@langchain/core/utils/testing';
 import {
   SYNTHETIC_LIVING_ROOM,
   SYNTHETIC_LIVING_ROOM_PLAN,
 } from '@roomquest/fixtures';
 import { LevelRequest, LevelResponse, type LevelPlan } from '@roomquest/schema';
-import { validatePlan } from '@roomquest/level-core';
+import { compactGraphForPrompt, validatePlan } from '@roomquest/level-core';
 import { describe, expect, it } from 'vitest';
 import {
   DIRECTOR_BUDGET_MS,
@@ -56,6 +56,13 @@ function dirtyLocalRepairJson(): string {
 
 function startEqualsGoalJson(): string {
   const dirty: LevelPlan = structuredClone(SYNTHETIC_LIVING_ROOM_PLAN);
+  const hut = dirty.placements.find((item) => item.piece === 'village_hut');
+  const shrine = dirty.placements.find(
+    (item) => item.piece === 'crystal_shrine'
+  );
+  if (hut && shrine) {
+    shrine.surface = hut.surface;
+  }
   dirty.goal = dirty.start;
   return planToLlmJson(dirty);
 }
@@ -86,6 +93,48 @@ describe('runDirector', () => {
     expect(outcome.telemetry[0]?.outcome).toBe('ok');
     expect(outcome.telemetry[0]?.inputTokens).toBe(12);
     expect(outcome.telemetry[0]?.outputTokens).toBe(34);
+    expect(outcome.telemetry[0]?.thoughtsTokenCount).toBe(5);
+    expect(outcome.telemetry[0]?.thinkingTokens).toBe(5);
+    expect(outcome.repairedBy).toBeNull();
+    expect(outcome.validation.firstTry).toEqual([]);
+    expect(outcome.validation.afterLocal).toBeNull();
+    expect(outcome.firstTryPlan).toBeTruthy();
+  });
+
+  it('sends compactGraphForPrompt in the user message and validates against the full posted graph', async () => {
+    let userJson: string | undefined;
+    const primary: StructuredChat = {
+      provider: 'google',
+      model: 'gemini-3.8-flash',
+      invokeStructured: (messages) => {
+        const human = messages[1];
+        if (
+          human instanceof HumanMessage &&
+          typeof human.content === 'string'
+        ) {
+          userJson = human.content;
+        }
+        return Promise.resolve({
+          parsed: JSON.parse(validJson) as unknown,
+          raw: new AIMessage(validJson),
+        });
+      },
+    };
+    const outcome = await runDirector(request, {
+      primary,
+      logger: silentLogger,
+    });
+    expect(userJson).toBeDefined();
+    const parsed = JSON.parse(userJson ?? '') as { graph: unknown };
+    expect(parsed.graph).toEqual(compactGraphForPrompt(request.graph));
+    expect(parsed.graph).not.toEqual(request.graph);
+    expect(parsed.graph).not.toHaveProperty('version');
+    expect(parsed.graph).not.toHaveProperty('roomHash');
+    expect(parsed.graph).not.toHaveProperty('floorY');
+    expect(request.graph.version).toBeDefined();
+    expect(request.graph.roomHash).toBeDefined();
+    expect(validatePlan(outcome.response.plan, request.graph).ok).toBe(true);
+    expect(outcome.response.source).toBe('llm');
   });
 
   it('feeds includeRaw text into local repair when structured parse fails', async () => {
@@ -114,6 +163,9 @@ describe('runDirector', () => {
     expect(
       outcome.response.plan.placements.some((p) => p.id === 'p-slime')
     ).toBe(false);
+    expect(outcome.repairedBy).toBe('local');
+    expect(outcome.validation.afterLocal).toEqual([]);
+    expect(outcome.validation.afterLlmRepair).toBeNull();
   });
 
   it('locally repairs an invalid first plan without a second LLM call', async () => {
@@ -132,6 +184,7 @@ describe('runDirector', () => {
     expect(
       outcome.response.plan.placements.some((p) => p.id === 'p-slime')
     ).toBe(false);
+    expect(outcome.repairedBy).toBe('local');
   });
 
   it('uses one LLM repair call when local repair is not enough', async () => {
@@ -149,6 +202,11 @@ describe('runDirector', () => {
       'invalid',
       'repaired',
     ]);
+    expect(outcome.repairedBy).toBe('llm');
+    expect(outcome.validation.afterLocal?.length).toBeGreaterThan(0);
+    expect(outcome.validation.afterLlmRepair).toEqual([]);
+    expect(outcome.validation.firstTry.length).toBeGreaterThan(0);
+    expect(outcome.validation.firstTry[0]?.code).toBeTruthy();
   });
 
   describe('budget', () => {
@@ -257,6 +315,27 @@ describe('runDirector', () => {
       expect(outcome.telemetry).toHaveLength(1);
       expect(outcome.telemetry[0]?.outcome).toBe('error');
     });
+  });
+
+  it('records first-try raw text when structured parse fails', async () => {
+    const primary: StructuredChat = {
+      provider: 'google',
+      model: 'gemini-3.8-flash',
+      invokeStructured: () =>
+        Promise.resolve({
+          parsed: { nope: true },
+          raw: { content: '{"nope":true}' },
+        }),
+    };
+    const outcome = await runDirector(request, {
+      primary,
+      logger: silentLogger,
+    });
+    expect(outcome.response.source).toBe('procedural');
+    expect(outcome.firstTryPlan).toEqual({ nope: true });
+    expect(outcome.firstTryRawText).toBe('{"nope":true}');
+    expect(outcome.validation.firstTry[0]?.code).toBe('SCHEMA_INVALID');
+    expect(outcome.repairedBy).toBeNull();
   });
 
   it('falls back to procedural after two invalid LLM plans', async () => {
