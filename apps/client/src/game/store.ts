@@ -9,10 +9,8 @@ import { clampParTimeMs, type Issue } from '@roomquest/level-core';
 import type { ErrorCode, LevelPlan, PlanSource, Tier } from '@roomquest/schema';
 import type { FallbackReason } from './director/types.js';
 import { DEFAULT_TIER } from './director/types.js';
-import {
-  ROOM_UNPLAYABLE,
-  type RelaxedRule,
-} from './director/schema-pending.js';
+import type { RelaxedRule } from '@roomquest/schema';
+import { ROOM_UNPLAYABLE } from './director/relaxed.js';
 import type {
   GamePhase,
   GameEvent,

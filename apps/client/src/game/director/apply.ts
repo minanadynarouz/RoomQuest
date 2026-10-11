@@ -5,7 +5,7 @@
  */
 
 import type { GameStore } from '../store.js';
-import { ROOM_UNPLAYABLE } from './schema-pending.js';
+import { ROOM_UNPLAYABLE } from './relaxed.js';
 import type { DirectorResult } from './types.js';
 
 export function applyDirectorResult(

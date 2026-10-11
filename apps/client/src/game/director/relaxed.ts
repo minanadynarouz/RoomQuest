@@ -1,13 +1,11 @@
 /**
- * Local stand-ins until Backend lands RelaxedRule + room-unplayable
- * on `@roomquest/schema`.
- *
- * TODO: switch to @roomquest/schema
+ * Client helpers for `RelaxedRule` and `room-unplayable` from
+ * `@roomquest/schema`.
  */
 
-export type RelaxedRule = string;
+import { FallbackReason, RelaxedRule } from '@roomquest/schema';
 
-export const ROOM_UNPLAYABLE = 'room-unplayable' as const;
+export const ROOM_UNPLAYABLE = FallbackReason.enum['room-unplayable'];
 
 export type RoomUnplayableReason = typeof ROOM_UNPLAYABLE;
 
@@ -22,11 +20,12 @@ export function readRelaxed(source: unknown): RelaxedRule[] {
   const out: RelaxedRule[] = [];
   const seen = new Set<string>();
   for (const item of raw) {
-    if (typeof item !== 'string' || item.length === 0 || seen.has(item)) {
+    const parsed = RelaxedRule.safeParse(item);
+    if (!parsed.success || seen.has(parsed.data)) {
       continue;
     }
-    seen.add(item);
-    out.push(item);
+    seen.add(parsed.data);
+    out.push(parsed.data);
   }
   return out;
 }

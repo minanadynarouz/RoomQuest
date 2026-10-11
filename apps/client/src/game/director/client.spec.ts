@@ -1037,7 +1037,7 @@ describe('applyDirectorResult', () => {
       usedFallback: true,
       fallbackReason: 'room-unplayable',
       issues: [{ code: 'GOAL_UNREACHABLE', message: 'no path' }],
-      relaxed: ['PATH_DISTANCE_TOO_SHORT'],
+      relaxed: ['minPath'],
     });
     expect(store.phase).toBe('roomUnplayable');
     expect(store.plan).toBeNull();
@@ -1046,7 +1046,7 @@ describe('applyDirectorResult', () => {
       true
     );
     expect(store.directorRequest.value.relaxed).toEqual([
-      'PATH_DISTANCE_TOO_SHORT',
+      'minPath',
     ]);
   });
 

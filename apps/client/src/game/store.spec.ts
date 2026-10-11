@@ -257,7 +257,7 @@ describe('createGameStore', () => {
       store.startSurveying();
       store.markRoomUnplayable({
         issues: [{ code: 'GOAL_UNREACHABLE', message: 'no path' }],
-        relaxed: ['PATH_DISTANCE_TOO_SHORT'],
+        relaxed: ['minPath'],
       });
       expect(store.phase).toBe('roomUnplayable');
       expect(store.fallbackReason).toBe('room-unplayable');
@@ -266,7 +266,7 @@ describe('createGameStore', () => {
         true
       );
       expect(store.directorRequest.value.relaxed).toEqual([
-        'PATH_DISTANCE_TOO_SHORT',
+        'minPath',
       ]);
       store.startSurveying();
       expect(store.phase).toBe('surveying');

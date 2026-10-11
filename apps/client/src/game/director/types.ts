@@ -18,10 +18,8 @@ import type {
   Theme,
   Tier,
 } from '@roomquest/schema';
-import type {
-  RelaxedRule,
-  RoomUnplayableReason,
-} from './schema-pending.js';
+import type { RelaxedRule } from '@roomquest/schema';
+import type { RoomUnplayableReason } from './relaxed.js';
 
 /** Client budget for accepting an API plan (Architecture §6). */
 export const DIRECTOR_BUDGET_MS = 8000;
@@ -97,7 +95,8 @@ export type SnapFn = (
 
 export type RepairedBy = 'snap' | 'repairPlan';
 
-export type { RelaxedRule, RoomUnplayableReason } from './schema-pending.js';
+export type { RelaxedRule } from '@roomquest/schema';
+export type { RoomUnplayableReason } from './relaxed.js';
 
 /**
  * Narrow fetch contract so tests can mock without a full Request polyfill.
