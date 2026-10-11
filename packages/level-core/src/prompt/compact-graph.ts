@@ -5,6 +5,8 @@ import type {
   SurfaceLabel,
   SurfaceReach,
 } from '@roomquest/schema';
+import { routeLinks } from '../route/route-links';
+import type { LinkKind } from '../generate/links';
 import { hintedSurfaces, type CompactHintedSlot } from './slot-ids';
 
 export type { CompactHintedSlot } from './slot-ids';
@@ -28,6 +30,8 @@ export interface CompactPromptNode {
   uv?: [number, number, number, number];
   /** Up to 4 non-overlapping slots with graph-unique ids and u/v. */
   slots?: CompactHintedSlot[];
+  /** Surfaces the explorer can reach in one hop (see `routeLinks`). */
+  links?: { to: string; kind: LinkKind }[];
 }
 
 /** Opt-in extras for {@link compactGraphForPrompt}. Default is unchanged. */
@@ -98,6 +102,8 @@ export function compactGraphForPrompt(
     opts?.hints === true
       ? hintedSurfaces(graph, { seed: opts.seed })
       : undefined;
+  const links =
+    opts?.hints === true ? routeLinks(graph, { seed: opts.seed }) : undefined;
   return {
     mode: graph.mode,
     nodes: graph.nodes.map((node) => {
@@ -124,6 +130,10 @@ export function compactGraphForPrompt(
           u: slot.u,
           v: slot.v,
         }));
+      }
+      const hops = links?.[node.id];
+      if (hops) {
+        compact.links = hops.map((hop) => ({ to: hop.to, kind: hop.kind }));
       }
       return compact;
     }),

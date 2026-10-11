@@ -26,3 +26,4 @@ export type {
   SlotResolveIssueCode,
   SlotResolveOptions,
 } from './prompt';
+export * from './route';
