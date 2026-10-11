@@ -23,6 +23,12 @@ const LlmCallTelemetrySchema = z.object({
   latencyMs: z.number(),
   ttftMs: z.number().nullable(),
   outcome: z.enum(['ok', 'invalid', 'repaired', 'timeout', 'error']),
+  /** Null when the transport did not stream (not obtainable). */
+  ttfbMs: z.number().nullable().default(null),
+  totalMs: z.number().optional(),
+  /** Gemini usageMetadata.cachedContentTokenCount. */
+  cachedTokens: z.number().nullable().default(null),
+  promptChars: z.number().nullable().default(null),
 });
 
 const PlacementArm = z.enum(['uv', 'slot', 'route']);
@@ -173,21 +179,31 @@ export function matrixLabel(report: {
   seedDates: readonly string[];
   tiers: readonly string[];
   placements?: readonly string[];
-  aggregate: { runCount: number };
+  aggregate: {
+    runCount: number;
+    byPlacement?: Record<string, { runCount: number }>;
+  };
+  runs?: readonly { requestedPlacement: string }[];
 }): string {
   const rooms = report.roomIds.length;
   const tiers = report.tiers.length;
   const seeds = report.seedDates.length;
-  const arms = report.placements?.length ?? 1;
-  const cells = rooms * tiers * seeds * arms;
+  const placements = report.placements ?? ['uv'];
+  const arms = placements.length;
+  const cells = rooms * tiers * seeds;
   const runs = report.aggregate.runCount;
-  const armLabel =
-    arms > 1 ? ` × ${String(arms)} placement arms` : '';
+  const armLabel = arms > 1 ? ` × ${String(arms)} placement arms` : '';
   const shape = `${String(rooms)} rooms × ${String(tiers)} tiers × ${String(seeds)} seeds${armLabel}`;
-  if (runs === cells) {
-    return `${shape} = ${String(runs)} runs`;
-  }
-  return `${shape} = ${String(cells)} cells; ${String(runs)} runs`;
+  const perArm = placements
+    .map((arm) => {
+      const count =
+        report.runs?.filter((run) => run.requestedPlacement === arm).length ??
+        report.aggregate.byPlacement?.[arm]?.runCount ??
+        0;
+      return `${arm}=${String(count)}`;
+    })
+    .join(', ');
+  return `${shape} (${String(cells)} cells per arm); runs per arm: ${perArm}; total ${String(runs)} runs`;
 }
 
 function countIssueCodes(

@@ -13,7 +13,10 @@ import {
 } from '../src/director/models';
 import {
   DEFAULT_DIRECTOR_THINKING_ID,
+  resolveDecorationThinkingId,
   resolveDirectorThinkingId,
+  thinkingConfigWithFallback,
+  thinkingFallbackLevels,
   thinkingVariantById,
 } from '../src/director/thinking';
 import { PROMPT_VERSION } from '../src/director/prompts';
@@ -146,6 +149,54 @@ export function skipReason(missingKeys: string[]): string {
  * Run the director over rooms × tiers × seeds by calling `runDirector`
  * directly (no HTTP, cache, or rate limits).
  */
+export interface EvalRunCell<R, T> {
+  room: R;
+  date: string;
+  tier: T;
+  placement: 'uv' | 'slot' | 'route';
+}
+
+/**
+ * Run order for the harness. One base sequence of (room, tier, seed) is
+ * built round-robin (rooms vary fastest, then tiers, then seeds) and cycled
+ * to `runsPerArm` entries (default: one full matrix pass). Every placement
+ * arm gets that identical sequence, interleaved: base[0]×arm0, base[0]×arm1,
+ * …, base[1]×arm0, … So `--runs N` means N runs per arm (N × arms total).
+ */
+export function evalRunCells<R, T>(
+  matrix: {
+    rooms: readonly R[];
+    seedDates: readonly string[];
+    tiers: readonly T[];
+    placements: readonly ('uv' | 'slot' | 'route')[];
+  },
+  runsPerArm?: number
+): EvalRunCell<R, T>[] {
+  const base: { room: R; date: string; tier: T }[] = [];
+  for (const date of matrix.seedDates) {
+    for (const tier of matrix.tiers) {
+      for (const room of matrix.rooms) {
+        base.push({ room, date, tier });
+      }
+    }
+  }
+  if (base.length === 0 || matrix.placements.length === 0) {
+    throw new Error('Eval harness produced an empty run matrix');
+  }
+  const perArm = runsPerArm ?? base.length;
+  const cells: EvalRunCell<R, T>[] = [];
+  for (let i = 0; i < perArm; i += 1) {
+    const step = base[i % base.length];
+    if (step === undefined) {
+      throw new Error('Eval harness: run matrix index out of range');
+    }
+    for (const placement of matrix.placements) {
+      cells.push({ ...step, placement });
+    }
+  }
+  return cells;
+}
+
 export async function runEvalHarness(
   options: EvalHarnessOptions
 ): Promise<EvalHarnessResult> {
@@ -217,37 +268,37 @@ export async function runEvalHarness(
         )
       : undefined;
 
+  const decorationThinkingId = resolveDecorationThinkingId(
+    process.env.DIRECTOR_DECORATION_THINKING
+  );
+  const liveDecoration =
+    !options.mock && googleApiKey !== undefined
+      ? wrapChatModel(
+          defaultDirectorChatFactory.createPrimary({
+            model: directorModel,
+            apiKey: googleApiKey,
+            thinking: thinkingConfigWithFallback(decorationThinkingId),
+          }),
+          'google',
+          directorModel,
+          { thinkingFallback: thinkingFallbackLevels(decorationThinkingId) }
+        )
+      : undefined;
+
   const placements = options.placements ?? ['uv'];
   if (placements.length === 0) {
     throw new Error('Eval harness needs at least one placement arm');
   }
 
-  // Round-robin: rooms vary fastest, then tiers, then seeds, then placement
-  // arms, so a short `--runs N` still spreads across every room.
-  const cells: {
-    room: (typeof rooms)[number];
-    date: string;
-    tier: (typeof tiers)[number];
-    placement: 'uv' | 'slot' | 'route';
-  }[] = [];
-  for (const placement of placements) {
-    for (const date of seedDates) {
-      for (const tier of tiers) {
-        for (const room of rooms) {
-          cells.push({ room, date, tier, placement });
-        }
-      }
-    }
-  }
-  if (cells.length === 0) {
-    throw new Error('Eval harness produced an empty run matrix');
-  }
-
-  const total = options.runCount ?? cells.length;
+  const cells = evalRunCells(
+    { rooms, seedDates, tiers, placements },
+    options.runCount
+  );
+  const total = cells.length;
   const runs: EvalRunRecord[] = [];
 
   for (let i = 0; i < total; i += 1) {
-    const cell = cells[i % cells.length];
+    const cell = cells[i];
     if (cell === undefined) {
       throw new Error('Eval harness: run matrix index out of range');
     }
@@ -287,6 +338,9 @@ export async function runEvalHarness(
 
     const outcome = await runDirector(request, {
       primary,
+      ...(options.mock || liveDecoration === undefined
+        ? {}
+        : { decoration: liveDecoration }),
       now,
       logger,
       placement,
@@ -329,7 +383,13 @@ export async function runEvalHarness(
           validatePlan(outcome.response.plan, room.graph).relaxed),
       ],
       estimatedCostUsd: runCost(outcome.telemetry),
-      telemetry: outcome.telemetry.map((row) => ({ ...row })),
+      telemetry: outcome.telemetry.map((row) => ({
+        ...row,
+        ttfbMs: row.ttfbMs ?? null,
+        totalMs: row.totalMs ?? row.latencyMs,
+        cachedTokens: row.cachedTokens ?? null,
+        promptChars: row.promptChars ?? null,
+      })),
       distinctSurfaces: variety.distinctSurfaces,
       distinctPieceTypes: variety.distinctPieceTypes,
       pieceTypes: variety.pieceTypes,

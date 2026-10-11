@@ -59,6 +59,7 @@ import {
 } from './structured-chat';
 import {
   logLlmCall,
+  promptCharCount,
   tokensFromRaw,
   type DirectorLogger,
   type LlmCallOutcome,
@@ -111,6 +112,17 @@ export interface RunDirectorOptions {
   quotaBreaker?: LlmQuotaBreaker;
   /** `DIRECTOR_PLACEMENT`: `uv` (default) or `slot`. */
   placement?: DirectorPlacementMode;
+  /**
+   * Chat for the route-arm decoration call only (DIRECTOR_DECORATION_THINKING).
+   * Defaults to `primary`.
+   */
+  decoration?: StructuredChat;
+}
+
+/** Start of one LLM call: wall-clock ms and the prompt's character size. */
+interface CallStart {
+  ms: number;
+  promptChars: number;
 }
 
 interface AttemptOk {
@@ -366,12 +378,13 @@ export async function runDirector(
 
   const record = (
     chat: StructuredChat,
-    callStarted: number,
+    callStarted: CallStart,
     outcome: LlmCallOutcome,
     raw?: unknown,
     ttftMs?: number | null
   ): void => {
     const tokens = tokensFromRaw(raw);
+    const totalMs = Math.max(0, now() - callStarted.ms);
     const row: LlmCallTelemetry = {
       provider: chat.provider,
       model: chat.model,
@@ -379,9 +392,13 @@ export async function runDirector(
       outputTokens: tokens.outputTokens,
       thinkingTokens: tokens.thinkingTokens,
       thoughtsTokenCount: tokens.thoughtsTokenCount,
-      latencyMs: Math.max(0, now() - callStarted),
+      latencyMs: totalMs,
       ttftMs: ttftMs ?? null,
       outcome,
+      ttfbMs: ttftMs ?? null,
+      totalMs,
+      cachedTokens: tokens.cachedTokens,
+      promptChars: callStarted.promptChars,
     };
     telemetry.push(row);
     logLlmCall(options.logger, row);
@@ -392,7 +409,10 @@ export async function runDirector(
     messages: (SystemMessage | HumanMessage)[],
     phase: 'draft' | 'repair'
   ): Promise<Attempt> => {
-    const callStarted = now();
+    const callStarted: CallStart = {
+      ms: now(),
+      promptChars: promptCharCount(messages),
+    };
     if (!deadline.canStartLlm(1)) {
       record(chat, callStarted, 'timeout');
       return { kind: 'timeout' };
@@ -514,7 +534,7 @@ export async function runDirector(
    * one and decorates it in ONE call (no LLM repair in this arm).
    */
   const runRoute = async (): Promise<DirectorOutcome> => {
-    const chat = options.primary;
+    const chat = options.decoration ?? options.primary;
     const candidates = candidateRoutes(request.graph, {
       seed,
       tier: request.tier,
@@ -534,7 +554,10 @@ export async function runDirector(
       buildDecorationMessages(candidates, { seed, tier: request.tier })
     );
 
-    const callStarted = now();
+    const callStarted: CallStart = {
+      ms: now(),
+      promptChars: promptCharCount(messages),
+    };
     if (!deadline.canStartLlm(1)) {
       record(chat, callStarted, 'timeout');
       return fallback('llm-timeout', 'route-decoration', {
