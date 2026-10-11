@@ -128,6 +128,12 @@ export const LevelResponse = z.object({
    * other arms and older servers.
    */
   lines: z.array(LevelLine).max(DECORATION_MAX_LINES).optional(),
+  /**
+   * Candidate route id chosen by the hybrid route arm when it produced the
+   * served plan (also returned on cache hits of such levels). Omitted for
+   * uv/slot, procedural, mock and fallback answers, and by older servers.
+   */
+  routeId: z.string().min(1).optional(),
 });
 export type LevelResponse = z.infer<typeof LevelResponse>;
 

@@ -277,3 +277,37 @@ describe('LevelsService cache + limiter', () => {
     expect(written.metadata).toEqual({ relaxed: [] });
   });
 });
+
+describe('LevelsService routeId (route-arm levels)', () => {
+  it('cache hit returns the stored routeId', async () => {
+    const { service } = await serviceWith({
+      cached: { ...cachedRow(validPlan), source: 'llm', metadata: { relaxed: [], routeId: 'r2' } },
+    });
+    const response = await service.create(request, 'device-1');
+    expect(response.source).toBe('cache');
+    expect(response.routeId).toBe('r2');
+  });
+
+  it('cache hit of a non-route level has no routeId', async () => {
+    const { service } = await serviceWith({ cached: cachedRow(validPlan) });
+    const response = await service.create(request, 'device-1');
+    expect('routeId' in response).toBe(false);
+  });
+
+  it('persists routeId in LevelCache.metadata on a route-arm miss', async () => {
+    const { service, persist, directorPlan } = await serviceWith({ cached: null });
+    directorPlan.mockResolvedValueOnce({ ...directorResponse(validPlan, 'llm'), routeId: 'r1' });
+    const response = await service.create(request, 'device-1');
+    expect(response.routeId).toBe('r1');
+    expect(persist).toHaveBeenCalledOnce();
+    const row = persist.mock.calls[0]?.[0] as { metadata: unknown };
+    expect(row.metadata).toEqual({ relaxed: [], routeId: 'r1' });
+  });
+
+  it('does not store routeId for non-route levels', async () => {
+    const { service, persist } = await serviceWith({ cached: null });
+    await service.create(request, 'device-1');
+    const row = persist.mock.calls[0]?.[0] as { metadata: unknown };
+    expect(row.metadata).toEqual({ relaxed: [] });
+  });
+});

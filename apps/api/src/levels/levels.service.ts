@@ -9,7 +9,10 @@ import { PROMPT_VERSION } from '../director/prompts';
 import { makeCacheKey } from './cache-key';
 import { CacheMissLimiter } from './cache-miss-limiter';
 import { LevelCacheRepository } from './level-cache.repository';
-import { cacheMetadataFromRelaxed } from './relaxed-metadata';
+import {
+  cacheMetadataFromRelaxed,
+  routeIdFromCacheMetadata,
+} from './relaxed-metadata';
 
 @Injectable()
 export class LevelsService {
@@ -47,7 +50,9 @@ export class LevelsService {
       if (parsed.success) {
         const validation = validatePlan(parsed.data, request.graph);
         if (validation.ok) {
+          const routeId = routeIdFromCacheMetadata(cached.metadata);
           return LevelResponse.parse({
+            ...(routeId === undefined ? {} : { routeId }),
             plan: parsed.data,
             source: 'cache',
             cacheKey,
@@ -92,7 +97,7 @@ export class LevelsService {
           plan: body.plan,
           source: body.source,
           model: body.model ?? null,
-          metadata: cacheMetadataFromRelaxed(body.relaxed ?? []),
+          metadata: cacheMetadataFromRelaxed(body.relaxed ?? [], body.routeId),
         },
         startedMs,
         now()

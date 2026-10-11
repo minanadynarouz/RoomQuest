@@ -89,6 +89,8 @@ describe('DIRECTOR_PLACEMENT=route', () => {
         expect(parsed.relaxed).toEqual(chosen?.relaxed);
         expect(parsed.lines?.length).toBeGreaterThan(0);
         expect(outcome.routeDecoration?.routeId).toBe(answer.routeId);
+        expect(parsed.routeId).toBe(answer.routeId);
+        expect(chosen).toBeDefined();
         expect(outcome.routeDecoration?.droppedLines).toBe(0);
         expect(outcome.routeDecoration?.bannedWordHits).toBe(0);
         const schema = calls[0]?.responseSchema ?? {};
@@ -120,6 +122,8 @@ describe('DIRECTOR_PLACEMENT=route', () => {
     expect(outcome.response.fallbackReason).toBe('llm-invalid');
     expect(outcome.failedAt).toBe('route-decoration');
     expect(outcome.validation.firstTry[0]?.code).toBe('UNKNOWN_ROUTE_ID');
+    expect(outcome.response.routeId).toBeUndefined();
+    expect('routeId' in outcome.response).toBe(false);
     expect(validatePlan(outcome.response.plan, request.graph).ok).toBe(true);
   });
 

@@ -788,6 +788,7 @@ export async function runDirector(
           repairs,
           relaxed,
           ...(applied.lines.length > 0 ? { lines: applied.lines } : {}),
+          routeId: parsed.decoration.routeId,
         }),
         telemetry,
       },
