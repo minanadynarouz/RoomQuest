@@ -44,7 +44,7 @@ export interface GeneratePlanResult {
   relaxed: RelaxedRule[];
 }
 
-const LABEL_WORD: Record<SurfaceLabel, string> = {
+export const LABEL_WORD: Record<SurfaceLabel, string> = {
   table: 'table',
   desk: 'desk',
   couch: 'couch',
@@ -138,6 +138,44 @@ function generatePlanInner(
     shortestPath(startNode.id, goalNode.id, links) ??
     [startNode.id, goalNode.id];
 
+  return planAlongPath(graph, seed, tier, {
+    rng,
+    theme,
+    title,
+    start: startNode,
+    goal: goalNode,
+    path,
+    links,
+  });
+}
+
+/** Inputs for {@link planAlongPath}: a fixed start→goal walk over `links`. */
+export interface PathPlanInput {
+  rng: Rng;
+  theme: Theme;
+  title: string;
+  start: SurfaceNode;
+  goal: SurfaceNode;
+  path: readonly string[];
+  links: readonly Link[];
+}
+
+/**
+ * generatePlan's placement / beat / dialogue / par logic along a given
+ * path. generatePlan calls this with its Dijkstra path; candidateRoutes
+ * and repairRoute call it with alternative paths so tier variety (gem
+ * count, slime, platform, lever/gate) is shared, not duplicated.
+ */
+export function planAlongPath(
+  graph: SurfaceGraph,
+  seed: string,
+  tier: Tier,
+  input: PathPlanInput
+): LevelPlan {
+  const nodes = graph.nodes;
+  const { rng, theme, title, path, links } = input;
+  const startNode = input.start;
+  const goalNode = input.goal;
   const placements: Placement[] = [];
   const id = makeIdFactory();
 
@@ -252,7 +290,7 @@ function generatePlanInner(
   return repaired.result.ok ? repaired.plan : plan;
 }
 
-function pickStart(nodes: readonly SurfaceNode[]): SurfaceNode {
+export function pickStart(nodes: readonly SurfaceNode[]): SurfaceNode {
   return pickHutSurface(nodes) ?? fallbackNode();
 }
 
@@ -271,7 +309,7 @@ function fallbackNode(): SurfaceNode {
   };
 }
 
-function pickGoal(
+export function pickGoal(
   start: SurfaceNode,
   nodes: readonly SurfaceNode[],
   reachable: ReadonlySet<string>
