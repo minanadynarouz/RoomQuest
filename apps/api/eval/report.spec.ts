@@ -34,6 +34,9 @@ function run(relaxed: EvalRunRecord['relaxed']): EvalRunRecord {
     lineCount: 0,
     droppedLines: 0,
     bannedWordHits: 0,
+    hedgeFired: false,
+    hedgeWinner: null,
+    hedgeSkippedReason: null,
   };
 }
 
@@ -87,5 +90,21 @@ describe('eval aggregate relaxedPct', () => {
       'llm-repair-gate': 2,
       none: 1,
     });
+  });
+});
+
+describe('hedge aggregate', () => {
+  it('reports hedge rate, winner counts and skip reasons', () => {
+    const runs: EvalRunRecord[] = [
+      { ...run([]), hedgeFired: true, hedgeWinner: 'second' },
+      { ...run([]), hedgeFired: true, hedgeWinner: 'first' },
+      { ...run([]), hedgeFired: true, hedgeWinner: 'second' },
+      { ...run([]), hedgeSkippedReason: 'near-daily-cap' },
+    ];
+    const agg = aggregateRuns(runs);
+    expect(agg.hedgeRatePct).toBe(75);
+    expect(agg.hedgeFiredCount).toBe(3);
+    expect(agg.hedgeWinnerCounts).toEqual({ first: 1, second: 2, none: 0 });
+    expect(agg.hedgeSkippedReasonCounts).toEqual({ 'near-daily-cap': 1 });
   });
 });

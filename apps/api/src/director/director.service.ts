@@ -18,6 +18,7 @@ import {
   type DirectorOutcome,
 } from './run-director';
 import type { DirectorFailurePoint } from './issue-trace';
+import { HEDGE_DAILY_CAP_FRACTION, type HedgeReserveResult } from './hedge';
 import {
   resolveDecorationThinkingId,
   resolveDirectorThinkingId,
@@ -44,6 +45,29 @@ export class DirectorService {
     @Inject(DIRECTOR_RUNTIME)
     private readonly runtime?: DirectorRuntime
   ) {}
+
+  /**
+   * Reserve one LLM_DAILY_MAX slot for the route-arm hedge call. Skips when
+   * the day's usage is already at >= 80 % of the cap (hedges are optional).
+   */
+  async reserveHedgeSlot(): Promise<HedgeReserveResult> {
+    if (this.dailyUsage === undefined) {
+      return { ok: true };
+    }
+    const snap = await this.dailyUsage.snapshot();
+    if (snap.failClosed) {
+      return { ok: false, reason: 'usage-unavailable' };
+    }
+    if (snap.used >= HEDGE_DAILY_CAP_FRACTION * snap.max) {
+      return { ok: false, reason: 'near-daily-cap' };
+    }
+    const slot = await this.dailyUsage.consume();
+    if (slot === 'ok') return { ok: true };
+    return {
+      ok: false,
+      reason: slot === 'capped' ? 'daily-capped' : 'usage-unavailable',
+    };
+  }
 
   async plan(request: LevelRequest): Promise<LevelResponse> {
     const outcome = await this.run(request);
@@ -136,6 +160,10 @@ export class DirectorService {
       now,
       startedMs,
       quotaBreaker: this.quotaBreaker,
+      hedge: {
+        delayMs: this.config.get('DIRECTOR_HEDGE_MS', { infer: true }),
+        reserve: () => this.reserveHedgeSlot(),
+      },
     });
   }
 }

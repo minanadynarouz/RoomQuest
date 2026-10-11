@@ -22,7 +22,9 @@ const LlmCallTelemetrySchema = z.object({
   thoughtsTokenCount: z.number().nullable(),
   latencyMs: z.number(),
   ttftMs: z.number().nullable(),
-  outcome: z.enum(['ok', 'invalid', 'repaired', 'timeout', 'error']),
+  outcome: z.enum(['ok', 'invalid', 'repaired', 'timeout', 'error', 'aborted']),
+  hedgeRole: z.enum(['first', 'second']).optional(),
+  startOffsetMs: z.number().optional(),
   /** Null when the transport did not stream (not obtainable). */
   ttfbMs: z.number().nullable().default(null),
   totalMs: z.number().optional(),
@@ -80,6 +82,10 @@ export const EvalRunRecordSchema = z.object({
   lineCount: z.number().int().default(0),
   droppedLines: z.number().int().default(0),
   bannedWordHits: z.number().int().default(0),
+  /** Route arm hedged decoration request (DIRECTOR_HEDGE_MS). */
+  hedgeFired: z.boolean().default(false),
+  hedgeWinner: z.enum(['first', 'second']).nullable().default(null),
+  hedgeSkippedReason: z.string().nullable().default(null),
   firstTryPlan: z.unknown().optional(),
   firstTryRawText: z.string().nullable().optional(),
 });
@@ -143,6 +149,13 @@ export const EvalAggregateSchema = z.object({
     afterLocal: z.record(z.string(), z.number()),
     afterLlmRepair: z.record(z.string(), z.number()),
   }),
+  /** Share of runs (percent) whose route decoration fired a hedge call. */
+  hedgeRatePct: z.number().default(0),
+  hedgeFiredCount: z.number().int().default(0),
+  hedgeWinnerCounts: z
+    .object({ first: z.number().int(), second: z.number().int(), none: z.number().int() })
+    .default({ first: 0, second: 0, none: 0 }),
+  hedgeSkippedReasonCounts: z.record(z.string(), z.number()).default({}),
   repairedByCounts: z.object({
     local: z.number().int(),
     llm: z.number().int(),
@@ -459,6 +472,29 @@ export function aggregateRuns(runs: readonly EvalRunRecord[]): EvalAggregate {
       afterLlmRepair: countIssueCodes(runs, 'issuesAfterLlmRepair'),
     },
     repairedByCounts,
+    ...hedgeAggregate(runs),
+  };
+}
+
+/** Hedge rate and winner counts across runs (hedged route decorations). */
+export function hedgeAggregate(runs: readonly EvalRunRecord[]): {
+  hedgeRatePct: number;
+  hedgeFiredCount: number;
+  hedgeWinnerCounts: { first: number; second: number; none: number };
+  hedgeSkippedReasonCounts: Record<string, number>;
+} {
+  const fired = runs.filter((run) => run.hedgeFired);
+  const hedgeWinnerCounts = { first: 0, second: 0, none: 0 };
+  for (const run of fired) {
+    hedgeWinnerCounts[run.hedgeWinner ?? 'none'] += 1;
+  }
+  const skipped = runs.filter((run) => run.hedgeSkippedReason !== null);
+  return {
+    hedgeRatePct:
+      runs.length === 0 ? 0 : Math.round((fired.length / runs.length) * 1000) / 10,
+    hedgeFiredCount: fired.length,
+    hedgeWinnerCounts,
+    hedgeSkippedReasonCounts: countBy(skipped, (run) => run.hedgeSkippedReason ?? 'none'),
   };
 }
 
@@ -651,6 +687,16 @@ ${countRows(report.aggregate.failedAtCounts, String)}
 | --- | --- |
 ${modelRows.length > 0 ? modelRows : '| — | 0 |'}
 
+### Hedged decoration requests
+
+| Metric | Value |
+| --- | --- |
+| hedge rate | ${formatPct(report.aggregate.hedgeRatePct)} (${String(report.aggregate.hedgeFiredCount)}/${String(report.aggregate.runCount)}) |
+| winner first | ${String(report.aggregate.hedgeWinnerCounts.first)} |
+| winner second | ${String(report.aggregate.hedgeWinnerCounts.second)} |
+| no winner | ${String(report.aggregate.hedgeWinnerCounts.none)} |
+| skipped | ${Object.entries(report.aggregate.hedgeSkippedReasonCounts).map(([reason, count]) => `${reason}=${String(count)}`).join(', ') || 'none'} |
+
 ### Repair stage that fixed the plan
 
 | Stage | Runs |
@@ -707,6 +753,7 @@ export function printSummary(report: EvalReport): void {
     `p50: ${report.aggregate.p50LatencyMs.toFixed(1)} ms  p95: ${report.aggregate.p95LatencyMs.toFixed(1)} ms`,
     `p50 TTFT: ${report.aggregate.p50TtftMs.toFixed(1)} ms  p95 TTFT: ${report.aggregate.p95TtftMs.toFixed(1)} ms`,
     `thoughtsTokenCount: ${String(report.aggregate.thoughtsTokenCount)}`,
+    `hedge: rate=${report.aggregate.hedgeRatePct.toFixed(1)}% fired=${String(report.aggregate.hedgeFiredCount)} winner first=${String(report.aggregate.hedgeWinnerCounts.first)} second=${String(report.aggregate.hedgeWinnerCounts.second)} none=${String(report.aggregate.hedgeWinnerCounts.none)}`,
     `mean distinct surfaces: ${report.aggregate.meanDistinctSurfaces.toFixed(1)}  pieces: ${report.aggregate.meanDistinctPieceTypes.toFixed(1)}`,
     `mean pairwise Jaccard piece-types: ${report.aggregate.meanPairwisePieceTypeJaccard.toFixed(3)}  surface-labels: ${report.aggregate.meanPairwiseSurfaceLabelJaccard.toFixed(3)}`,
     `tokens: ${String(report.aggregate.inputTokens)} in / ${String(report.aggregate.thoughtsTokenCount)} thoughts / ${String(report.aggregate.outputTokens)} out`,

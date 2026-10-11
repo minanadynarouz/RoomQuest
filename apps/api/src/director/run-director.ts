@@ -1,5 +1,11 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import {
+  hedgedInvoke,
+  type HedgeCallRecord,
+  type HedgeOptions,
+  type HedgeTrace,
+} from './hedge';
+import {
   applyDecoration,
   candidateRoutes,
   generatePlan,
@@ -86,6 +92,8 @@ export interface DirectorOutcome {
   firstTryPlan: unknown;
   /** Raw first-try model text when structured parse failed. */
   firstTryRawText: string | null;
+  /** Route arm: hedged decoration request bookkeeping; null otherwise. */
+  hedge?: HedgeTrace | null;
 }
 
 export interface RouteDecorationTrace {
@@ -110,6 +118,12 @@ export interface RunDirectorOptions {
   promptVersion?: string;
   logger: DirectorLogger;
   quotaBreaker?: LlmQuotaBreaker;
+  /**
+   * Route-arm hedged decoration request (DIRECTOR_HEDGE_MS). Omitted or
+   * delayMs 0: no hedge. `reserve` takes one LLM_DAILY_MAX slot (and
+   * enforces the 80 % rule) before the hedge fires.
+   */
+  hedge?: { delayMs: number; reserve?: HedgeOptions['reserve'] };
   /** `DIRECTOR_PLACEMENT`: `uv` (default) or `slot`. */
   placement?: DirectorPlacementMode;
   /**
@@ -123,6 +137,12 @@ export interface RunDirectorOptions {
 interface CallStart {
   ms: number;
   promptChars: number;
+  /** Extra telemetry fields (hedge role) for this call's row. */
+  extra?: HedgeRoleTag;
+}
+
+interface HedgeRoleTag {
+  hedgeRole?: 'first' | 'second';
 }
 
 interface AttemptOk {
@@ -399,6 +419,44 @@ export async function runDirector(
       totalMs,
       cachedTokens: tokens.cachedTokens,
       promptChars: callStarted.promptChars,
+      startOffsetMs: Math.max(0, callStarted.ms - startedMs),
+      ...callStarted.extra,
+    };
+    telemetry.push(row);
+    logLlmCall(options.logger, row);
+  };
+
+  let routeHedge: HedgeTrace | null = null;
+
+  /** Telemetry row for a hedged call that was not the chosen one. */
+  const recordCall = (
+    chat: StructuredChat,
+    rec: HedgeCallRecord,
+    extra: HedgeRoleTag
+  ): void => {
+    const tokens = tokensFromRaw(rec.call?.raw);
+    const totalMs = Math.max(0, (rec.endedMs ?? now()) - rec.startedMs);
+    let outcome: LlmCallOutcome;
+    if (rec.outcome === 'aborted') outcome = 'aborted';
+    else if (rec.outcome === 'unusable') outcome = 'invalid';
+    else if (rec.outcome === 'ok') outcome = 'ok';
+    else outcome = isTimeoutError(rec.error) ? 'timeout' : 'error';
+    const row: LlmCallTelemetry = {
+      provider: chat.provider,
+      model: chat.model,
+      inputTokens: tokens.inputTokens,
+      outputTokens: tokens.outputTokens,
+      thinkingTokens: tokens.thinkingTokens,
+      thoughtsTokenCount: tokens.thoughtsTokenCount,
+      latencyMs: totalMs,
+      ttftMs: rec.call?.ttftMs ?? null,
+      outcome,
+      ttfbMs: rec.call?.ttftMs ?? null,
+      totalMs,
+      cachedTokens: tokens.cachedTokens,
+      promptChars: null,
+      startOffsetMs: Math.max(0, rec.startedMs - startedMs),
+      ...extra,
     };
     telemetry.push(row);
     logLlmCall(options.logger, row);
@@ -564,14 +622,52 @@ export async function runDirector(
         routeDecoration: trace,
       });
     }
-    let call: Awaited<ReturnType<StructuredChat['invokeStructured']>>;
-    try {
-      call = await chat.invokeStructured(
-        messages,
-        deadline.signal,
-        routeCallOptions(enums)
+    const hedged = await hedgedInvoke(
+      (signal) =>
+        chat.invokeStructured(messages, signal, routeCallOptions(enums)),
+      deadline.signal,
+      {
+        delayMs: options.hedge?.delayMs ?? 0,
+        breakerOpen: () => options.quotaBreaker?.isOpen() ?? false,
+        reserve: options.hedge?.reserve,
+      },
+      (result) => {
+        const candidate = structuredCandidate(result);
+        return candidate !== undefined && candidate !== null;
+      },
+      now
+    );
+    routeHedge = {
+      hedgeFired: hedged.hedgeFired,
+      hedgeWinner: hedged.hedgeWinner,
+      hedgeSkippedReason: hedged.hedgeSkippedReason,
+    };
+    if (hedged.hedgeFired) {
+      options.logger.log(
+        `director.hedge fired winner=${String(hedged.hedgeWinner)} calls=${hedged.calls
+          .map((rec) => `${rec.role}:${String(rec.outcome)}:${String((rec.endedMs ?? now()) - rec.startedMs)}ms`)
+          .join(',')}`
       );
-    } catch (err) {
+    }
+    const hedgeRole = (role: 'first' | 'second'): HedgeRoleTag =>
+      hedged.hedgeFired ? { hedgeRole: role } : {};
+    // One telemetry row per call: the non-chosen ones here (with their own
+    // duration), the chosen one below with its final outcome.
+    for (const rec of hedged.calls) {
+      if (rec.role === hedged.callRole) continue;
+      if (hedged.call === undefined && rec === hedged.calls[0]) continue;
+      recordCall(chat, rec, hedgeRole(rec.role));
+    }
+    const chosenRec =
+      hedged.calls.find((rec) => rec.role === hedged.callRole) ??
+      hedged.calls[0];
+    if (chosenRec !== undefined) {
+      callStarted.ms = chosenRec.startedMs;
+      callStarted.extra = hedgeRole(chosenRec.role);
+    }
+    const call = hedged.call;
+    if (call === undefined) {
+      const err = hedged.error;
       if (isQuotaError(err)) {
         options.quotaBreaker?.trip(err);
         record(chat, callStarted, 'error');
@@ -708,7 +804,8 @@ export async function runDirector(
 
   try {
     if (placement === 'route') {
-      return await runRoute();
+      const routed = await runRoute();
+      return { ...routed, hedge: routeHedge };
     }
     const draftMessages = [
       new SystemMessage(SYSTEM_PREFIX),
