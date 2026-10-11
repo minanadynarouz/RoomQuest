@@ -5,7 +5,8 @@
 
 import type { Issue } from '@roomquest/level-core';
 import type { ErrorCode, LevelPlan, PlanSource, Tier } from '@roomquest/schema';
-import type { FallbackReason } from './director/types.js';
+import type { FallbackReason, RepairedBy } from './director/types.js';
+import type { RelaxedRule } from './director/schema-pending.js';
 import type { StarCount } from './stars.js';
 
 /** In-flight director POST, for the room-reading animation. */
@@ -25,6 +26,10 @@ export interface DirectorRequestState {
   fallbackReason?: string;
   /** `X-Request-Id` when CORS exposes it; otherwise omitted. */
   requestId?: string;
+  /** Local snap / repairPlan step that made the plan validate. */
+  repairedBy?: RepairedBy;
+  /** Relaxed validation rule ids from the plan or validator. */
+  relaxed?: RelaxedRule[];
 }
 
 export const IDLE_DIRECTOR_REQUEST: DirectorRequestState = { status: 'idle' };
@@ -49,7 +54,7 @@ export interface StartBuildingOptions {
 
 /**
  * Game phase state machine
- * landing → requesting → surveying → building → playing ⇄ paused → won | noSurfaces | error
+ * landing → requesting → surveying → building → playing ⇄ paused → won | noSurfaces | roomUnplayable | error
  */
 export type GamePhase =
   | 'landing'
@@ -60,6 +65,7 @@ export type GamePhase =
   | 'paused'
   | 'won'
   | 'noSurfaces'
+  | 'roomUnplayable'
   | 'error';
 
 /**
@@ -142,9 +148,12 @@ export type GameEvent =
       fallbackReason?: string;
       durationMs: number;
       requestId?: string;
+      repairedBy?: RepairedBy;
+      relaxed?: RelaxedRule[];
       timestamp: number;
       beatIndex: number;
-    };
+    }
+  | { type: 'roomUnplayable'; timestamp: number; beatIndex: number };
 
 /** Reasons the explorer waits. X-07 adds `unalignedPlatform`. */
 export type ExplorerBlockReason =

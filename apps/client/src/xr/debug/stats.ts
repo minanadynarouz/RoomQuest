@@ -4,6 +4,7 @@
  */
 
 import type { FallbackReason } from '../../game/director/types.js';
+import type { RelaxedRule, RepairedBy } from '../../game/director/types.js';
 import type { DirectorRequestStatus } from '../../game/types.js';
 import type { PlanSource } from '@roomquest/schema';
 import type { RollingFps } from './rolling-fps.js';
@@ -29,6 +30,8 @@ export interface RqPerfStats {
   validationIssues: number;
   directorStatus: DirectorRequestStatus;
   requestId: string | null;
+  repairedBy: RepairedBy | null;
+  relaxed: readonly RelaxedRule[];
 }
 
 export const EMPTY_PERF_STATS: RqPerfStats = {
@@ -43,6 +46,8 @@ export const EMPTY_PERF_STATS: RqPerfStats = {
   validationIssues: 0,
   directorStatus: 'idle',
   requestId: null,
+  repairedBy: null,
+  relaxed: [],
 };
 
 export function readRendererInfo(
@@ -67,6 +72,8 @@ export interface PerfStatsInput {
   validationIssues: number;
   directorStatus?: DirectorRequestStatus;
   requestId?: string | null;
+  repairedBy?: RepairedBy | null;
+  relaxed?: readonly RelaxedRule[];
 }
 
 export function collectPerfStats(input: PerfStatsInput): RqPerfStats {
@@ -85,6 +92,8 @@ export function collectPerfStats(input: PerfStatsInput): RqPerfStats {
     validationIssues: input.validationIssues,
     directorStatus: input.directorStatus ?? 'idle',
     requestId: input.requestId ?? null,
+    repairedBy: input.repairedBy ?? null,
+    relaxed: input.relaxed ?? [],
   };
 }
 
@@ -100,6 +109,8 @@ export function copyPerfStats(from: RqPerfStats, into: RqPerfStats): void {
   into.validationIssues = from.validationIssues;
   into.directorStatus = from.directorStatus;
   into.requestId = from.requestId;
+  into.repairedBy = from.repairedBy;
+  into.relaxed = from.relaxed;
 }
 
 export function perfSignature(stats: RqPerfStats): string {
@@ -115,5 +126,7 @@ export function perfSignature(stats: RqPerfStats): string {
     stats.validationIssues,
     stats.directorStatus,
     stats.requestId ?? '',
+    stats.repairedBy ?? '',
+    stats.relaxed.join(','),
   ].join('|');
 }
