@@ -77,7 +77,7 @@ export function applyDecoration(
   }
 
   const seenBeats = new Set<string>();
-  for (const hazard of decoration.hazards) {
+  for (const hazard of decoration.hazards ?? []) {
     if (seenBeats.has(hazard.beat)) {
       replaced.push(`extra hazard on beat ${hazard.beat} dropped`);
       continue;

@@ -16,12 +16,15 @@ export const LevelDecorationLLM = z.object({
   routeId: z.string(),
   theme: z.string(),
   twistBeat: z.string(),
-  hazards: z.array(
-    z.object({
-      beat: z.string(),
-      type: z.string(),
-    })
-  ),
+  /** Omitted when the request offers no hazard types. */
+  hazards: z
+    .array(
+      z.object({
+        beat: z.string(),
+        type: z.string(),
+      })
+    )
+    .optional(),
   lines: z
     .array(
       z.object({
@@ -49,30 +52,46 @@ function stringEnum(values: readonly string[], label: string) {
   return z.enum([first, ...rest]);
 }
 
+function linesSchema(beat: z.ZodType<string>) {
+  return z
+    .array(
+      z.object({
+        beat,
+        text: z.string().max(DECORATION_LINE_MAX_CHARS),
+      })
+    )
+    .max(DECORATION_MAX_LINES)
+    .optional();
+}
+
 /**
  * Per-request decoration schema: ids become string enums (Gemini-safe, no
  * `pattern`). Parse output with this zod schema after running the API's
  * decoration sanitizer; send {@link buildLevelDecorationGeminiSchema} on the
  * wire.
+ *
+ * `routeIds` and `beats` must be non-empty (throws otherwise). When
+ * `hazardTypes` is empty the `hazards` property is omitted entirely, since
+ * Gemini rejects an empty `enum`; the parse result then has no `hazards`.
  */
 export function buildLevelDecorationSchema(enums: LevelDecorationEnums) {
   const routeId = stringEnum(enums.routeIds, 'routeId');
   const beat = stringEnum(enums.beats, 'beat');
+  if ([...new Set(enums.hazardTypes)].length === 0) {
+    return z.object({
+      routeId,
+      theme: z.string(),
+      twistBeat: beat,
+      lines: linesSchema(beat),
+    });
+  }
   const hazardType = stringEnum(enums.hazardTypes, 'hazard type');
   return z.object({
     routeId,
     theme: z.string(),
     twistBeat: beat,
     hazards: z.array(z.object({ beat, type: hazardType })),
-    lines: z
-      .array(
-        z.object({
-          beat,
-          text: z.string().max(DECORATION_LINE_MAX_CHARS),
-        })
-      )
-      .max(DECORATION_MAX_LINES)
-      .optional(),
+    lines: linesSchema(beat),
   });
 }
 

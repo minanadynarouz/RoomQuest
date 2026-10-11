@@ -18,7 +18,13 @@ import {
   type DirectorOutcome,
 } from './run-director';
 import type { DirectorFailurePoint } from './issue-trace';
-import { resolveDirectorThinkingId, thinkingConfigForId } from './thinking';
+import {
+  resolveDecorationThinkingId,
+  resolveDirectorThinkingId,
+  thinkingConfigForId,
+  thinkingConfigWithFallback,
+  thinkingFallbackLevels,
+} from './thinking';
 
 @Injectable()
 export class DirectorService {
@@ -98,15 +104,34 @@ export class DirectorService {
       directorModel
     );
 
+    const placement = this.config.get('DIRECTOR_PLACEMENT', { infer: true });
+    let decoration: typeof primary | undefined;
+    if (placement === 'route') {
+      const decorationId = resolveDecorationThinkingId(
+        this.config.get('DIRECTOR_DECORATION_THINKING', { infer: true })
+      );
+      decoration = wrapChatModel(
+        this.factory.createPrimary({
+          model: directorModel,
+          apiKey: googleKey,
+          thinking: thinkingConfigWithFallback(decorationId),
+        }),
+        'google',
+        directorModel,
+        { thinkingFallback: thinkingFallbackLevels(decorationId) }
+      );
+    }
+
     return runDirector(request, {
       primary,
+      decoration,
       promptVersion,
       logger: this.logger,
       budgetMs: this.runtime?.budgetMs,
       llmRepairMinRemainingMs:
         this.runtime?.llmRepairMinRemainingMs ??
         this.config.get('LLM_REPAIR_MIN_REMAINING_MS', { infer: true }),
-      placement: this.config.get('DIRECTOR_PLACEMENT', { infer: true }),
+      placement,
       proceduralReserveMs: this.runtime?.proceduralReserveMs,
       now,
       startedMs,

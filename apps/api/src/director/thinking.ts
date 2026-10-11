@@ -8,6 +8,8 @@
  * thinkingConfig and remembers the level process-wide.
  *
  * Env `DIRECTOR_THINKING`: `minimal` | `low` | `default`.
+ * Env `DIRECTOR_DECORATION_THINKING` (route-arm decoration call only):
+ * same ids, default `minimal`; a rejected MINIMAL falls back to LOW.
  */
 
 export const DIRECTOR_THINKING_IDS = ['minimal', 'low', 'default'] as const;
@@ -114,6 +116,53 @@ export function resolveDirectorThinkingId(
   throw new Error(
     `Unknown DIRECTOR_THINKING "${raw}" (use minimal, low, or default)`
   );
+}
+
+/** Route-arm decoration default: lowest level, MINIMAL → LOW on rejection. */
+export const DEFAULT_DECORATION_THINKING_ID: DirectorThinkingId = 'minimal';
+
+export function resolveDecorationThinkingId(
+  raw: string | undefined
+): DirectorThinkingId {
+  const trimmed = raw?.trim().toLowerCase() ?? '';
+  if (trimmed.length === 0) {
+    return DEFAULT_DECORATION_THINKING_ID;
+  }
+  if (isDirectorThinkingId(trimmed)) {
+    return trimmed;
+  }
+  throw new Error(
+    `Unknown DIRECTOR_DECORATION_THINKING "${String(raw)}" (use minimal, low, or default)`
+  );
+}
+
+/**
+ * Levels to try, in order, after the configured one is rejected as
+ * unsupported. MINIMAL steps up to LOW; after the list is exhausted the
+ * wrapper drops thinkingConfig (existing behaviour).
+ */
+export function thinkingFallbackLevels(
+  id: DirectorThinkingId
+): GeminiThinkingLevel[] {
+  return id === 'minimal' ? ['LOW'] : [];
+}
+
+/**
+ * Initial config for an id, stepping through {@link thinkingFallbackLevels}
+ * when the preferred level is already known to be unsupported.
+ */
+export function thinkingConfigWithFallback(
+  id: DirectorThinkingId
+): DirectorThinking | undefined {
+  const config = thinkingVariantById(id)?.config;
+  const level = config?.thinkingLevel;
+  if (level === undefined || !isThinkingLevelUnsupported(level)) {
+    return config;
+  }
+  const next = thinkingFallbackLevels(id).find(
+    (item) => !isThinkingLevelUnsupported(item)
+  );
+  return next === undefined ? undefined : { thinkingLevel: next };
 }
 
 export function thinkingVariantById(
