@@ -32,6 +32,8 @@ export interface RqPerfStats {
   requestId: string | null;
   repairedBy: RepairedBy | null;
   relaxed: readonly RelaxedRule[];
+  /** Server Pip lines kept for the current level. */
+  lines: number;
 }
 
 export const EMPTY_PERF_STATS: RqPerfStats = {
@@ -48,6 +50,7 @@ export const EMPTY_PERF_STATS: RqPerfStats = {
   requestId: null,
   repairedBy: null,
   relaxed: [],
+  lines: 0,
 };
 
 export function readRendererInfo(
@@ -74,6 +77,7 @@ export interface PerfStatsInput {
   requestId?: string | null;
   repairedBy?: RepairedBy | null;
   relaxed?: readonly RelaxedRule[];
+  lines?: number;
 }
 
 export function collectPerfStats(input: PerfStatsInput): RqPerfStats {
@@ -94,6 +98,7 @@ export function collectPerfStats(input: PerfStatsInput): RqPerfStats {
     requestId: input.requestId ?? null,
     repairedBy: input.repairedBy ?? null,
     relaxed: input.relaxed ?? [],
+    lines: input.lines ?? 0,
   };
 }
 
@@ -111,6 +116,7 @@ export function copyPerfStats(from: RqPerfStats, into: RqPerfStats): void {
   into.requestId = from.requestId;
   into.repairedBy = from.repairedBy;
   into.relaxed = from.relaxed;
+  into.lines = from.lines;
 }
 
 export function perfSignature(stats: RqPerfStats): string {
@@ -128,5 +134,6 @@ export function perfSignature(stats: RqPerfStats): string {
     stats.requestId ?? '',
     stats.repairedBy ?? '',
     stats.relaxed.join(','),
+    stats.lines,
   ].join('|');
 }

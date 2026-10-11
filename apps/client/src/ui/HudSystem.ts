@@ -38,10 +38,12 @@ import {
   HUD_DROP_M,
   HUD_FOLLOW_MAX_ANGLE_DEG,
   HUD_MODAL_SCALE,
+  SPEECH_CARD_HEIGHT_M,
 } from './placement.js';
 import { setObjectTreeVisible } from './tree-visible.js';
 import {
   mapStoreToHud,
+  selectSpeechCard,
   snapshotGameStore,
   visiblePanelIds,
   type HudPanelContent,
@@ -93,10 +95,16 @@ const PANEL_ASSETS: Record<HudPanelId, string> = {
   noSurfaces: 'hud-no-surfaces',
   pause: 'hud-pause',
   win: 'hud-win',
+  speechCard: 'hud-speech',
 };
 
+/** Panels that follow the explorer (Pip) instead of the head-leashed root. */
+function followsExplorer(id: HudPanelId): boolean {
+  return id === 'dialogue' || id === 'speechCard';
+}
+
 function panelScale(id: HudPanelId): number {
-  if (id === 'dialogue') return HUD_DIALOGUE_SCALE;
+  if (id === 'dialogue' || id === 'speechCard') return HUD_DIALOGUE_SCALE;
   if (id === 'beatGoal') return HUD_CHIP_SCALE;
   return HUD_MODAL_SCALE;
 }
@@ -120,6 +128,9 @@ function viewSignature(view: HudPanelContent): string {
     view.win.statsLabel,
     view.win.tomorrowLabel,
     view.win.title,
+    view.speechCard.visible,
+    view.speechCard.beat,
+    view.speechCard.text,
   ].join('|');
 }
 
@@ -149,6 +160,7 @@ export class HudSystem extends createSystem({}) {
   private lastStars = -1;
   private lastGems = -1;
   private lastTimeMs = -1;
+  private lastSpeechVisible = false;
 
   init(): void {
     this.cleanupFuncs.push(() => {
@@ -171,9 +183,11 @@ export class HudSystem extends createSystem({}) {
       this.explorerObject.visible = this.usingStub;
     }
     const target = object ?? this.explorerObject;
-    const dialogue = this.panels.get('dialogue');
-    if (target && dialogue?.entity.hasComponent(Follower)) {
-      dialogue.entity.setValue(Follower, 'target', target);
+    for (const id of ['dialogue', 'speechCard'] as const) {
+      const panel = this.panels.get(id);
+      if (target && panel?.entity.hasComponent(Follower)) {
+        panel.entity.setValue(Follower, 'target', target);
+      }
     }
   }
 
@@ -183,7 +197,8 @@ export class HudSystem extends createSystem({}) {
       this.applyExplorerAnchor(explorerAnchor);
     }
     this.syncStubPose();
-    this.billboardDialogue();
+    this.billboardToViewer('dialogue');
+    this.billboardToViewer('speechCard');
     if (!this.hudInputsChanged(boundStore)) return;
     const overlay = readGuidanceOverlay();
     const view = mapStoreToHud(snapshotGameStore(boundStore), {
@@ -203,7 +218,16 @@ export class HudSystem extends createSystem({}) {
     const stars = result?.stars ?? -1;
     const gems = result?.gems ?? -1;
     const timeMs = result?.timeMs ?? -1;
+    // Speech cards expire on a timer, not a store change.
+    const speechVisible =
+      selectSpeechCard(
+        store.phase,
+        store.state.currentBeatIndex,
+        store.events,
+        store.nowMs
+      ) !== null;
     if (
+      speechVisible === this.lastSpeechVisible &&
       store.phase === this.lastPhase &&
       store.state.currentBeatIndex === this.lastBeat &&
       store.events.length === this.lastEventCount &&
@@ -223,6 +247,7 @@ export class HudSystem extends createSystem({}) {
     this.lastStars = stars;
     this.lastGems = gems;
     this.lastTimeMs = timeMs;
+    this.lastSpeechVisible = speechVisible;
     return true;
   }
 
@@ -278,6 +303,7 @@ export class HudSystem extends createSystem({}) {
       'pause',
       'win',
       'dialogue',
+      'speechCard',
     ];
 
     for (const id of ids) {
@@ -286,7 +312,7 @@ export class HudSystem extends createSystem({}) {
       );
       asset.scale.setScalar(panelScale(id));
       const parent =
-        id === 'dialogue'
+        followsExplorer(id)
           ? undefined
           : { parent: hudRootObject, persistent: true };
       const entity = this.world.createTransformEntity(
@@ -295,11 +321,15 @@ export class HudSystem extends createSystem({}) {
       );
       entity.addComponent(RayInteractable);
       entity.addComponent(PokeInteractable);
-      if (id === 'dialogue') {
+      if (followsExplorer(id)) {
         const target = this.customExplorer ?? stub;
         entity.addComponent(Follower, {
           target,
-          offsetPosition: [0, DIALOGUE_HEIGHT_M, 0],
+          offsetPosition: [
+            0,
+            id === 'speechCard' ? SPEECH_CARD_HEIGHT_M : DIALOGUE_HEIGHT_M,
+            0,
+          ],
           behavior: FollowBehavior.NoRotation,
           speed: 8,
           tolerance: 0.02,
@@ -391,6 +421,12 @@ export class HudSystem extends createSystem({}) {
     this.setPanelVisible('noSurfaces', view.noSurfaces.visible);
     this.setPanelVisible('pause', view.pause.visible);
     this.setPanelVisible('win', view.win.visible);
+    this.setPanelVisible('speechCard', view.speechCard.visible);
+
+    const speech = this.panels.get('speechCard');
+    if (speech && view.speechCard.visible) {
+      setText(speech.asset, 'speech-text', view.speechCard.text);
+    }
 
     const surveying = this.panels.get('surveying');
     if (surveying && view.surveying.visible) {
@@ -473,8 +509,8 @@ export class HudSystem extends createSystem({}) {
     if (playing) this.stubPinned = true;
   }
 
-  private billboardDialogue(): void {
-    const panel = this.panels.get('dialogue');
+  private billboardToViewer(id: HudPanelId): void {
+    const panel = this.panels.get(id);
     const object = panel?.entity.object3D;
     if (!object?.visible) return;
     if (this.renderer.xr.isPresenting) {

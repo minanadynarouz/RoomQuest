@@ -19,6 +19,7 @@ describe('debug overlay format', () => {
       requestId: 'req-abc',
       repairedBy: 'snap',
       relaxed: ['minPath'],
+      lines: 2,
     });
     expect(block).toContain('PERF');
     expect(block).toContain('fps      60');
@@ -31,6 +32,7 @@ describe('debug overlay format', () => {
     expect(block).toContain('reqId    req-abc');
     expect(block).toContain('repaired snap');
     expect(block).toContain('relaxed  minPath');
+    expect(block).toContain('lines    2');
     expect(formatLatency(null)).toBe('-');
     expect(formatDebugLines(EMPTY_PERF_STATS).map((line) => line.id)).toEqual([
       'debug-fps',
@@ -46,6 +48,7 @@ describe('debug overlay format', () => {
       'debug-reqid',
       'debug-repaired',
       'debug-relaxed',
+      'debug-lines',
     ]);
   });
 });

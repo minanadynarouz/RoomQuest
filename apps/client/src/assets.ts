@@ -55,6 +55,11 @@ export default defineAssets({
     type: AssetType.UIKitML,
     name: 'HUD Dialogue',
   },
+  'hud-speech': {
+    url: publicAssetUrl('ui/hud-speech.uikitml'),
+    type: AssetType.UIKitML,
+    name: 'HUD Pip Speech Card',
+  },
   'hud-beat': {
     url: publicAssetUrl('ui/hud-beat.uikitml'),
     type: AssetType.UIKitML,

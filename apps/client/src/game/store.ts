@@ -6,7 +6,13 @@
 
 import { signal, computed, effect } from '@preact/signals-core';
 import { clampParTimeMs, type Issue } from '@roomquest/level-core';
-import type { ErrorCode, LevelPlan, PlanSource, Tier } from '@roomquest/schema';
+import type {
+  ErrorCode,
+  LevelLine,
+  LevelPlan,
+  PlanSource,
+  Tier,
+} from '@roomquest/schema';
 import type { FallbackReason } from './director/types.js';
 import { DEFAULT_TIER } from './director/types.js';
 import type { RelaxedRule } from '@roomquest/schema';
@@ -24,6 +30,7 @@ import type {
   ExplorerBlockReason,
   DirectorRequestState,
   DirectorRequestSource,
+  LevelLinesMap,
 } from './types.js';
 import { defaultClock, IDLE_DIRECTOR_REQUEST } from './types.js';
 import { calculateStars } from './stars.js';
@@ -40,6 +47,21 @@ export class TransitionError extends Error {
     super(message || `Invalid transition from ${from} to ${to}`);
     this.name = 'TransitionError';
   }
+}
+
+const EMPTY_LINES: LevelLinesMap = Object.freeze({});
+
+/** `LevelLine[]` → beat-index map; later duplicates win, blank text skipped. */
+export function toLevelLinesMap(
+  lines: readonly LevelLine[] | undefined
+): LevelLinesMap {
+  if (!lines || lines.length === 0) return EMPTY_LINES;
+  const map: Record<string, string> = {};
+  for (const line of lines) {
+    const text = line.text.trim();
+    if (text.length > 0) map[line.beat.trim()] = text;
+  }
+  return Object.keys(map).length > 0 ? Object.freeze(map) : EMPTY_LINES;
 }
 
 /**
@@ -98,6 +120,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
   const validationIssues = signal<Issue[]>([]);
   const tier = signal<Tier | null>(null);
   const directorRequest = signal<DirectorRequestState>(IDLE_DIRECTOR_REQUEST);
+  const levelLines = signal<LevelLinesMap>(EMPTY_LINES);
 
   // Computed values
   const state = computed<GameState>(() => ({
@@ -118,6 +141,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
     retryAfterS: retryAfterS.value,
     validationIssues: validationIssues.value,
     tier: tier.value,
+    level: { lines: levelLines.value },
     directorRequest: directorRequest.value,
   }));
 
@@ -270,6 +294,10 @@ export function createGameStore(options: GameStoreOptions = {}) {
       },
     ];
     currentBeatIndex.value = beatIndex;
+    const text = levelLines.value[String(beatIndex)];
+    if (text) {
+      emitEvent({ type: 'pipLine', beat: String(beatIndex), text });
+    }
   }
 
   function completeBeat(beatIndex: number) {
@@ -330,6 +358,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
         relaxed?: RelaxedRule[];
       }
     | { type: 'roomUnplayable' }
+    | { type: 'pipLine'; beat: string; text: string }
     | {
         type: 'beatCompleted';
         beatIndex: number;
@@ -421,6 +450,14 @@ export function createGameStore(options: GameStoreOptions = {}) {
     get tier() {
       return tier.value;
     },
+    /** Director extras for the current level; `level.lines` is beat → text. */
+    get level() {
+      return { lines: levelLines.value };
+    },
+    /** Store clock reading (HUD speech-card timing). */
+    get nowMs() {
+      return clock.now();
+    },
     /** Read-only in-flight director signal (`store.directorRequest.value`). */
     directorRequest,
 
@@ -444,6 +481,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
       latencyMs?: number;
     }) {
       plan.value = null;
+      levelLines.value = EMPTY_LINES;
       fallbackReason.value = ROOM_UNPLAYABLE;
       validationIssues.value = info?.issues ?? [];
       if (info?.latencyMs !== undefined) {
@@ -479,6 +517,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
       retryAfterS.value = options?.retryAfterS ?? null;
       validationIssues.value = options?.issues ?? [];
       tier.value = options?.tier ?? DEFAULT_TIER;
+      levelLines.value = toLevelLinesMap(options?.lines);
       events.value = [];
       gemsCollected.value = 0;
       beatTimings.value = [];
@@ -553,6 +592,7 @@ export function createGameStore(options: GameStoreOptions = {}) {
       retryAfterS.value = null;
       validationIssues.value = [];
       tier.value = null;
+      levelLines.value = EMPTY_LINES;
       events.value = [];
       gemsCollected.value = 0;
       beatTimings.value = [];

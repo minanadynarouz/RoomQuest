@@ -21,7 +21,16 @@ import {
 } from './copy.js';
 
 export type HudPanelId =
-  'surveying' | 'dialogue' | 'beatGoal' | 'noSurfaces' | 'pause' | 'win';
+  | 'surveying'
+  | 'dialogue'
+  | 'beatGoal'
+  | 'noSurfaces'
+  | 'pause'
+  | 'win'
+  | 'speechCard';
+
+/** How long a Pip speech card stays up after its beat starts. */
+export const SPEECH_CARD_MS = 4000;
 
 export interface HudStoreSnapshot {
   phase: GamePhase;
@@ -31,6 +40,8 @@ export interface HudStoreSnapshot {
   result: GameResult | null;
   error: string | null;
   todayIso: string;
+  /** Store clock reading; speech cards expire against event timestamps. */
+  nowMs?: number;
 }
 
 export interface HudPanelContent {
@@ -60,6 +71,7 @@ export interface HudPanelContent {
     restartLabel: string;
     exitLabel: string;
   };
+  speechCard: { visible: boolean; beat: string; text: string };
   win: {
     visible: boolean;
     title: string;
@@ -140,6 +152,30 @@ export function selectDialogueLine(
   );
 }
 
+/**
+ * Active Pip speech card: the `pipLine` event for the current beat, while
+ * playing and within {@link SPEECH_CARD_MS}. A newer beat replaces it (its
+ * own line or nothing); pause / win hide it.
+ */
+export function selectSpeechCard(
+  phase: GamePhase,
+  beatIndex: number,
+  events: readonly GameEvent[],
+  nowMs: number | undefined
+): { beat: string; text: string } | null {
+  if (phase !== 'playing') return null;
+  for (let i = events.length - 1; i >= 0; i--) {
+    const event = events[i];
+    if (event?.type !== 'pipLine') continue;
+    if (event.beatIndex !== beatIndex) return null;
+    if (nowMs !== undefined && nowMs - event.timestamp >= SPEECH_CARD_MS) {
+      return null;
+    }
+    return { beat: event.beat, text: event.text };
+  }
+  return null;
+}
+
 export function snapshotGameStore(
   store: GameStore,
   today: Date = new Date()
@@ -153,6 +189,7 @@ export function snapshotGameStore(
     result: store.result,
     error: state.error,
     todayIso: formatIsoDate(today),
+    nowMs: store.nowMs,
   };
 }
 
@@ -161,6 +198,12 @@ export function mapStoreToHud(
   overlay?: DialogueOverlay
 ): HudPanelContent {
   const { phase, plan, currentBeatIndex, events, result, todayIso } = snapshot;
+  const speech = selectSpeechCard(
+    phase,
+    currentBeatIndex,
+    events,
+    snapshot.nowMs
+  );
   const surveyingVisible = SURVEYING_PHASES.has(phase);
   const playing = phase === 'playing';
   const paused = phase === 'paused';
@@ -216,6 +259,11 @@ export function mapStoreToHud(
       restartLabel: HUD_COPY.restart,
       exitLabel: HUD_COPY.exit,
     },
+    speechCard: {
+      visible: speech !== null,
+      beat: speech?.beat ?? '',
+      text: speech?.text ?? '',
+    },
     win: {
       visible: won,
       title: winDialogue,
@@ -236,6 +284,7 @@ export function visiblePanelIds(view: HudPanelContent): HudPanelId[] {
     'noSurfaces',
     'pause',
     'win',
+    'speechCard',
   ];
   return ids.filter((id) => view[id].visible);
 }

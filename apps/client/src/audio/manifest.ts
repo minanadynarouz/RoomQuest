@@ -47,6 +47,8 @@ export type SoundKey =
       | 'directorRequestStarted'
       | 'directorRequestEnded'
       | 'roomUnplayable'
+      // Pip speech cards: no sound yet; audio may subscribe to `pipLine` later.
+      | 'pipLine'
     >
   | 'grab'
   | 'invalidPlace'

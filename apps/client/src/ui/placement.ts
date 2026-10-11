@@ -35,6 +35,9 @@ export const HUD_DIALOGUE_SCALE = 0.14;
 /** Dialogue bubble height above the explorer stub, metres. */
 export const DIALOGUE_HEIGHT_M = 0.2;
 
+/** Pip speech card: above the dialogue bubble so both can show at once. */
+export const SPEECH_CARD_HEIGHT_M = 0.34;
+
 /** Stub explorer distance from the head, metres. */
 export const EXPLORER_STUB_DISTANCE_M = 0.75;
 
