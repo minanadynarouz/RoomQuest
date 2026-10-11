@@ -16,3 +16,12 @@ export {
   THEME_WORDS,
 } from './variation';
 export type { PromptVariation, RouteDirection } from './variation';
+export {
+  buildDecorationMessages,
+  buildDecorationUserMessage,
+  DECORATION_BANNED_WORDS,
+  DECORATION_SYSTEM_PREFIX,
+  decorationEnums,
+  RELAXED_RULE_LINES,
+} from './decoration';
+export type { DecorationMessage, DecorationPromptInput } from './decoration';
