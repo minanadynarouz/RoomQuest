@@ -19,6 +19,7 @@ const STORE_EVENTS: SoundKey[] = [
   'pieceMoved',
   'platformAligned',
   'portalUsed',
+  'pipLine',
 ];
 
 describe('SOUND_MANIFEST', () => {

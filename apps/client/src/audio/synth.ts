@@ -202,6 +202,33 @@ function playVoiceBlip(
   startOsc(audio, dest, 'sine', f0 * 2.15, t0, dur * 0.85, 0.28);
 }
 
+/**
+ * Pip line chirp: one soft sine that glides up by `riseCents` (± a little
+ * random rise, never downward) from a slightly detuned base. Dry — no
+ * reverb or delay nodes.
+ */
+function playChirpRise(
+  audio: SynthContext,
+  dest: unknown,
+  entry: SoundEntry,
+  t0: number
+): void {
+  const dur = entry.duration ?? 0.09;
+  const f0 = detunedHz(entry.pitchHz ?? 620, entry.randomPitchCents ?? 0);
+  const baseRise = Math.max(0, entry.riseCents ?? 300);
+  const rise = baseRise * (0.8 + randomFn() * 0.4);
+  const osc = audio.createOscillator();
+  const gain = audio.createGain();
+  osc.type = 'sine';
+  setAt(osc.frequency, f0, t0);
+  ramp(osc.frequency, f0 * centsToRatio(rise), t0 + dur);
+  pluck(gain.gain, t0, 0.8, dur);
+  osc.connect(gain);
+  gain.connect(dest);
+  osc.start(t0);
+  osc.stop(t0 + dur + 0.02);
+}
+
 function playChime(
   audio: SynthContext,
   dest: unknown,
@@ -236,6 +263,9 @@ export function playSynth(
       return;
     case 'chimeSting':
       playChime(audio, dest, entry, t0);
+      return;
+    case 'chirpRise':
+      playChirpRise(audio, dest, entry, t0);
       return;
   }
 }

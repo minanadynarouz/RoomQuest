@@ -19,7 +19,8 @@ export type SynthKind =
   | 'marimbaRise'
   | 'mutedThud'
   | 'voiceBlip'
-  | 'chimeSting';
+  | 'chimeSting'
+  | 'chirpRise';
 
 export interface SoundEntry {
   /** Optional CC0 file under `public/audio/`. When set, plays instead of synth. */
@@ -38,6 +39,8 @@ export interface SoundEntry {
   randomPitchCents?: number;
   /** Marimba note offsets in semitones from `pitchHz`. */
   intervals?: readonly number[];
+  /** `chirpRise`: pitch glide upward over the voice, in cents (always ≥ 0). */
+  riseCents?: number;
 }
 
 /** Store events plus pinch/grab, tray-return, and F-07 pause HUD actions. */
@@ -47,8 +50,6 @@ export type SoundKey =
       | 'directorRequestStarted'
       | 'directorRequestEnded'
       | 'roomUnplayable'
-      // Pip speech cards: no sound yet; audio may subscribe to `pipLine` later.
-      | 'pipLine'
     >
   | 'grab'
   | 'invalidPlace'
@@ -189,6 +190,20 @@ export const SOUND_MANIFEST: Record<SoundKey, SoundEntry> = {
     pitchHz: 493.88,
     duration: 0.16,
     intervals: [0, 4],
+  },
+  /**
+   * Pip speech card chirp: fires only on a `pipLine` event (never on a beat
+   * without a line). Soft, dry, slightly rising, positioned on Pip.
+   * Placeholder — set `file` to swap in the final sound.
+   */
+  pipLine: {
+    synth: 'chirpRise',
+    gain: 0.12,
+    spatial: true,
+    pitchHz: 620,
+    duration: 0.09,
+    randomPitchCents: 120,
+    riseCents: 320,
   },
   portalUsed: {
     synth: 'marimbaRise',

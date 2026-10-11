@@ -10,6 +10,7 @@ import {
 import { setExplorerAnchor } from '../../ui/HudSystem.js';
 import { createExplorerModel } from '../explorer/model.js';
 import { isExplorerOutOfView } from '../explorer/out-of-view.js';
+import { RescanAnimator } from '../explorer/rescan.js';
 import {
   ExplorerWalker,
   type ExplorerPose,
@@ -43,6 +44,11 @@ export class ExplorerSystem
   private builder: LevelBuilderSystem | null = null;
   private store: GameStore | null = null;
   private model: Object3D | null = null;
+  /** Existing explorer mesh (child of `model`); rescan animates it only. */
+  private mesh: Object3D | null = null;
+  private readonly rescan = new RescanAnimator();
+  private rescanTargetX = 0;
+  private rescanTargetZ = 0;
   private entity: Entity | null = null;
   private started = false;
   private gemHideCursor = 0;
@@ -57,6 +63,7 @@ export class ExplorerSystem
   init(): void {
     const model = createExplorerModel();
     this.model = model;
+    this.mesh = model.children[0] ?? null;
     this.entity = this.world.createTransformEntity(model, { persistent: true });
     setExplorerAnchor(model);
     // F-04's setExplorerAnchor also writes the target; re-register the walker.
@@ -67,6 +74,7 @@ export class ExplorerSystem
       this.entity?.dispose({ disposeResources: false });
       this.entity = null;
       this.model = null;
+      this.mesh = null;
     });
   }
 
@@ -74,6 +82,7 @@ export class ExplorerSystem
     const path = explorerPath(plan, graph);
     this.gemHideCursor = 0;
     this.movementFrozen = false;
+    this.rescan.stop(this.mesh);
     this.walker.stopWander();
     if (this.store) {
       this.walker.begin(path, plan, this.store);
@@ -111,6 +120,23 @@ export class ExplorerSystem
 
   stopWander(): void {
     this.walker.stopWander();
+  }
+
+  /**
+   * Room-unplayable: look around, shrug, then turn and lean toward
+   * (`x`, `z`) — the largest open floor. Mesh transforms only.
+   */
+  playRescan(x: number, z: number): void {
+    this.walker.stopWander();
+    this.walker.writePose(this.pose);
+    this.rescanTargetX = x;
+    this.rescanTargetZ = z;
+    this.rescan.start(this.pose.x, this.pose.z, this.pose.yaw, x, z);
+  }
+
+  /** True while the rescan animation is playing. */
+  isRescanning(): boolean {
+    return this.rescan.active;
   }
 
   /** F-07: stop walking without resetting pose or path. */
@@ -151,6 +177,16 @@ export class ExplorerSystem
   }
 
   update(delta: number, time: number): void {
+    if (this.rescan.active) {
+      if (!this.rescan.step(delta, this.mesh)) {
+        // Hand the final heading to the walker; keep the pointing lean.
+        this.walker.faceToward(this.rescanTargetX, this.rescanTargetZ);
+        this.walker.stopWander();
+        this.mesh?.rotation.set(this.mesh.rotation.x, 0, 0);
+      }
+      this.syncModel(time);
+      return;
+    }
     if (this.walker.isWandering) {
       if (!this.movementFrozen) {
         this.walker.update(delta, time);
