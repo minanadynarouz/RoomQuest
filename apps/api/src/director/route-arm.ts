@@ -46,7 +46,13 @@ export function routeCallOptions(
 }
 
 export type RouteDecorationParse =
-  | { kind: 'ok'; decoration: LevelDecorationLLM; droppedLines: number }
+  | {
+      kind: 'ok';
+      decoration: LevelDecorationLLM;
+      droppedLines: number;
+      linesIn: number;
+      dropReasons: string[];
+    }
   | { kind: 'parse-failed'; error: string; droppedLines: number };
 
 /**
@@ -75,6 +81,8 @@ export function parseRouteDecoration(
     kind: 'ok',
     decoration: parsed.data,
     droppedLines: report.droppedLines,
+    linesIn: report.linesIn,
+    dropReasons: report.dropReasons,
   };
 }
 

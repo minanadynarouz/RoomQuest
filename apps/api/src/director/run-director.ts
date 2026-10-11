@@ -765,7 +765,24 @@ export async function runDirector(
       call.raw,
       call.ttftMs
     );
-    trace.bannedWordHits = countBannedWordHits(applied.lines);
+    // Lines must name a beat of the served plan (local repair may change
+    // the beat count); applyDecoration already dropped duplicates /
+    // out-of-range beats of the decorated plan.
+    const lineReasons = [...parsed.dropReasons];
+    const decoratedIn = parsed.decoration.lines?.length ?? 0;
+    for (let i = applied.lines.length; i < decoratedIn; i += 1) {
+      lineReasons.push('apply-decoration');
+    }
+    const servedLines = applied.lines.filter((line) => {
+      const ok = Number(line.beat) < plan.beats.length;
+      if (!ok) lineReasons.push(`beat-beyond-plan:${line.beat}`);
+      return ok;
+    });
+    trace.droppedLines = parsed.linesIn - servedLines.length;
+    trace.bannedWordHits = countBannedWordHits(servedLines);
+    options.logger.log(
+      `director.route_lines routeId=${parsed.decoration.routeId} stage=${stage} linesRaw=${String(parsed.linesIn)} linesKept=${String(servedLines.length)} droppedLines=${String(trace.droppedLines)} reasons=${lineReasons.length > 0 ? lineReasons.join('|') : 'none'}`
+    );
     options.logger.log(
       `director.plan_fixed stage=${stage} placement=route routeId=${parsed.decoration.routeId} droppedLines=${String(trace.droppedLines)}`
     );
@@ -787,7 +804,7 @@ export async function runDirector(
           latencyMs: Math.max(0, now() - startedMs),
           repairs,
           relaxed,
-          ...(applied.lines.length > 0 ? { lines: applied.lines } : {}),
+          ...(servedLines.length > 0 ? { lines: servedLines } : {}),
           routeId: parsed.decoration.routeId,
         }),
         telemetry,

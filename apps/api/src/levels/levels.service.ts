@@ -11,6 +11,7 @@ import { CacheMissLimiter } from './cache-miss-limiter';
 import { LevelCacheRepository } from './level-cache.repository';
 import {
   cacheMetadataFromRelaxed,
+  linesFromCacheMetadata,
   routeIdFromCacheMetadata,
 } from './relaxed-metadata';
 
@@ -51,8 +52,10 @@ export class LevelsService {
         const validation = validatePlan(parsed.data, request.graph);
         if (validation.ok) {
           const routeId = routeIdFromCacheMetadata(cached.metadata);
+          const lines = linesFromCacheMetadata(cached.metadata);
           return LevelResponse.parse({
             ...(routeId === undefined ? {} : { routeId }),
+            ...(lines === undefined ? {} : { lines }),
             plan: parsed.data,
             source: 'cache',
             cacheKey,
@@ -97,7 +100,11 @@ export class LevelsService {
           plan: body.plan,
           source: body.source,
           model: body.model ?? null,
-          metadata: cacheMetadataFromRelaxed(body.relaxed ?? [], body.routeId),
+          metadata: cacheMetadataFromRelaxed(
+            body.relaxed ?? [],
+            body.routeId,
+            body.lines
+          ),
         },
         startedMs,
         now()
