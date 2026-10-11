@@ -251,6 +251,27 @@ describe('createGameStore', () => {
       expect(store.phase).toBe('noSurfaces');
     });
 
+    it('allows surveying → roomUnplayable and emits roomUnplayable', () => {
+      const store = createGameStore({ clock: mockClock });
+      store.requestLevel();
+      store.startSurveying();
+      store.markRoomUnplayable({
+        issues: [{ code: 'GOAL_UNREACHABLE', message: 'no path' }],
+        relaxed: ['PATH_DISTANCE_TOO_SHORT'],
+      });
+      expect(store.phase).toBe('roomUnplayable');
+      expect(store.fallbackReason).toBe('room-unplayable');
+      expect(store.plan).toBeNull();
+      expect(store.events.some((event) => event.type === 'roomUnplayable')).toBe(
+        true
+      );
+      expect(store.directorRequest.value.relaxed).toEqual([
+        'PATH_DISTANCE_TOO_SHORT',
+      ]);
+      store.startSurveying();
+      expect(store.phase).toBe('surveying');
+    });
+
     it('allows any phase → error', () => {
       const phases = [
         'landing',

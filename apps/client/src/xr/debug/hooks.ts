@@ -48,6 +48,8 @@ export function writeLatestPerfStats(stats: RqPerfStats): void {
   latestStats.validationIssues = stats.validationIssues;
   latestStats.directorStatus = stats.directorStatus;
   latestStats.requestId = stats.requestId;
+  latestStats.repairedBy = stats.repairedBy;
+  latestStats.relaxed = stats.relaxed;
   hasOverlaySample = true;
 }
 
@@ -67,6 +69,8 @@ export function resetLatestPerfStats(): void {
   latestStats.validationIssues = EMPTY_PERF_STATS.validationIssues;
   latestStats.directorStatus = EMPTY_PERF_STATS.directorStatus;
   latestStats.requestId = EMPTY_PERF_STATS.requestId;
+  latestStats.repairedBy = EMPTY_PERF_STATS.repairedBy;
+  latestStats.relaxed = EMPTY_PERF_STATS.relaxed;
   hasOverlaySample = false;
   overlayReady = false;
 }

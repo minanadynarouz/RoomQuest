@@ -166,6 +166,7 @@ export function mapStoreToHud(
   const paused = phase === 'paused';
   const won = phase === 'won';
   const noSurfaces = phase === 'noSurfaces';
+  const roomUnplayable = phase === 'roomUnplayable';
 
   const storeLine = selectDialogueLine(
     phase,
@@ -203,10 +204,10 @@ export function mapStoreToHud(
       pauseLabel: HUD_COPY.pause,
     },
     noSurfaces: {
-      visible: noSurfaces,
-      title: HUD_COPY.noSurfacesTitle,
-      body: HUD_COPY.noSurfacesBody,
-      retryLabel: HUD_COPY.retry,
+      visible: noSurfaces || roomUnplayable,
+      title: roomUnplayable ? HUD_COPY.rescanTitle : HUD_COPY.noSurfacesTitle,
+      body: roomUnplayable ? '' : HUD_COPY.noSurfacesBody,
+      retryLabel: roomUnplayable ? HUD_COPY.rescan : HUD_COPY.retry,
     },
     pause: {
       visible: paused,

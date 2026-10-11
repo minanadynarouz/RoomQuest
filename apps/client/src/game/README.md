@@ -165,9 +165,14 @@ Races `POST ${VITE_API_BASE_URL}/api/v1/levels` against `generatePlan` from
 `X-Client-Version` (`0.1.0`). The API plan is used only if it arrives in
 ≤ 8 s (or a one-time 20 s cold-start budget — `DIRECTOR_COLD_START_BUDGET_MS`
 — when landing's `GET /api/health` pre-warm has not answered yet), parses as
-`LevelResponse`, **and** passes `validatePlan` against the scanned graph. If validation fails, `repairPlan` is tried first; only a
-failed repair falls through to the racing `generatePlan`. API failures are
-invisible to the player.
+`LevelResponse`, **and** passes `validatePlan` against the scanned graph. If
+validation fails, the client snaps placements to slots, validates again,
+then tries `repairPlan`. Only if both local repairs fail does it keep the
+racing `generatePlan` result — and only if that recovered plan also
+validates. Otherwise `fallbackReason` is `room-unplayable` (Rescan HUD);
+the synthetic fixture is not used except `?fixture=` or dev.
+A 422 `{error:{code:"ROOM_UNPLAYABLE"}}` skips the local generator.
+API failures are otherwise invisible to the player.
 
 ```
 ?director=live|mock|off   live (default) races the API; mock/off skip the network
@@ -181,11 +186,12 @@ or the client's local date (FR-6). Tier defaults to `normal` — F-03 has no
 
 A 200 that is schema-valid but placed on fixture surface ids (`s1`/`s2`/`s4`)
 is the B-02 mock until B-05. `validatePlan` reports `UNKNOWN_SURFACE`; the
-client tries `repairPlan`, then `generatePlan`. If repair cannot bind the
-plan to the graph, `fallbackReason` is `graph-mismatch`, logged at info,
-with typed issues on the store — not an error. `?director=off` uses
-`generatePlan` only. `?director=mock` skips the network and still returns a
-plan bound to the player's graph (`generatePlan`).
+client tries `snapPlacementsToSlots`, then `repairPlan`, then
+`generatePlan`. If snap/repair cannot bind the plan to the graph, the
+generator is recovered the same way. A still-invalid plan is
+`room-unplayable`, not the fixture. `?director=off` uses `generatePlan`
+only. `?director=mock` skips the network and still returns a plan bound to
+the player's graph (`generatePlan`).
 
 `{error:{code,message,issues}}` with `INVALID_REQUEST` or `INTERNAL` also
 falls back. The code is stored as `apiErrorCode` for the debug overlay.
@@ -250,9 +256,11 @@ The spec said "Exit returns to landing" but didn't specify from which states. I 
 
 **Decision**: race `generatePlan(graph, seed, tier, { recentThemes? })` with
 the API. Same `(graph, seed, tier)` always yields the same plan (~0.5 ms).
-When a server plan fails `validatePlan`, try `repairPlan` first
-(`source: 'llm_repaired'`, `fallbackReason: 'repaired'`). Only if repair
-does not validate do we keep the procedural plan.
+When a server plan fails `validatePlan`, try `snapPlacementsToSlots` then
+`repairPlan` (`source: 'llm_repaired'`, `fallbackReason: 'repaired'`,
+`repairedBy: 'snap' | 'repairPlan'`). Only if both fail do we keep the
+procedural plan, and only if that plan also recovers. A 422
+`ROOM_UNPLAYABLE` or an unrecoverable local plan is `room-unplayable`.
 
 ### 6. B-02 fixture-id mismatch is expected
 

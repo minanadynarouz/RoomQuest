@@ -5,12 +5,22 @@
  */
 
 import type { GameStore } from '../store.js';
+import { ROOM_UNPLAYABLE } from './schema-pending.js';
 import type { DirectorResult } from './types.js';
 
 export function applyDirectorResult(
   store: GameStore,
   result: DirectorResult
 ): void {
+  if (result.fallbackReason === ROOM_UNPLAYABLE) {
+    store.markRoomUnplayable({
+      issues: result.issues,
+      relaxed: result.relaxed,
+      requestId: result.requestId,
+      latencyMs: result.latencyMs,
+    });
+    return;
+  }
   store.startBuilding(result.plan, {
     source: result.source,
     latencyMs: result.latencyMs,

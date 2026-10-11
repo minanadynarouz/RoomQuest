@@ -21,6 +21,8 @@ describe('HUD copy', () => {
       HUD_COPY.pauseTitle,
       HUD_COPY.winTitle,
       HUD_COPY.retry,
+      HUD_COPY.rescanTitle,
+      HUD_COPY.rescan,
       HUD_COPY.resume,
       HUD_COPY.replay,
       HUD_COPY.done,
