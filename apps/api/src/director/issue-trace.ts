@@ -39,6 +39,7 @@ export type DirectorFailurePoint =
   | 'route-candidates'
   | 'route-decoration'
   | 'route-validate'
+  | 'repairRoute'
   | 'director';
 
 export const DIRECTOR_FAILURE_POINTS = [
@@ -51,6 +52,7 @@ export const DIRECTOR_FAILURE_POINTS = [
   'route-candidates',
   'route-decoration',
   'route-validate',
+  'repairRoute',
   'director',
 ] as const satisfies readonly DirectorFailurePoint[];
 

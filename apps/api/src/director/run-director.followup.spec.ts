@@ -15,7 +15,8 @@ import {
   type LevelPlan,
   type LevelPlanLLM,
 } from '@roomquest/schema';
-import { describe, expect, it } from 'vitest';
+import * as levelCore from '@roomquest/level-core';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeDailySeed } from '../levels/daily-seed';
 import {
   DIRECTOR_LLM_WINDOW_MS,
@@ -44,8 +45,40 @@ const request = LevelRequest.parse({
 const seed = makeDailySeed(request.graph.roomHash, request.date);
 const validJson = planToLlmJson(SYNTHETIC_LIVING_ROOM_PLAN);
 
+const levelCoreActual = vi.hoisted(() => ({
+  repairRoute: undefined as unknown as typeof levelCore.repairRoute,
+}));
+
+vi.mock('@roomquest/level-core', async (importOriginal) => {
+  const actual = await importOriginal<typeof levelCore>();
+  levelCoreActual.repairRoute = actual.repairRoute;
+  return { ...actual, repairRoute: vi.fn(actual.repairRoute) };
+});
+
+afterEach(() => {
+  vi.mocked(levelCore.repairRoute).mockImplementation(
+    levelCoreActual.repairRoute
+  );
+});
+
+/**
+ * The real repairRoute answers a no-shrine plan with a fresh `skeleton`,
+ * which the director now turns into a procedural fallback (failedAt
+ * `repairRoute`). Tests that exercise the later LLM-repair path pin
+ * repairRoute to a genuine `none` (could not repair) instead.
+ */
+function routeRepairFindsNothing(): void {
+  vi.mocked(levelCore.repairRoute).mockImplementation((plan) => ({
+    plan,
+    changed: false,
+    issues: [],
+    strategy: 'none',
+  }));
+}
+
 /** Invalid in a way snap/repairRoute/repairPlan cannot fix (no shrine). */
 function unfixableLocallyJson(): string {
+  routeRepairFindsNothing();
   const dirty: LevelPlan = structuredClone(SYNTHETIC_LIVING_ROOM_PLAN);
   dirty.placements = dirty.placements.filter(
     (item) => item.piece !== 'crystal_shrine'
@@ -285,9 +318,7 @@ describe('runDirector DIRECTOR_PLACEMENT=slot', () => {
     };
   }
 
-  function capturing(
-    responses: unknown[]
-  ): {
+  function capturing(responses: unknown[]): {
     chat: StructuredChat;
     calls: { options?: StructuredCallOptions; user?: string }[];
   } {

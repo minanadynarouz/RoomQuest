@@ -6,7 +6,8 @@ import {
 } from '@roomquest/fixtures';
 import { LevelRequest, LevelResponse, type LevelPlan } from '@roomquest/schema';
 import { compactGraphForPrompt, validatePlan } from '@roomquest/level-core';
-import { describe, expect, it } from 'vitest';
+import * as levelCore from '@roomquest/level-core';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DIRECTOR_BUDGET_MS,
   DIRECTOR_LLM_WINDOW_MS,
@@ -54,8 +55,40 @@ function dirtyLocalRepairJson(): string {
   return planToLlmJson(dirty);
 }
 
+const levelCoreActual = vi.hoisted(() => ({
+  repairRoute: undefined as unknown as typeof levelCore.repairRoute,
+}));
+
+vi.mock('@roomquest/level-core', async (importOriginal) => {
+  const actual = await importOriginal<typeof levelCore>();
+  levelCoreActual.repairRoute = actual.repairRoute;
+  return { ...actual, repairRoute: vi.fn(actual.repairRoute) };
+});
+
+afterEach(() => {
+  vi.mocked(levelCore.repairRoute).mockImplementation(
+    levelCoreActual.repairRoute
+  );
+});
+
+/**
+ * The real repairRoute answers a no-shrine plan with a fresh `skeleton`,
+ * which the director now turns into a procedural fallback (failedAt
+ * `repairRoute`). Tests that exercise the later LLM-repair path pin
+ * repairRoute to a genuine `none` (could not repair) instead.
+ */
+function routeRepairFindsNothing(): void {
+  vi.mocked(levelCore.repairRoute).mockImplementation((plan) => ({
+    plan,
+    changed: false,
+    issues: [],
+    strategy: 'none',
+  }));
+}
+
 /** Invalid in a way snap/repairRoute/repairPlan cannot fix (no shrine). */
 function unfixableLocallyJson(): string {
+  routeRepairFindsNothing();
   const dirty: LevelPlan = structuredClone(SYNTHETIC_LIVING_ROOM_PLAN);
   dirty.placements = dirty.placements.filter(
     (item) => item.piece !== 'crystal_shrine'

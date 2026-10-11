@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parseEvalArgs } from './args';
-import { livePlanDump, runEvalHarness } from './harness';
+import { classifySource, livePlanDump, runEvalHarness } from './harness';
 import { findRepoRoot } from './paths';
 import { EvalReportSchema, renderMarkdown } from './report';
 
@@ -275,3 +275,14 @@ describe('eval harness', () => {
   });
 });
 
+
+describe('classifySource (repairRoute skeleton → procedural)', () => {
+  it('counts a procedural answer (e.g. failedAt repairRoute) as fallback, not repaired', () => {
+    expect(classifySource('procedural')).toEqual({
+      validBeforeRepair: false,
+      validAfterRepair: false,
+      fallbackToProcedural: true,
+    });
+    expect(classifySource('llm_repaired').fallbackToProcedural).toBe(false);
+  });
+});

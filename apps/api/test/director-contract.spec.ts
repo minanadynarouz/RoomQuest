@@ -12,6 +12,7 @@ import type { Server } from 'node:http';
 import { Logger } from 'nestjs-pino';
 import request from 'supertest';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import * as levelCore from '@roomquest/level-core';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/create-app';
 import {
@@ -72,8 +73,35 @@ function dirtyLocalRepairJson(): string {
   return planToLlmJson(dirty);
 }
 
+const levelCoreActual = vi.hoisted(() => ({
+  repairRoute: undefined as unknown as typeof levelCore.repairRoute,
+}));
+
+vi.mock('@roomquest/level-core', async (importOriginal) => {
+  const actual = await importOriginal<typeof levelCore>();
+  levelCoreActual.repairRoute = actual.repairRoute;
+  return { ...actual, repairRoute: vi.fn(actual.repairRoute) };
+});
+
+afterEach(() => {
+  vi.mocked(levelCore.repairRoute).mockImplementation(
+    levelCoreActual.repairRoute
+  );
+});
+
+/** Pin repairRoute to a genuine `none` so the LLM-repair path is reachable. */
+function routeRepairFindsNothing(): void {
+  vi.mocked(levelCore.repairRoute).mockImplementation((plan) => ({
+    plan,
+    changed: false,
+    issues: [],
+    strategy: 'none',
+  }));
+}
+
 /** No goal shrine: repairRoute / repairPlan cannot fix it, so LLM repair runs. */
 function unfixableLocallyJson(): string {
+  routeRepairFindsNothing();
   const dirty: LevelPlan = structuredClone(SYNTHETIC_LIVING_ROOM_PLAN);
   dirty.placements = dirty.placements.filter(
     (item) => item.piece !== 'crystal_shrine'

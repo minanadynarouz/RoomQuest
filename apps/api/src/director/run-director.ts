@@ -163,8 +163,7 @@ function withTrace(
     failedAt: extras?.failedAt ?? outcome.failedAt ?? null,
     placement:
       extras?.placement ?? outcome.placement ?? DEFAULT_DIRECTOR_PLACEMENT,
-    routeDecoration:
-      extras?.routeDecoration ?? outcome.routeDecoration ?? null,
+    routeDecoration: extras?.routeDecoration ?? outcome.routeDecoration ?? null,
     firstTryPlan: extras?.firstTryPlan ?? outcome.firstTryPlan ?? null,
     firstTryRawText: extras?.firstTryRawText ?? outcome.firstTryRawText ?? null,
   };
@@ -624,11 +623,15 @@ export async function runDirector(
       afterLocal = traceIssues(local.result.issues);
       if (!local.ok) {
         record(chat, callStarted, 'invalid', call.raw, call.ttftMs);
-        return fallback('llm-invalid', 'route-validate', {
-          validation: { firstTry, afterLocal, afterLlmRepair: null },
-          routeDecoration: trace,
-          firstTryPlan: raw ?? null,
-        });
+        return fallback(
+          'llm-invalid',
+          local.routeSkeleton ? 'repairRoute' : 'route-validate',
+          {
+            validation: { firstTry, afterLocal, afterLlmRepair: null },
+            routeDecoration: trace,
+            firstTryPlan: raw ?? null,
+          }
+        );
       }
       plan = local.plan;
       repairs = local.repairs;
@@ -761,6 +764,19 @@ export async function runDirector(
       { seed, tier: request.tier }
     );
     const afterLocal = traceIssues(local.result.issues);
+    if (!local.ok && local.routeSkeleton) {
+      options.logger.log(
+        'director.route_skeleton repairRoute returned a fresh skeleton; not serving it as a repaired plan'
+      );
+      return fallback('llm-invalid', 'repairRoute', {
+        validation: {
+          firstTry: firstTryIssues,
+          afterLocal,
+          afterLlmRepair: null,
+        },
+        ...draftTrace,
+      });
+    }
     if (local.ok) {
       const fixedBy = local.fixedBy;
       options.logger.log(
