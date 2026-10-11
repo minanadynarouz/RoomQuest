@@ -3,9 +3,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parseEvalArgs } from './args';
-import { classifySource, livePlanDump, runEvalHarness } from './harness';
+import {
+  classifySource,
+  evalRunCells,
+  livePlanDump,
+  runEvalHarness,
+} from './harness';
 import { findRepoRoot } from './paths';
-import { EvalReportSchema, renderMarkdown } from './report';
+import { EvalReportSchema, matrixLabel, renderMarkdown } from './report';
 
 const FIXED_NOW_MS = 1_700_000_000_000;
 
@@ -181,7 +186,9 @@ describe('eval harness', () => {
       'object'
     );
     const markdown = renderMarkdown(result.report);
-    expect(markdown).toMatch(/1 rooms × 1 tiers × 1 seeds = 1 cells; 3 runs/);
+    expect(markdown).toContain(
+      '1 rooms × 1 tiers × 1 seeds (1 cells per arm); runs per arm: uv=3; total 3 runs'
+    );
     expect(markdown).toContain('Validation issue codes');
     expect(markdown).toContain('Repair stage that fixed the plan');
   });
@@ -250,8 +257,11 @@ describe('eval harness', () => {
     const runs = result.report.runs;
     const roomCount = result.report.roomIds.length;
     expect(roomCount).toBeGreaterThan(1);
-    // First `roomCount` runs hit every room once.
-    expect(new Set(runs.slice(0, roomCount).map((r) => r.roomId)).size).toBe(
+    // --runs 12 = 12 per arm, interleaved.
+    expect(runs).toHaveLength(24);
+    const uvRuns = runs.filter((r) => r.requestedPlacement === 'uv');
+    // First `roomCount` runs of an arm hit every room once.
+    expect(new Set(uvRuns.slice(0, roomCount).map((r) => r.roomId)).size).toBe(
       roomCount
     );
     expect(new Set(runs.map((r) => r.requestedPlacement))).toEqual(
@@ -284,5 +294,93 @@ describe('classifySource (repairRoute skeleton → procedural)', () => {
       fallbackToProcedural: true,
     });
     expect(classifySource('llm_repaired').fallbackToProcedural).toBe(false);
+  });
+});
+
+describe('--runs N per placement arm (mock)', () => {
+  it('evalRunCells interleaves arms over an identical room/tier/seed sequence', () => {
+    const cells = evalRunCells(
+      {
+        rooms: ['a', 'b'],
+        seedDates: ['d1', 'd2'],
+        tiers: ['easy', 'normal'],
+        placements: ['uv', 'slot', 'route'],
+      },
+      5
+    );
+    expect(cells).toHaveLength(15);
+    expect(cells.map((c) => c.placement).slice(0, 6)).toEqual([
+      'uv',
+      'slot',
+      'route',
+      'uv',
+      'slot',
+      'route',
+    ]);
+    const seq = (arm: string) =>
+      cells
+        .filter((c) => c.placement === arm)
+        .map((c) => `${c.room}/${c.tier}/${c.date}`);
+    expect(seq('uv')).toEqual([
+      'a/easy/d1',
+      'b/easy/d1',
+      'a/normal/d1',
+      'b/normal/d1',
+      'a/easy/d2',
+    ]);
+    expect(seq('slot')).toEqual(seq('uv'));
+    expect(seq('route')).toEqual(seq('uv'));
+  });
+
+  it('defaults to one full matrix pass per arm', () => {
+    const cells = evalRunCells({
+      rooms: ['a'],
+      seedDates: ['d1'],
+      tiers: ['easy', 'normal'],
+      placements: ['uv', 'route'],
+    });
+    expect(cells).toHaveLength(4);
+  });
+
+  it('harness: N per arm, same sequence per arm, banner shows per-arm and total', async () => {
+    const result = await runEvalHarness({
+      mock: true,
+      roomLimit: 2,
+      seedLimit: 2,
+      tiers: ['easy', 'normal'],
+      placements: ['uv', 'slot', 'route'],
+      runCount: 4,
+      now: () => FIXED_NOW_MS,
+      write: false,
+      googleApiKey: undefined,
+    });
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
+    const runs = result.report.runs;
+    expect(runs).toHaveLength(12);
+    expect(runs.slice(0, 3).map((r) => r.requestedPlacement)).toEqual([
+      'uv',
+      'slot',
+      'route',
+    ]);
+    const seq = (arm: string) =>
+      runs
+        .filter((r) => r.requestedPlacement === arm)
+        .map((r) => `${r.roomId}/${r.tier}/${r.seed}`);
+    expect(seq('uv')).toHaveLength(4);
+    expect(seq('slot')).toEqual(seq('uv'));
+    expect(seq('route')).toEqual(seq('uv'));
+    const label = matrixLabel(result.report);
+    expect(label).toContain('runs per arm: uv=4, slot=4, route=4');
+    expect(label).toContain('total 12 runs');
+    expect(renderMarkdown(result.report)).toContain('total 12 runs');
+    for (const run of runs) {
+      for (const row of run.telemetry) {
+        expect(row).toHaveProperty('ttfbMs');
+        expect(row).toHaveProperty('cachedTokens');
+        expect(typeof row.promptChars).toBe('number');
+        expect(row.totalMs).toBe(row.latencyMs);
+      }
+    }
   });
 });

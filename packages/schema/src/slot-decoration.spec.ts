@@ -163,6 +163,24 @@ describe('buildLevelDecorationSchema', () => {
     expect(LevelDecorationLLM.safeParse(base).success).toBe(true);
   });
 
+  it('omits hazards entirely when no hazard types are offered', () => {
+    const none = { ...enums, hazardTypes: [] };
+    expect(() => buildLevelDecorationSchema(none)).not.toThrow();
+    const gemini = buildLevelDecorationGeminiSchema(none);
+    expect(violations(gemini)).toEqual([]);
+    expect(validateLLMSafeJsonSchema(gemini)).toEqual([]);
+    expect(prop(gemini, 'properties').hazards).toBeUndefined();
+    expect(gemini.required).toEqual(['routeId', 'theme', 'twistBeat']);
+    expect(JSON.stringify(gemini)).not.toContain('hazard');
+    const parsed = buildLevelDecorationSchema(none).safeParse({
+      routeId: 'r1',
+      theme: 'forest',
+      twistBeat: 'b1',
+    });
+    expect(parsed.success).toBe(true);
+    expect(LevelDecorationLLM.safeParse(parsed.data).success).toBe(true);
+  });
+
   it('throws on empty enum inputs', () => {
     expect(() =>
       buildLevelDecorationSchema({ ...enums, routeIds: [] })

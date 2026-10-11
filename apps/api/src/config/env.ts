@@ -59,6 +59,21 @@ export const envSchema = z.object({
     })
     .pipe(z.enum(['minimal', 'low', 'default'])),
   /**
+   * Thinking level for the route-arm decoration call only
+   * (DIRECTOR_PLACEMENT=route). Default `minimal`; if Gemini rejects
+   * MINIMAL the call steps up to LOW (then drops thinkingConfig).
+   */
+  DIRECTOR_DECORATION_THINKING: z
+    .string()
+    .optional()
+    .transform((value) => {
+      if (value === undefined || value.trim().length === 0) {
+        return 'minimal';
+      }
+      return value.trim().toLowerCase();
+    })
+    .pipe(z.enum(['minimal', 'low', 'default'])),
+  /**
    * Only attempt the second (LLM repair) Gemini call when at least this many
    * ms of the director's LLM window remain; otherwise go procedural with
    * fallbackReason `llm-invalid`.

@@ -17,6 +17,7 @@ import {
   rememberUnsupportedThinkingLevel,
   thinkingConfigFor,
   type DirectorThinking,
+  type GeminiThinkingLevel,
 } from './thinking';
 
 export const DIRECTOR_CHAT_FACTORY = Symbol('DIRECTOR_CHAT_FACTORY');
@@ -71,11 +72,43 @@ function clearGoogleThinkingConfig(model: BaseChatModel): void {
   (model as unknown as { thinkingConfig?: unknown }).thinkingConfig = undefined;
 }
 
-function stripUnsupportedThinking(model: BaseChatModel): void {
+function nextSupportedLevel(
+  fallback: readonly GeminiThinkingLevel[]
+): GeminiThinkingLevel | undefined {
+  return fallback.find((level) => !isThinkingLevelUnsupported(level));
+}
+
+/** Step to the next supported fallback level, or drop thinkingConfig. */
+function downgradeThinking(
+  model: BaseChatModel,
+  fallback: readonly GeminiThinkingLevel[]
+): void {
+  const next = nextSupportedLevel(fallback);
+  if (next === undefined) {
+    clearGoogleThinkingConfig(model);
+    return;
+  }
+  (model as unknown as { thinkingConfig?: unknown }).thinkingConfig = {
+    thinkingLevel: next,
+  };
+}
+
+function stripUnsupportedThinking(
+  model: BaseChatModel,
+  fallback: readonly GeminiThinkingLevel[]
+): void {
   const level = googleThinkingConfig(model)?.thinkingLevel;
   if (isThinkingLevelUnsupported(level)) {
-    clearGoogleThinkingConfig(model);
+    downgradeThinking(model, fallback);
   }
+}
+
+export interface WrapChatModelOptions {
+  /**
+   * Thinking levels to step through when Gemini rejects the configured one
+   * (e.g. ['LOW'] after MINIMAL). Empty: drop thinkingConfig (default).
+   */
+  thinkingFallback?: readonly GeminiThinkingLevel[];
 }
 
 /**
@@ -129,13 +162,15 @@ export const defaultDirectorChatFactory: DirectorChatFactory = {
 export function wrapChatModel(
   model: BaseChatModel,
   provider: LlmProvider,
-  modelId: string
+  modelId: string,
+  wrapOptions: WrapChatModelOptions = {}
 ): StructuredChat {
+  const fallback = wrapOptions.thinkingFallback ?? [];
   return {
     provider,
     model: modelId,
     async invokeStructured(messages, signal, options) {
-      stripUnsupportedThinking(model);
+      stripUnsupportedThinking(model, fallback);
       const structured = model.withStructuredOutput(
         options?.responseSchema ?? LevelPlanLLMGeminiSchema,
         {
@@ -170,7 +205,7 @@ export function wrapChatModel(
           throw err;
         }
         rememberUnsupportedThinkingLevel(level);
-        clearGoogleThinkingConfig(model);
+        downgradeThinking(model, fallback);
         result = await invokeOnce();
       }
       const call = unwrapStructured(result);

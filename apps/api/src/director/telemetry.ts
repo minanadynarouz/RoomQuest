@@ -17,6 +17,17 @@ export interface LlmCallTelemetry {
   latencyMs: number;
   ttftMs: number | null;
   outcome: LlmCallOutcome;
+  /**
+   * Time to first byte/token in ms when the transport streamed; null when
+   * not obtainable (non-streaming structured output). Same as ttftMs.
+   */
+  ttfbMs?: number | null;
+  /** Wall time of the call in ms (same as latencyMs). */
+  totalMs?: number;
+  /** Gemini `usageMetadata.cachedContentTokenCount` (implicit cache hits). */
+  cachedTokens?: number | null;
+  /** Total characters of the prompt messages sent on this call. */
+  promptChars?: number | null;
 }
 
 export interface DirectorLogger {
@@ -119,6 +130,7 @@ export function tokensFromRaw(raw: unknown): {
   outputTokens: number | null;
   thinkingTokens: number | null;
   thoughtsTokenCount: number | null;
+  cachedTokens: number | null;
 } {
   const sources = usageSources(raw);
   if (sources.length === 0) {
@@ -127,6 +139,7 @@ export function tokensFromRaw(raw: unknown): {
       outputTokens: null,
       thinkingTokens: null,
       thoughtsTokenCount: null,
+      cachedTokens: null,
     };
   }
   const usage = usageRecord(raw);
@@ -153,5 +166,48 @@ export function tokensFromRaw(raw: unknown): {
       asFiniteNumber(usage?.candidatesTokenCount),
     thinkingTokens: thoughts,
     thoughtsTokenCount: thoughts,
+    cachedTokens: cachedFromUsage(sources),
   };
+}
+
+/**
+ * Implicit-cache hits: Gemini `cachedContentTokenCount`, or LangChain's
+ * `input_token_details.cache_read` when the adapter maps it.
+ */
+function cachedFromUsage(sources: Record<string, unknown>[]): number | null {
+  for (const source of sources) {
+    const direct =
+      asFiniteNumber(source.cachedContentTokenCount) ??
+      asFiniteNumber(source.cached_content_token_count);
+    if (direct !== null) {
+      return direct;
+    }
+    const details = asRecord(source.input_token_details);
+    const cacheRead =
+      details === undefined ? null : asFiniteNumber(details.cache_read);
+    if (cacheRead !== null) {
+      return cacheRead;
+    }
+  }
+  return null;
+}
+
+/** Character size of a prompt (message contents, text parts only). */
+export function promptCharCount(messages: readonly unknown[]): number {
+  let total = 0;
+  for (const message of messages) {
+    const content = asRecord(message)?.content;
+    if (typeof content === 'string') {
+      total += content.length;
+    } else if (Array.isArray(content)) {
+      for (const part of content) {
+        if (typeof part === 'string') total += part.length;
+        else {
+          const text = asRecord(part)?.text;
+          if (typeof text === 'string') total += text.length;
+        }
+      }
+    }
+  }
+  return total;
 }

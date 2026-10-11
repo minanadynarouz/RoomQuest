@@ -1,6 +1,6 @@
 import {
   KIT_CATALOG,
-  type LevelPlan,
+  LevelPlan,
   type PieceId,
   type Placement,
   type RelaxedRule,
@@ -108,7 +108,19 @@ export function candidateRoutes(
     pool.push({ key, path, plan });
   }
 
-  const picked = pickDiverse(pool, k, `${seed}|${tier}|routes`);
+  // Prefer routes that can carry at least one hazard (the decoration
+  // schema needs a hazard-type enum); fall back to the rest only when the
+  // geometry leaves fewer than k such routes.
+  const withOptions = pool.map((item) => ({
+    ...item,
+    options: routeOptions(item.plan, graph),
+  }));
+  const hazardous = withOptions.filter((item) => item.options.hazards.length > 0);
+  const rest = withOptions.filter((item) => item.options.hazards.length === 0);
+  const picked = pickDiverse(hazardous, k, `${seed}|${tier}|routes`);
+  if (picked.length < k) {
+    picked.push(...pickDiverse(rest, k - picked.length, `${seed}|${tier}|routes|rest`));
+  }
   return picked.map((item, index) => {
     const plan = { ...item.plan };
     return {
@@ -117,7 +129,7 @@ export function candidateRoutes(
       surfaces: [...item.path],
       plan,
       relaxed: [...relaxed],
-      options: routeOptions(plan, graph),
+      options: item.options,
       graph,
     };
   });
@@ -357,9 +369,13 @@ export function withHazard(
     }
   }
   for (const attempt of tries) {
+    const base = makeRoom(plan, attempt.add.length);
+    if (!base) {
+      continue;
+    }
     const next: LevelPlan = {
       ...plan,
-      placements: [...plan.placements, ...attempt.add],
+      placements: [...base, ...attempt.add],
       beats: plan.beats.map((b, i) =>
         i === beatIndex ? { ...b, uses: [...b.uses, ...attempt.uses] } : b
       ),
@@ -370,6 +386,34 @@ export function withHazard(
     }
   }
   return null;
+}
+
+/** LevelPlan's placement cap (schema `placements.max(14)`). */
+const MAX_PLACEMENTS =
+  (LevelPlan.shape.placements._zod.bag as { maximum?: number }).maximum ?? 14;
+
+/**
+ * Placements with room for `extra` more: when the plan is at the cap,
+ * drop decorative gems that no beat uses (last first). `null` when that
+ * is not enough. validatePlan still decides if the result is legal.
+ */
+function makeRoom(plan: LevelPlan, extra: number): Placement[] | null {
+  const over = plan.placements.length + extra - MAX_PLACEMENTS;
+  if (over <= 0) {
+    return [...plan.placements];
+  }
+  const used = new Set(plan.beats.flatMap((b) => b.uses));
+  const linked = new Set(plan.placements.flatMap((p) => p.links));
+  const out = [...plan.placements];
+  let dropped = 0;
+  for (let i = out.length - 1; i >= 0 && dropped < over; i -= 1) {
+    const p = out[i];
+    if (p?.piece === 'gem' && !used.has(p.id) && !linked.has(p.id)) {
+      out.splice(i, 1);
+      dropped += 1;
+    }
+  }
+  return dropped >= over ? out : null;
 }
 
 function routeSurfaces(plan: LevelPlan): string[] {
