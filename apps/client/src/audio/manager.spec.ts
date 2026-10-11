@@ -14,6 +14,7 @@ import {
   playUiSound,
   resetAudioManager,
   setAudioClock,
+  setMasterVolume,
 } from './manager.js';
 import { resetAudioEngine } from './engine.js';
 import { resetAudioUnlock, unlockAudio } from './unlock.js';
@@ -250,5 +251,94 @@ describe('audio manager', () => {
     expect(audio.voices).toBeGreaterThan(afterFirst);
     expect(SOUND_MANIFEST.explorerOutOfView.spatial).toBe(true);
     expect(SOUND_MANIFEST.explorerOutOfView.randomPitchCents).toBeGreaterThan(0);
+  });
+
+  describe('pipLine chirp', () => {
+    function linedStore() {
+      const store = createGameStore({ clock: { now: () => 1000 } });
+      store.requestLevel();
+      store.startSurveying();
+      const plan = mockPlan();
+      plan.beats = [
+        { goal: 'A', uses: [] },
+        { goal: 'B', uses: [] },
+        { goal: 'C', uses: [] },
+      ];
+      store.startBuilding(plan, {
+        lines: [
+          { beat: '0', text: 'Hop hop!' },
+          { beat: '2', text: 'Almost there.' },
+        ],
+      });
+      return store;
+    }
+
+    function pipTarget() {
+      setExplorerTarget({
+        getWorldPosition: (out) => {
+          out.x = 0.4;
+          out.y = 0.8;
+          out.z = -0.6;
+          return out;
+        },
+      });
+    }
+
+    it('plays one spatial chirp per pipLine and none on beats without a line', () => {
+      const audio = installMockAudio();
+      unlockAudio();
+      pipTarget();
+      const store = linedStore();
+      bindAudioStore(store);
+      store.startPlaying(); // beat 0 has a line
+      expect(audio.panners).toHaveLength(1);
+      expect(audio.panners[0]?.setPosition).toHaveBeenCalledWith(0.4, 0.8, -0.6);
+      store.advanceBeat(); // beat 1: no line
+      expect(audio.panners).toHaveLength(1);
+      store.advanceBeat(); // beat 2: line, right away (no shared cooldown)
+      expect(audio.panners).toHaveLength(2);
+      const lineEvents = store.events.filter((e) => e.type === 'pipLine');
+      expect(lineEvents).toHaveLength(audio.panners.length);
+    });
+
+    it('never chirps without a pipLine event', () => {
+      const audio = installMockAudio();
+      unlockAudio();
+      pipTarget();
+      const store = playingStore(); // no lines
+      bindAudioStore(store);
+      store.advanceBeat();
+      store.completeCurrentBeat();
+      store.win();
+      expect(store.events.some((e) => e.type === 'pipLine')).toBe(false);
+      expect(audio.panners).toHaveLength(0);
+    });
+
+    it('is silent while paused or muted', () => {
+      const audio = installMockAudio();
+      unlockAudio();
+      pipTarget();
+      const store = playingStore();
+      bindAudioStore(store);
+      store.pause();
+      handleGameEvent({ type: 'pipLine', beat: '0', text: 'x' } as never);
+      expect(audio.panners).toHaveLength(0);
+      store.resume();
+      setMasterVolume(0);
+      handleGameEvent({ type: 'pipLine', beat: '0', text: 'x' } as never);
+      expect(audio.panners).toHaveLength(0);
+      setMasterVolume(0.7);
+      handleGameEvent({ type: 'pipLine', beat: '0', text: 'x' } as never);
+      expect(audio.panners).toHaveLength(1);
+    });
+
+    it('is a quiet, dry, rising toy-box chirp in the manifest', () => {
+      const entry = SOUND_MANIFEST.pipLine;
+      expect(entry.synth).toBe('chirpRise');
+      expect(entry.spatial).toBe(true);
+      expect(entry.gain).toBeLessThanOrEqual(0.15);
+      expect(entry.riseCents).toBeGreaterThan(0);
+      expect(entry.randomPitchCents).toBeLessThan(entry.riseCents ?? 0);
+    });
   });
 });

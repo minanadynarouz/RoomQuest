@@ -1,5 +1,9 @@
 import { createSystem, type Entity } from '@iwsdk/core';
 import {
+  largestOpenFloor,
+  onRoomUnplayableEvent,
+} from '../explorer/rescan.js';
+import {
   applyDirectorStatus,
   createRoomReadingRuntime,
   isRoomReadingBusy,
@@ -54,10 +58,8 @@ export class RoomReadingSystem extends createSystem({}, {}) {
     const stopDirector = onDirectorRequest(options.store, (state) => {
       this.onDirector(state);
     });
-    const stopEvents = options.store.subscribeEvents((event) => {
-      if (event.type === 'roomUnplayable') {
-        this.onRoomUnplayable();
-      }
+    const stopEvents = onRoomUnplayableEvent(options.store, () => {
+      this.onRoomUnplayable();
     });
     this.unsubscribe = () => {
       stopDirector();
@@ -115,32 +117,19 @@ export class RoomReadingSystem extends createSystem({}, {}) {
     }
   }
 
+  /** Rescan reaction: look around, shrug, point at the largest open floor. */
   private onRoomUnplayable(): void {
     const graph = this.graph;
     const explorer = this.explorer;
     if (!graph || !explorer || graph.nodes.length === 0) {
       return;
     }
-    const order = orderSurfacesByArea(graph);
-    const openId = order[order.length - 1] ?? order[0];
-    if (!openId) {
-      return;
-    }
-    const node = nodeOf(graph, openId);
+    const node = largestOpenFloor(graph);
     if (!node) {
       return;
     }
     const target = surfaceCenter(graph, node);
-    const from = this.pipSurfaceId ?? order[0];
-    if (from && from !== openId) {
-      const path = wanderPath(graph, from, openId);
-      if (path && path.segments.length > 0) {
-        explorer.beginWander(path);
-        this.pipSurfaceId = openId;
-        return;
-      }
-    }
-    explorer.faceToward(target.x, target.z);
+    explorer.playRescan(target.x, target.z);
   }
 
   private onDirector(state: DirectorRequestState): void {

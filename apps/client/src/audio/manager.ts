@@ -19,6 +19,7 @@ import { unlockAudio } from './unlock.js';
 export const CHIRP_COOLDOWN_MS = 4000;
 
 let unsubscribe: (() => void) | null = null;
+let boundStore: Pick<GameStore, 'phase'> | null = null;
 let lastSpatialAt = Number.NEGATIVE_INFINITY;
 const tmpPos: AudioPosition = { x: 0, y: 0, z: 0 };
 let nowMs = (): number =>
@@ -27,6 +28,7 @@ let nowMs = (): number =>
 export function resetAudioManager(): void {
   unsubscribe?.();
   unsubscribe = null;
+  boundStore = null;
   lastSpatialAt = Number.NEGATIVE_INFINITY;
 }
 
@@ -51,6 +53,13 @@ export function handleGameEvent(event: GameEvent, atMs = nowMs()): void {
   if (!(event.type in SOUND_MANIFEST)) return;
   const key = event.type as SoundKey;
   const entry = SOUND_MANIFEST[key];
+  if (key === 'pipLine') {
+    // One chirp per line; no shared out-of-view cooldown. Silent while
+    // paused or muted (master volume 0).
+    if (boundStore?.phase === 'paused' || getEngineVolume() <= 0) return;
+    playEntry(key);
+    return;
+  }
   if (entry.spatial) {
     if (atMs - lastSpatialAt < CHIRP_COOLDOWN_MS) return;
     lastSpatialAt = atMs;
@@ -60,6 +69,7 @@ export function handleGameEvent(event: GameEvent, atMs = nowMs()): void {
 
 export function bindAudioStore(store: GameStore): void {
   unsubscribe?.();
+  boundStore = store;
   unsubscribe = store.subscribeEvents((event) => {
     handleGameEvent(event);
   });
