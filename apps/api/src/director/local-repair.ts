@@ -42,6 +42,13 @@ export type LocalRepairOutcome =
        * issues describe the input shape, not the model's level.
        */
       unrecoverable: boolean;
+      /**
+       * level-core `repairRoute` returned its `skeleton` strategy: a
+       * brand-new procedural plan, not a repair of the model's plan. The
+       * director must fall back to procedural (`llm-invalid`, failedAt
+       * `repairRoute`) instead of serving or further repairing it.
+       */
+      routeSkeleton: boolean;
     });
 
 /** repairPlan repair strings meaning "input could not be coerced". */
@@ -53,6 +60,8 @@ const UNRECOVERABLE_REPAIRS = [
 export interface RepairRouteResult {
   plan: LevelPlan;
   repairs: string[];
+  /** True when level-core answered with a fresh `skeleton` plan (rejected). */
+  skeleton: boolean;
 }
 
 /**
@@ -75,9 +84,10 @@ export interface RepairRouteContext {
 /**
  * Route-repair hook: level-core `repairRoute` (#68). Single call site used
  * by {@link localRepairPlan}. Only the `kept` strategy (the plan's own route
- * rebuilt) is accepted; the `skeleton` fallback is a fresh procedural path,
- * not the model's plan, so it is treated as "no change" here and repairPlan
- * runs next instead.
+ * rebuilt) is accepted. The `skeleton` fallback is a fresh procedural path,
+ * not the model's plan: it is never returned as the plan, and `skeleton`
+ * is flagged so the director falls back to procedural instead of serving
+ * it (or anything derived from it) as an LLM repair.
  */
 export function repairRoute(
   plan: LevelPlan,
@@ -88,10 +98,13 @@ export function repairRoute(
     seed: ctx.seed ?? plan.seed,
     tier: ctx.tier,
   });
-  if (result.strategy !== 'kept' || !result.changed) {
-    return { plan, repairs: [] };
+  if (result.strategy === 'skeleton') {
+    return { plan, repairs: [], skeleton: true };
   }
-  return { plan: result.plan, repairs: ['repair-route'] };
+  if (result.strategy !== 'kept' || !result.changed) {
+    return { plan, repairs: [], skeleton: false };
+  }
+  return { plan: result.plan, repairs: ['repair-route'], skeleton: false };
 }
 
 function addRepair(repairs: string[], label: string): void {
@@ -151,11 +164,30 @@ export function localRepairPlan(
       // Snap is best effort; repairPlan below handles the plan as-is.
     }
 
-    let routed: RepairRouteResult = { plan: current, repairs: [] };
+    let routed: RepairRouteResult = {
+      plan: current,
+      repairs: [],
+      skeleton: false,
+    };
     try {
       routed = repairRoute(current, graph, ctx);
     } catch {
       // Best effort, like snap.
+    }
+    if (routed.skeleton) {
+      // repairRoute could not keep the model's route and produced a fresh
+      // procedural skeleton. That is not a repair: report failure.
+      const unrepaired =
+        safeValidate(current, graph) ?? validatePlan(plan, graph);
+      return {
+        ok: false,
+        repairs,
+        result: unrepaired,
+        relaxed: unrepaired.relaxed,
+        fixedBy: null,
+        unrecoverable: false,
+        routeSkeleton: true,
+      };
     }
     if (routed.plan !== current || routed.repairs.length > 0) {
       current = routed.plan;
@@ -190,6 +222,7 @@ export function localRepairPlan(
       unrecoverable: repaired.repairs.some((label) =>
         (UNRECOVERABLE_REPAIRS as readonly string[]).includes(label)
       ),
+      routeSkeleton: false,
     };
   }
   const result = safeValidate(repaired.plan, graph) ?? repaired.result;
@@ -201,6 +234,7 @@ export function localRepairPlan(
       relaxed: result.relaxed,
       fixedBy: null,
       unrecoverable: false,
+      routeSkeleton: false,
     };
   }
   return {

@@ -107,7 +107,7 @@ export const LIVE_FLAG_REQUIRED_REASON = [
   'Pass --mock to exercise the director pipeline with FakeListChatModel (no keys required).',
 ].join('\n');
 
-function classifySource(source: EvalRunRecord['source']): {
+export function classifySource(source: EvalRunRecord['source']): {
   validBeforeRepair: boolean;
   validAfterRepair: boolean;
   fallbackToProcedural: boolean;
