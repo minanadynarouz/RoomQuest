@@ -15,6 +15,7 @@ export type DirectorStage =
   | 'repair-route'
   | 'repair-plan'
   | 'llm-repair'
+  | 'route'
   | 'procedural';
 
 export const DIRECTOR_STAGES = [
@@ -23,6 +24,7 @@ export const DIRECTOR_STAGES = [
   'repair-route',
   'repair-plan',
   'llm-repair',
+  'route',
   'procedural',
 ] as const satisfies readonly DirectorStage[];
 
@@ -34,6 +36,9 @@ export type DirectorFailurePoint =
   | 'slot-resolve'
   | 'llm-repair-gate'
   | 'llm-repair'
+  | 'route-candidates'
+  | 'route-decoration'
+  | 'route-validate'
   | 'director';
 
 export const DIRECTOR_FAILURE_POINTS = [
@@ -43,6 +48,9 @@ export const DIRECTOR_FAILURE_POINTS = [
   'slot-resolve',
   'llm-repair-gate',
   'llm-repair',
+  'route-candidates',
+  'route-decoration',
+  'route-validate',
   'director',
 ] as const satisfies readonly DirectorFailurePoint[];
 

@@ -5,8 +5,8 @@ export interface EvalHarnessOptions {
   mock: boolean;
   /** Live Gemini requires an explicit `--live` flag (and a key). */
   live?: boolean;
-  /** Placement arms (`--placement uv|slot|both`); default `['uv']`. */
-  placements?: readonly ('uv' | 'slot')[];
+  /** Placement arms (`--placement uv|slot|route|both|all` or a comma list); default `['uv']`. */
+  placements?: readonly ('uv' | 'slot' | 'route')[];
   roomLimit?: number;
   seedLimit?: number;
   tiers?: readonly Tier[];

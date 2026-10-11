@@ -2,7 +2,7 @@ import { FakeListChatModel } from '@langchain/core/utils/testing';
 import { AIMessage } from '@langchain/core/messages';
 import type { BaseLanguageModelInput } from '@langchain/core/language_models/base';
 import { RunnableLambda } from '@langchain/core/runnables';
-import { listHintedSlots } from '@roomquest/level-core';
+import { listHintedSlots, type CandidateRoute } from '@roomquest/level-core';
 import type { LevelPlan, SurfaceGraph } from '@roomquest/schema';
 import { abortableDelay } from './errors';
 import { wrapJsonChatModel } from './models';
@@ -237,5 +237,41 @@ export function planToSlotLlmJson(
         lk: placement.links,
       };
     }),
+  });
+}
+
+/**
+ * Route-arm mock answer built only from what the request offers: the first
+ * candidate (or `routeId` override), its first twist beat, its offered
+ * hazards, and one in-voice line per beat.
+ */
+export function mockDecorationJson(
+  candidates: readonly CandidateRoute[],
+  overrides: Record<string, unknown> = {}
+): string {
+  const route = candidates[0];
+  if (route === undefined) {
+    return JSON.stringify({
+      routeId: 'r0',
+      theme: 'none',
+      twistBeat: '0',
+      hazards: [],
+      ...overrides,
+    });
+  }
+  const hazards = route.options.hazards
+    .filter((hazard) => hazard.types.length > 0)
+    .slice(0, 1)
+    .map((hazard) => ({ beat: hazard.beat, type: hazard.types[0] ?? '' }));
+  return JSON.stringify({
+    routeId: route.id,
+    theme: 'Sofa summit climb',
+    twistBeat: route.options.twistBeats[0] ?? '0',
+    hazards,
+    lines: route.plan.beats.slice(0, 8).map((_beat, index) => ({
+      beat: String(index),
+      text: `Whoa, look at that, step ${String(index + 1)} together!`,
+    })),
+    ...overrides,
   });
 }

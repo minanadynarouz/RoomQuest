@@ -175,6 +175,35 @@ describe('API schemas', () => {
       repairs: [],
     };
 
+    describe('lines', () => {
+      const base = validResponse;
+      it('accepts optional lines and keeps old responses valid', () => {
+        expect(LevelResponse.parse(base).lines).toBeUndefined();
+        expect(
+          LevelResponse.parse({ ...base, lines: [{ beat: '0', text: 'Hi!' }] })
+            .lines
+        ).toEqual([{ beat: '0', text: 'Hi!' }]);
+      });
+      it('rejects empty, overlong or too many lines', () => {
+        expect(() =>
+          LevelResponse.parse({ ...base, lines: [{ beat: '0', text: '' }] })
+        ).toThrow();
+        expect(() =>
+          LevelResponse.parse({
+            ...base,
+            lines: [{ beat: '0', text: 'x'.repeat(81) }],
+          })
+        ).toThrow();
+        expect(() =>
+          LevelResponse.parse({
+            ...base,
+            lines: Array.from({ length: 9 }, () => ({ beat: '0', text: 'a' })),
+          })
+        ).toThrow();
+      });
+    });
+
+
     it('accepts valid level response', () => {
       const result = LevelResponse.parse(validResponse);
       expect(result.source).toBe('llm');
@@ -258,6 +287,7 @@ describe('API schemas', () => {
         'llm-unconfigured',
         'director-mock',
         'director-error',
+        'no-route-candidates',
       ] as const) {
         expect(FallbackReason.parse(reason)).toBe(reason);
       }

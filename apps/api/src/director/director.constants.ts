@@ -14,7 +14,7 @@ export const DIRECTOR_BUDGET_MS = 7000;
  */
 export const LLM_REPAIR_MIN_REMAINING_MS = 3500;
 
-export const DIRECTOR_PLACEMENT_MODES = ['uv', 'slot'] as const;
+export const DIRECTOR_PLACEMENT_MODES = ['uv', 'slot', 'route'] as const;
 export type DirectorPlacementMode = (typeof DIRECTOR_PLACEMENT_MODES)[number];
 export const DEFAULT_DIRECTOR_PLACEMENT: DirectorPlacementMode = 'uv';
 

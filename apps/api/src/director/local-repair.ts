@@ -1,11 +1,12 @@
 import {
   repairPlan,
+  repairRoute as levelCoreRepairRoute,
   snapPlacementsToSlots,
   validatePlan,
   type RepairResult,
   type ValidationResult,
 } from '@roomquest/level-core';
-import { LevelPlan, type SurfaceGraph } from '@roomquest/schema';
+import { LevelPlan, type SurfaceGraph, type Tier } from '@roomquest/schema';
 
 /** Local deterministic stage that turned an invalid plan valid. */
 export type LocalRepairStage = 'snap' | 'repair-route' | 'repair-plan';
@@ -43,16 +44,32 @@ export function trySnapPlacementsToSlots(
   return snapPlacementsToSlots(plan, graph).plan;
 }
 
+export interface RepairRouteContext {
+  /** Daily seed (route-link tie-breaks). Defaults to `plan.seed`. */
+  seed?: string;
+  tier?: Tier;
+}
+
 /**
- * Route-repair hook. `@roomquest/level-core` has no `repairRoute` yet, so
- * this is a pass-through. When level-core ships one, swap the body here —
- * this is the single call site used by {@link localRepairPlan}.
+ * Route-repair hook: level-core `repairRoute` (#68). Single call site used
+ * by {@link localRepairPlan}. Only the `kept` strategy (the plan's own route
+ * rebuilt) is accepted; the `skeleton` fallback is a fresh procedural path,
+ * not the model's plan, so it is treated as "no change" here and repairPlan
+ * runs next instead.
  */
 export function repairRoute(
   plan: LevelPlan,
-  _graph: SurfaceGraph
+  graph: SurfaceGraph,
+  ctx: RepairRouteContext = {}
 ): RepairRouteResult {
-  return { plan, repairs: [] };
+  const result = levelCoreRepairRoute(plan, graph, {
+    seed: ctx.seed ?? plan.seed,
+    tier: ctx.tier,
+  });
+  if (result.strategy !== 'kept' || !result.changed) {
+    return { plan, repairs: [] };
+  }
+  return { plan: result.plan, repairs: ['repair-route'] };
 }
 
 function addRepair(repairs: string[], label: string): void {
@@ -84,7 +101,8 @@ function safeValidate(
  */
 export function localRepairPlan(
   plan: LevelPlan,
-  graph: SurfaceGraph
+  graph: SurfaceGraph,
+  ctx: RepairRouteContext = {}
 ): LocalRepairOutcome {
   const repairs: string[] = [];
   let current = plan;
@@ -111,7 +129,12 @@ export function localRepairPlan(
       // Snap is best effort; repairPlan below handles the plan as-is.
     }
 
-    const routed = repairRoute(current, graph);
+    let routed: RepairRouteResult = { plan: current, repairs: [] };
+    try {
+      routed = repairRoute(current, graph, ctx);
+    } catch {
+      // Best effort, like snap.
+    }
     if (routed.plan !== current || routed.repairs.length > 0) {
       current = routed.plan;
       for (const label of routed.repairs) {
