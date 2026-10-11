@@ -99,9 +99,11 @@ describe('recoverPlan', () => {
     const repair: RepairFn = (plan) => ({
       plan,
       repairs: ['gave up'],
+      relaxed: [],
       result: {
         ok: false,
         issues: [{ code: 'GOAL_UNREACHABLE', message: 'no path' }],
+        relaxed: [],
       },
     });
     const recovered = await recoverPlan(
@@ -116,18 +118,18 @@ describe('recoverPlan', () => {
   it('forwards relaxed rule ids from the plan or validator', async () => {
     const plan = {
       ...generatePlan(GRAPH, 'relaxed-seed', 'normal'),
-      relaxed: ['PATH_DISTANCE_TOO_SHORT'],
+      relaxed: ['minPath'],
     } as LevelPlan & { relaxed: string[] };
     const recovered = await recoverPlan(plan, GRAPH, {
       validate: (next) => {
         const result = validatePlan(next, GRAPH);
-        return { ...result, relaxed: ['SLOPE_TOO_STEEP'] };
+        return { ...result, relaxed: ['portalFov'] };
       },
     });
     expect(recovered.ok).toBe(true);
     expect(recovered.relaxed).toEqual([
-      'PATH_DISTANCE_TOO_SHORT',
-      'SLOPE_TOO_STEEP',
+      'minPath',
+      'portalFov',
     ]);
   });
 });

@@ -200,7 +200,12 @@ async function postLevels(
     const requestId = readResponseHeader(response.headers, 'X-Request-Id');
 
     if (isRoomUnplayableResponse(response.status, payload)) {
-      return { ok: false, reason: ROOM_UNPLAYABLE, requestId };
+      return {
+        ok: false,
+        reason: ROOM_UNPLAYABLE,
+        apiErrorCode: parseApiError(payload),
+        requestId,
+      };
     }
 
     if (response.status === 429) {
