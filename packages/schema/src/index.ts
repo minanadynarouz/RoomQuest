@@ -9,6 +9,8 @@ export * from './api.js';
 export * from './proc-key.js';
 export * from './kit-catalog.js';
 export * from './json-schema.js';
+export * from './slot-plan.js';
+export * from './decoration.js';
 
 // Re-export constants for convenience
 export { PAR_TIME_MIN_MS, PAR_TIME_MAX_MS } from './level.js';

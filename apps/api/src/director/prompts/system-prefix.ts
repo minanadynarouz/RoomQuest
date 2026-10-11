@@ -1,17 +1,30 @@
+import { VALIDATION_LIMITS } from '@roomquest/level-core';
+import { KIT_CATALOG } from '@roomquest/schema';
 import { FEW_SHOT_DESERT_JSON, FEW_SHOT_FOREST_JSON } from './few-shots';
 import { KIT_CATALOG_PROMPT } from './kit-catalog';
 
 const ROLE = `Roomquest director: place 4–14 kit pieces on a SurfaceGraph. No geometry, titles, beats, dialogue, or par.`;
 
+const L = VALIDATION_LIMITS;
+const m = (value: number): string => String(value);
+
+/**
+ * Numeric rules are interpolated once at module load from level-core's
+ * VALIDATION_LIMITS (the values validatePlan enforces), never hard-coded,
+ * so the string is byte-identical on every request.
+ */
 const RULES = `## Rules
 1. Only the 10 kit ids. Unique placement ids (\`i\`).
-2. village_hut on a table/desk (≥0.3m², 0.4–1.1m, ≤50° forward). Max 1.
-3. crystal_shrine on a different surface ≥0.8m away. Max 1.
+2. village_hut on a table/desk (≥${m(KIT_CATALOG.village_hut.minArea ?? 0)}m², ${m(KIT_CATALOG.village_hut.minHeight ?? 0)}–${m(KIT_CATALOG.village_hut.maxHeight ?? 0)}m, ≤${m(L.maxSlopeDeg)}° from forward). Max 1.
+3. crystal_shrine on a different surface ≥${m(L.minPathDistanceM)}m (min path distance) from the hut. Max 1.
 4. Bridges/ramps/portals set \`t\` to the other surface id; else \`t\`:null.
-5. Plank gap 0.1–0.9m, Δh≤0.25m. Ramp Δh≤0.6m. One portal pair, both in view.
-6. Gate needs a reachable lever (≤50° forward) via \`lk\`.
-7. Gems 3–5 and gates on the explorer path. Slime on couch/bed/table ≥0.5m².
-8. Pick \`th\` from forest|desert|snow|sky; avoid recentThemes.`;
+5. Plank gap ${m(L.plankMinGapM)}–${m(L.plankMaxGapM)}m, step height Δh≤${m(L.plankMaxStepHeightM)}m. Ramp Δh≤${m(L.rampMaxStepHeightM)}m and min floor run ≥${m(L.rampFloorRunPerDh)}×Δh. One portal pair, both in view.
+6. Max slope: any surface or \`t\` target used by hut, lever or portal must be ≤${m(L.maxSlopeDeg)}° from forward.
+7. Reach: levers only on reach ${L.playerReach.join('|')} surfaces, within ${m(L.leverMaxReachM)}m. Gate needs such a lever via \`lk\`.
+8. Gems 3–5 and gates on the explorer path. Slime on couch/bed/table ≥${m(KIT_CATALOG.slime.minArea ?? 0)}m².
+9. Beats must be completable in order: every used piece exists, the explorer can reach it from the hut, a gate opens only after a reachable linked lever, goal reachable from start.
+10. Pick \`th\` from forest|desert|snow|sky; avoid recentThemes.
+11. If the response schema has \`slot\` instead of \`s\`/\`u\`/\`v\`, pick one slot id from the graph node \`slots\` whose \`fits\` lists the piece; each slot at most once.`;
 
 /**
  * Static system prefix. Do not interpolate request data here — that would

@@ -18,8 +18,19 @@ export interface StructuredChat {
   readonly model: string;
   invokeStructured(
     messages: BaseMessageLike[],
-    signal: AbortSignal
+    signal: AbortSignal,
+    options?: StructuredCallOptions
   ): Promise<StructuredPlanCall>;
+}
+
+export interface StructuredCallOptions {
+  /**
+   * Per-request Gemini responseSchema (e.g. the DIRECTOR_PLACEMENT=slot
+   * enum schema). Omit to use the static LevelPlanLLMGeminiSchema.
+   */
+  responseSchema?: Record<string, unknown>;
+  /** Structured-output name passed to LangChain. */
+  schemaName?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

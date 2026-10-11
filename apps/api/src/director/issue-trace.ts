@@ -8,6 +8,44 @@ export interface IssueTrace {
 
 export type RepairStage = 'local' | 'llm';
 
+/** Stage that produced the returned plan. */
+export type DirectorStage =
+  | 'first-try'
+  | 'snap'
+  | 'repair-route'
+  | 'repair-plan'
+  | 'llm-repair'
+  | 'procedural';
+
+export const DIRECTOR_STAGES = [
+  'first-try',
+  'snap',
+  'repair-route',
+  'repair-plan',
+  'llm-repair',
+  'procedural',
+] as const satisfies readonly DirectorStage[];
+
+/** Where the LLM path stopped when the answer is procedural. */
+export type DirectorFailurePoint =
+  | 'mode'
+  | 'quota-precheck'
+  | 'draft'
+  | 'slot-resolve'
+  | 'llm-repair-gate'
+  | 'llm-repair'
+  | 'director';
+
+export const DIRECTOR_FAILURE_POINTS = [
+  'mode',
+  'quota-precheck',
+  'draft',
+  'slot-resolve',
+  'llm-repair-gate',
+  'llm-repair',
+  'director',
+] as const satisfies readonly DirectorFailurePoint[];
+
 export interface ValidationTrace {
   firstTry: IssueTrace[];
   afterLocal: IssueTrace[] | null;

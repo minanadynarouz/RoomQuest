@@ -91,6 +91,7 @@ describe('eval harness', () => {
   it('skips a live run when GOOGLE_API_KEY is missing', async () => {
     const result = await runEvalHarness({
       mock: false,
+      live: true,
       googleApiKey: undefined,
       write: false,
     });
@@ -202,9 +203,75 @@ describe('eval harness', () => {
     }
     expect(result.report.runs.map((run) => `${run.tier}:${run.date}`)).toEqual([
       'easy:2026-10-01',
-      'easy:2026-10-02',
       'normal:2026-10-01',
+      'easy:2026-10-02',
     ]);
+  });
+
+  it('requires an explicit --live flag even when a key is available', async () => {
+    const result = await runEvalHarness({
+      mock: false,
+      googleApiKey: 'test-dummy-key',
+      write: false,
+    });
+    expect(result.status).toBe('skipped');
+    if (result.status === 'skipped') {
+      expect(result.reason).toMatch(/--live/);
+    }
+    expect(parseEvalArgs(['--live']).live).toBe(true);
+    expect(parseEvalArgs([]).live).toBe(false);
+    await expect(
+      runEvalHarness({ mock: true, live: true, write: false })
+    ).rejects.toThrow(/--mock or --live/);
+  });
+
+  it('spreads --runs round-robin across rooms × tiers × seeds × placement arms', async () => {
+    const options = parseEvalArgs(['--mock', '--placement', 'both']);
+    expect(options.placements).toEqual(['uv', 'slot']);
+    expect(parseEvalArgs(['--placement', 'slot']).placements).toEqual([
+      'slot',
+    ]);
+    expect(() => parseEvalArgs(['--placement', 'grid'])).toThrow();
+    const result = await runEvalHarness({
+      mock: true,
+      roomLimit: 3,
+      seedLimit: 1,
+      tiers: ['easy', 'normal'],
+      placements: ['uv', 'slot'],
+      runCount: 12,
+      now: () => FIXED_NOW_MS,
+      write: false,
+      googleApiKey: undefined,
+    });
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') {
+      return;
+    }
+    const runs = result.report.runs;
+    const roomCount = result.report.roomIds.length;
+    expect(roomCount).toBeGreaterThan(1);
+    // First `roomCount` runs hit every room once.
+    expect(new Set(runs.slice(0, roomCount).map((r) => r.roomId)).size).toBe(
+      roomCount
+    );
+    expect(new Set(runs.map((r) => r.requestedPlacement))).toEqual(
+      new Set(['uv', 'slot'])
+    );
+    for (const run of runs) {
+      expect(run.fallbackReason.length).toBeGreaterThan(0);
+      expect(run.stage).toBeTruthy();
+      if (run.source === 'procedural') {
+        expect(run.fallbackReason).not.toBe('none');
+        expect(run.failedAt).not.toBeNull();
+      } else {
+        expect(run.fallbackReason).toBe('none');
+      }
+    }
+    const markdown = renderMarkdown(result.report);
+    expect(markdown).toContain('placement arms');
+    expect(markdown).toContain('Relaxed rules by placement arm');
+    expect(markdown).toContain('Fallback reason');
+    expect(result.report.aggregate.relaxedPctByPlacement).toHaveProperty('uv');
   });
 });
 

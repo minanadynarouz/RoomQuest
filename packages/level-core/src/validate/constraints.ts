@@ -25,6 +25,7 @@ import {
   pairMetrics,
   type NodeIndex,
 } from './graph-utils';
+import { RAMP_FLOOR_RUN_PER_DH } from './limits';
 import { issue, type Issue } from './types';
 
 /**
@@ -470,7 +471,7 @@ function checkRampFloorRun(
   const run = floor
     ? Math.max(gap, Math.min(floor.size[0], floor.size[1]))
     : gap;
-  const needed = 2 * dh;
+  const needed = RAMP_FLOOR_RUN_PER_DH * dh;
   if (run < needed) {
     issues.push(
       issue(

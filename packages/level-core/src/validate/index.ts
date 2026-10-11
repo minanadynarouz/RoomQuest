@@ -9,6 +9,16 @@
 export { clampParTimeMs } from './clamp-par';
 export { validatePlan } from './validate-plan';
 export { relaxedRulesFor } from './relaxed-rules';
+export {
+  PLAYER_REACH_VALUES,
+  RAMP_FLOOR_RUN_PER_DH,
+  VALIDATION_LIMITS,
+} from './limits';
+export {
+  GEOM_EPS_M,
+  MAX_VIEW_ANGLE_DEG,
+  MIN_PATH_DISTANCE_M,
+} from './graph-utils';
 export { ISSUE_CODES } from './types';
 export type { Issue, IssueCode, ValidationResult } from './types';
 export { bfsPath, bfsReachable, explorerAdjacency } from './graph-utils';

@@ -26,6 +26,11 @@ function run(relaxed: EvalRunRecord['relaxed']): EvalRunRecord {
     issuesAfterLocal: null,
     issuesAfterLlmRepair: null,
     repairedBy: null,
+    placement: 'uv',
+    requestedPlacement: 'uv',
+    fallbackReason: 'llm-invalid',
+    stage: 'procedural',
+    failedAt: 'llm-repair-gate',
   };
 }
 
@@ -49,6 +54,35 @@ describe('eval aggregate relaxedPct', () => {
       minPath: 0,
       hutTable: 0,
       portalFov: 0,
+    });
+  });
+
+  it('reports relaxed % per placement arm and counts reasons/stages', () => {
+    const aggregate = aggregateRuns([
+      run(['hutTable']),
+      { ...run([]), placement: 'slot', requestedPlacement: 'slot' },
+      {
+        ...run(['minPath']),
+        placement: 'slot',
+        requestedPlacement: 'slot',
+        source: 'llm',
+        fallbackReason: 'none',
+        stage: 'snap',
+        failedAt: null,
+      },
+    ]);
+    expect(aggregate.relaxedPctByPlacement).toEqual({
+      uv: { minPath: 0, hutTable: 100, portalFov: 0 },
+      slot: { minPath: 50, hutTable: 0, portalFov: 0 },
+    });
+    expect(aggregate.fallbackReasonCounts).toEqual({
+      'llm-invalid': 2,
+      none: 1,
+    });
+    expect(aggregate.stageCounts).toEqual({ procedural: 2, snap: 1 });
+    expect(aggregate.failedAtCounts).toEqual({
+      'llm-repair-gate': 2,
+      none: 1,
     });
   });
 });
