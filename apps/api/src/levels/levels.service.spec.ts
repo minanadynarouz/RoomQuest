@@ -277,3 +277,86 @@ describe('LevelsService cache + limiter', () => {
     expect(written.metadata).toEqual({ relaxed: [] });
   });
 });
+
+describe('LevelsService routeId (route-arm levels)', () => {
+  it('cache hit returns the stored routeId', async () => {
+    const { service } = await serviceWith({
+      cached: { ...cachedRow(validPlan), source: 'llm', metadata: { relaxed: [], routeId: 'r2' } },
+    });
+    const response = await service.create(request, 'device-1');
+    expect(response.source).toBe('cache');
+    expect(response.routeId).toBe('r2');
+  });
+
+  it('cache hit of a non-route level has no routeId', async () => {
+    const { service } = await serviceWith({ cached: cachedRow(validPlan) });
+    const response = await service.create(request, 'device-1');
+    expect('routeId' in response).toBe(false);
+  });
+
+  it('persists routeId in LevelCache.metadata on a route-arm miss', async () => {
+    const { service, persist, directorPlan } = await serviceWith({ cached: null });
+    directorPlan.mockResolvedValueOnce({ ...directorResponse(validPlan, 'llm'), routeId: 'r1' });
+    const response = await service.create(request, 'device-1');
+    expect(response.routeId).toBe('r1');
+    expect(persist).toHaveBeenCalledOnce();
+    const row = persist.mock.calls[0]?.[0] as { metadata: unknown };
+    expect(row.metadata).toEqual({ relaxed: [], routeId: 'r1' });
+  });
+
+  it('does not store routeId for non-route levels', async () => {
+    const { service, persist } = await serviceWith({ cached: null });
+    await service.create(request, 'device-1');
+    const row = persist.mock.calls[0]?.[0] as { metadata: unknown };
+    expect(row.metadata).toEqual({ relaxed: [] });
+  });
+});
+
+describe('LevelsService lines (route-arm levels)', () => {
+  const lines = [
+    { beat: '0', text: 'Whoa, the sofa mountains look huge!' },
+    { beat: '1', text: 'Help me sneak past this slime.' },
+  ];
+
+  it('route miss stores lines in LevelCache.metadata', async () => {
+    const { service, persist, directorPlan } = await serviceWith({ cached: null });
+    directorPlan.mockResolvedValueOnce({
+      ...directorResponse(validPlan, 'llm'),
+      routeId: 'r1',
+      lines,
+    });
+    const response = await service.create(request, 'device-1');
+    expect(response.lines).toEqual(lines);
+    const row = persist.mock.calls[0]?.[0] as { metadata: unknown };
+    expect(row.metadata).toEqual({ relaxed: [], routeId: 'r1', lines });
+  });
+
+  it('cache hit returns the same stored lines', async () => {
+    const { service } = await serviceWith({
+      cached: {
+        ...cachedRow(validPlan),
+        source: 'llm',
+        metadata: { relaxed: [], routeId: 'r1', lines },
+      },
+    });
+    const response = await service.create(request, 'device-1');
+    expect(response.source).toBe('cache');
+    expect(response.lines).toEqual(lines);
+    expect(response.routeId).toBe('r1');
+  });
+
+  it('old rows without lines (or invalid lines) → lines absent', async () => {
+    for (const metadata of [
+      { relaxed: [] },
+      { relaxed: [], lines: 'nope' },
+      { relaxed: [], lines: [{ beat: '0', text: '' }] },
+    ]) {
+      const { service } = await serviceWith({
+        cached: { ...cachedRow(validPlan), metadata },
+      });
+      const response = await service.create(request, 'device-1');
+      expect(response.source).toBe('cache');
+      expect('lines' in response).toBe(false);
+    }
+  });
+});
