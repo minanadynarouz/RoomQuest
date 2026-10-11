@@ -14,10 +14,7 @@ import {
   resetHealthPrewarmForTests,
 } from './health-prewarm.js';
 import { createGameStore } from '../store.js';
-import {
-  createResultPoster,
-  resolveLevelKey,
-} from '../results/poster.js';
+import { createResultPoster, resolveLevelKey } from '../results/poster.js';
 import { LEVELS_PATH } from './types.js';
 import type {
   FetchLike,
@@ -271,9 +268,9 @@ function apiResponse(overrides?: Partial<LevelResponse>): LevelResponse {
   };
 }
 
-function headerBag(
-  headers: Record<string, string>
-): { get(name: string): string | null } {
+function headerBag(headers: Record<string, string>): {
+  get(name: string): string | null;
+} {
   const normalized = new Map(
     Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value])
   );
@@ -534,7 +531,11 @@ describe('createDirectorClient', () => {
       )
     );
 
-    const result = await client(fetchFn, { snap, route: noopRoute, repair }).requestPlan(GRAPH);
+    const result = await client(fetchFn, {
+      snap,
+      route: noopRoute,
+      repair,
+    }).requestPlan(GRAPH);
 
     expect(result.usedFallback).toBe(true);
     expect(result.source).toBe('procedural');
@@ -780,7 +781,8 @@ describe('createDirectorClient', () => {
           {
             error: {
               code: 'ROOM_UNPLAYABLE',
-              message: 'Room cannot produce a valid plan even with relaxed rules',
+              message:
+                'Room cannot produce a valid plan even with relaxed rules',
             },
           },
           422
@@ -1093,9 +1095,7 @@ describe('applyDirectorResult', () => {
     expect(store.events.some((event) => event.type === 'roomUnplayable')).toBe(
       true
     );
-    expect(store.directorRequest.value.relaxed).toEqual([
-      'minPath',
-    ]);
+    expect(store.directorRequest.value.relaxed).toEqual(['minPath']);
   });
 
   it('surfaces source and latency on the game store', () => {
@@ -1271,8 +1271,16 @@ describe('director lines (Pip speech cards)', () => {
 
   it('drops lines on procedural fallback', async () => {
     const snap: SnapFn = (plan) => ({ plan, changes: [] });
-    const repair: RepairFn = (plan) => ({
+    // Force every local recovery step to fail so the client must go
+    // procedural: snap and repairRoute are no-ops, repairPlan gives up.
+    const route: RouteRepairFn = (plan) => ({
       plan,
+      changed: false,
+      issues: [],
+      strategy: 'none',
+    });
+    const repair: RepairFn = () => ({
+      ok: false,
       repairs: [],
       result: {
         ok: false,
@@ -1288,9 +1296,11 @@ describe('director lines (Pip speech cards)', () => {
         )
       )
     );
-    const result = await linesClient(fetchFn, { snap, repair }).requestPlan(
-      GRAPH
-    );
+    const result = await linesClient(fetchFn, {
+      snap,
+      route,
+      repair,
+    }).requestPlan(GRAPH);
     expect(result.source).toBe('procedural');
     expect(result.lines).toBeUndefined();
 
