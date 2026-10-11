@@ -1,4 +1,4 @@
-import { generatePlan } from '@roomquest/level-core';
+import { generatePlan, validatePlan } from '@roomquest/level-core';
 import { LevelRequest } from '@roomquest/schema';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -218,6 +218,10 @@ export async function runEvalHarness(
           ...flags,
           latencyMs: outcome.response.latencyMs,
           repairs: [...outcome.response.repairs],
+          relaxed: [
+            ...(outcome.response.relaxed ??
+              validatePlan(outcome.response.plan, room.graph).relaxed),
+          ],
           estimatedCostUsd: runCost(outcome.telemetry),
           telemetry: outcome.telemetry.map((row) => ({ ...row })),
         });

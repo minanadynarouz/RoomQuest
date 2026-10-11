@@ -7,6 +7,7 @@ import { generatePlan } from '@roomquest/level-core';
 import { LevelRequest, LevelResponse, type LevelPlan } from '@roomquest/schema';
 import { describe, expect, it, vi } from 'vitest';
 import { RateLimitedException } from '../common/rate-limited.exception';
+import { RoomUnplayableException } from '../common/room-unplayable.exception';
 import { DirectorService } from '../director/director.service';
 import { DIRECTOR_RUNTIME } from '../director/models';
 import { PROMPT_VERSION } from '../director/prompts';
@@ -65,6 +66,7 @@ function cachedRow(plan: LevelPlan): LevelCacheRow {
     plan,
     source: 'procedural',
     model: null,
+    metadata: {},
   };
 }
 
@@ -115,6 +117,7 @@ describe('LevelsService cache + limiter', () => {
     });
     const response = await service.create(request, 'device-1');
     expect(response.source).toBe('cache');
+    expect(response.relaxed).toEqual([]);
     expect(directorPlan).not.toHaveBeenCalled();
     expect(persist).not.toHaveBeenCalled();
   });
@@ -213,7 +216,35 @@ describe('LevelsService cache + limiter', () => {
     const response = await service.create(request, 'device-quota');
     expect(response.source).toBe('procedural');
     expect(response.fallbackReason).toBe('llm-quota');
+    expect(response.relaxed).toEqual([]);
     expect(directorPlan).toHaveBeenCalledOnce();
     expect(persist).not.toHaveBeenCalled();
+  });
+
+  it('throws ROOM_UNPLAYABLE instead of returning an invalid director plan', async () => {
+    const invalid: LevelPlan = {
+      ...SYNTHETIC_LIVING_ROOM_PLAN,
+      start: 'missing-start',
+      goal: 'missing-goal',
+    };
+    const { service, persist } = await serviceWith({
+      cached: null,
+      plan: invalid,
+    });
+    await expect(service.create(request, 'device-unplayable')).rejects.toBeInstanceOf(
+      RoomUnplayableException
+    );
+    expect(persist).not.toHaveBeenCalled();
+  });
+
+  it('persists relaxed waiver ids in LevelCache metadata', async () => {
+    const { service, persist } = await serviceWith({ cached: null });
+    const response = await service.create(request, 'device-relaxed');
+    expect(response.relaxed).toEqual([]);
+    expect(persist).toHaveBeenCalledOnce();
+    const written = persist.mock.calls[0]?.[0] as {
+      metadata?: { relaxed?: string[] };
+    };
+    expect(written.metadata).toEqual({ relaxed: [] });
   });
 });

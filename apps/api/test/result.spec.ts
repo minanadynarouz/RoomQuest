@@ -112,6 +112,29 @@ describe.skipIf(dbUrl === undefined && process.env.CI !== 'true')(
       expect(row?.gems).toBe(3);
       expect(row?.completed).toBe(true);
       expect(row?.planSource).toBe(parsedLevel.source);
+      expect(row?.relaxed ?? []).toEqual(parsedLevel.relaxed ?? []);
+    });
+
+    it('stores optional relaxed waiver ids from the result body', async () => {
+      const key = procLevelKey('f1a2b3c4d5e6-2026-10-16', 'easy');
+      const res = await request(httpServer(app))
+        .post(`/api/v1/levels/${key}/result`)
+        .send(
+          ResultRequest.parse({
+            ...resultBody('procedural'),
+            relaxed: ['minPath', 'hutTable'],
+          })
+        )
+        .expect(201);
+      const parsed = ResultResponse.parse(res.body as unknown);
+      const client = app.get(PrismaService).getClient();
+      if (client === null) {
+        throw new Error('expected a Prisma client in the postgres spec');
+      }
+      const row = await client.sessionResult.findUnique({
+        where: { id: parsed.id },
+      });
+      expect(row?.relaxed).toEqual(['minPath', 'hutTable']);
     });
 
     it('returns 201 for a proc: key without a LevelCache row', async () => {

@@ -190,6 +190,9 @@ async function postLevels(
 
     if (!response.ok) {
       const apiErrorCode = parseApiError(payload);
+      if (apiErrorCode === 'ROOM_UNPLAYABLE') {
+        return { ok: false, reason: 'room-unplayable', apiErrorCode, requestId };
+      }
       if (apiErrorCode) {
         return { ok: false, reason: 'api-error', apiErrorCode, requestId };
       }

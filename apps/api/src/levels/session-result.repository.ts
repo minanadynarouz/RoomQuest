@@ -65,6 +65,7 @@ export class SessionResultRepository {
           timeMs: row.timeMs,
           completed: row.completed,
           planSource: row.planSource,
+          relaxed: row.relaxed === undefined ? undefined : [...row.relaxed],
         },
         select: { id: true },
       });

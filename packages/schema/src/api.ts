@@ -3,11 +3,37 @@ import { SurfaceGraph } from './surface.js';
 import { LevelPlan, Theme, Tier, PlanSource } from './level.js';
 
 /**
- * Why the API returned a procedural plan instead of Gemini.
- * Response-only — never part of LevelPlanLLM (Gemini structured output).
+ * Why the API returned a procedural plan instead of Gemini, or why the
+ * client could not play the room. Response-only — never part of
+ * LevelPlanLLM (Gemini structured output).
  */
-export const FallbackReason = z.enum(['llm-quota']);
+export const FallbackReason = z.enum(['llm-quota', 'room-unplayable']);
 export type FallbackReason = z.infer<typeof FallbackReason>;
+
+/**
+ * Graph-aware validation waivers from level-core (#60).
+ * Response metadata — never part of LevelPlanLLM.
+ *
+ * - `minPath` — hut→shrine distance < 0.8 m because the graph has no pair that far
+ * - `hutTable` — village_hut height/angle skipped; no catalog-valid table/desk
+ * - `portalFov` — portal FoV skipped; every surface is outside the 50° play cone
+ */
+export const RelaxedRule = z.enum(['minPath', 'hutTable', 'portalFov']);
+export type RelaxedRule = z.infer<typeof RelaxedRule>;
+
+/** Canonical order for `relaxed` arrays (enum declaration order). */
+export const RELAXED_RULE_ORDER = [
+  'minPath',
+  'hutTable',
+  'portalFov',
+] as const satisfies readonly RelaxedRule[];
+
+export function orderRelaxedRules(
+  rules: readonly RelaxedRule[]
+): RelaxedRule[] {
+  const seen = new Set(rules);
+  return RELAXED_RULE_ORDER.filter((rule) => seen.has(rule));
+}
 
 /**
  * API request/response types
@@ -50,6 +76,12 @@ export const LevelResponse = z.object({
   repairs: z.array(z.string()),
   /** Present when source is procedural because Gemini quota was exhausted. */
   fallbackReason: FallbackReason.optional(),
+  /**
+   * Graph-aware waivers applied while validating this plan.
+   * Empty when the room meets every full-quality rule. Omitted by older
+   * servers; treat as `[]`.
+   */
+  relaxed: z.array(RelaxedRule).optional(),
 });
 export type LevelResponse = z.infer<typeof LevelResponse>;
 
@@ -61,6 +93,7 @@ export const ErrorCode = z.enum([
   'RATE_LIMITED',
   'INTERNAL',
   'UNKNOWN_LEVEL',
+  'ROOM_UNPLAYABLE',
 ]);
 export type ErrorCode = z.infer<typeof ErrorCode>;
 
@@ -102,6 +135,8 @@ export const ResultRequest = z.object({
   completed: z.boolean(),
   /** Source of the plan that was played (`LevelResponse.source`) */
   planSource: PlanSource,
+  /** Waivers that were in effect for the played plan (`LevelResponse.relaxed`). */
+  relaxed: z.array(RelaxedRule).optional(),
 });
 export type ResultRequest = z.infer<typeof ResultRequest>;
 

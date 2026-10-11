@@ -52,7 +52,8 @@ export type FallbackReason =
   | 'http-error'
   | 'rate-limited'
   | 'director-off'
-  | 'director-mock';
+  | 'director-mock'
+  | 'room-unplayable';
 
 export interface DirectorFlags {
   director: DirectorMode;

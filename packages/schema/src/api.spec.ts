@@ -9,6 +9,8 @@ import {
   RESULT_TIME_MS_MAX,
   ApiError,
   RateLimitError,
+  RelaxedRule,
+  orderRelaxedRules,
 } from './api.js';
 
 describe('API schemas', () => {
@@ -207,11 +209,41 @@ describe('API schemas', () => {
         LevelResponse.parse({ ...validResponse, fallbackReason: 'timeout' })
       ).toThrow();
     });
+
+    it('accepts optional fallbackReason room-unplayable', () => {
+      const withReason = {
+        ...validResponse,
+        source: 'procedural' as const,
+        fallbackReason: 'room-unplayable' as const,
+      };
+      expect(LevelResponse.parse(withReason).fallbackReason).toBe(
+        'room-unplayable'
+      );
+    });
+
+    it('accepts optional relaxed waiver ids and rejects unknown ids', () => {
+      const withRelaxed = {
+        ...validResponse,
+        relaxed: ['hutTable', 'minPath'] as const,
+      };
+      expect(LevelResponse.parse(withRelaxed).relaxed).toEqual([
+        'hutTable',
+        'minPath',
+      ]);
+      expect(LevelResponse.parse(validResponse).relaxed).toBeUndefined();
+      expect(LevelResponse.parse({ ...validResponse, relaxed: [] }).relaxed).toEqual(
+        []
+      );
+      expect(() =>
+        LevelResponse.parse({ ...validResponse, relaxed: ['unknown'] })
+      ).toThrow();
+    });
   });
 
   describe('FallbackReason', () => {
-    it('accepts llm-quota only', () => {
+    it('accepts llm-quota and room-unplayable', () => {
       expect(FallbackReason.parse('llm-quota')).toBe('llm-quota');
+      expect(FallbackReason.parse('room-unplayable')).toBe('room-unplayable');
       expect(() => FallbackReason.parse('timeout')).toThrow();
     });
   });
@@ -303,6 +335,31 @@ describe('API schemas', () => {
         ).not.toThrow();
       }
     });
+
+    it('accepts optional relaxed waiver ids', () => {
+      const parsed = ResultRequest.parse({
+        ...validResult,
+        relaxed: ['portalFov', 'hutTable'],
+      });
+      expect(parsed.relaxed).toEqual(['portalFov', 'hutTable']);
+      expect(ResultRequest.parse(validResult).relaxed).toBeUndefined();
+      expect(() =>
+        ResultRequest.parse({ ...validResult, relaxed: ['nope'] }),
+      ).toThrow();
+    });
+  });
+
+  describe('RelaxedRule', () => {
+    it('accepts the three waiver ids and orders them deterministically', () => {
+      expect(RelaxedRule.parse('minPath')).toBe('minPath');
+      expect(RelaxedRule.parse('hutTable')).toBe('hutTable');
+      expect(RelaxedRule.parse('portalFov')).toBe('portalFov');
+      expect(() => RelaxedRule.parse('fov')).toThrow();
+      expect(orderRelaxedRules(['portalFov', 'minPath', 'hutTable', 'minPath'])).toEqual(
+        ['minPath', 'hutTable', 'portalFov']
+      );
+      expect(orderRelaxedRules([])).toEqual([]);
+    });
   });
 
   describe('ResultResponse', () => {
@@ -345,6 +402,7 @@ describe('API schemas', () => {
         'RATE_LIMITED',
         'INTERNAL',
         'UNKNOWN_LEVEL',
+        'ROOM_UNPLAYABLE',
       ];
       codes.forEach((code) => {
         expect(() =>

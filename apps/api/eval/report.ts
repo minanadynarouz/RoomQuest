@@ -1,4 +1,9 @@
-import { PlanSource, Tier } from '@roomquest/schema';
+import {
+  PlanSource,
+  RELAXED_RULE_ORDER,
+  RelaxedRule,
+  Tier,
+} from '@roomquest/schema';
 import { z } from 'zod';
 import { EVAL_BAR_P95_MS, EVAL_BAR_VALID_AFTER_REPAIR_PCT } from './constants';
 import { priceForModel } from './prices';
@@ -25,6 +30,7 @@ export const EvalRunRecordSchema = z.object({
   fallbackToProcedural: z.boolean(),
   latencyMs: z.number(),
   repairs: z.array(z.string()),
+  relaxed: z.array(RelaxedRule).default([]),
   estimatedCostUsd: z.number(),
   telemetry: z.array(LlmCallTelemetrySchema),
 });
@@ -46,6 +52,11 @@ export const EvalAggregateSchema = z.object({
   outputTokens: z.number().int(),
   missingUsageCalls: z.number().int(),
   unknownModelCalls: z.number().int(),
+  relaxedPct: z.object({
+    minPath: z.number(),
+    hutTable: z.number(),
+    portalFov: z.number(),
+  }),
 });
 export type EvalAggregate = z.infer<typeof EvalAggregateSchema>;
 
@@ -103,6 +114,11 @@ export function aggregateRuns(runs: readonly EvalRunRecord[]): EvalAggregate {
   let estimatedCostUsd = 0;
   const models: Record<string, number> = {};
   const latencies: number[] = [];
+  const relaxedCounts: Record<(typeof RELAXED_RULE_ORDER)[number], number> = {
+    minPath: 0,
+    hutTable: 0,
+    portalFov: 0,
+  };
 
   for (const run of runs) {
     if (run.validBeforeRepair) {
@@ -113,6 +129,9 @@ export function aggregateRuns(runs: readonly EvalRunRecord[]): EvalAggregate {
     }
     if (run.fallbackToProcedural) {
       fallback += 1;
+    }
+    for (const rule of run.relaxed) {
+      relaxedCounts[rule] += 1;
     }
     latencies.push(run.latencyMs);
     estimatedCostUsd += run.estimatedCostUsd;
@@ -150,6 +169,11 @@ export function aggregateRuns(runs: readonly EvalRunRecord[]): EvalAggregate {
     outputTokens,
     missingUsageCalls,
     unknownModelCalls,
+    relaxedPct: {
+      minPath: roundPct(relaxedCounts.minPath, total),
+      hutTable: roundPct(relaxedCounts.hutTable, total),
+      portalFov: roundPct(relaxedCounts.portalFov, total),
+    },
   };
 }
 
@@ -234,6 +258,15 @@ ${barLine}
 | missing usage metadata | ${String(report.aggregate.missingUsageCalls)} calls |
 | unknown model prices | ${String(report.aggregate.unknownModelCalls)} calls |
 
+### Relaxed rules
+
+| Rule | % of runs |
+| --- | --- |
+${RELAXED_RULE_ORDER.map(
+    (rule) =>
+      `| ${rule} | ${formatPct(report.aggregate.relaxedPct[rule])} |`
+  ).join('\n')}
+
 ### Which model answered
 
 | Model | Runs |
@@ -262,6 +295,10 @@ export function printSummary(report: EvalReport): void {
     `valid-before-repair: ${report.aggregate.validBeforeRepairPct.toFixed(1)}%`,
     `valid-after-repair: ${report.aggregate.validAfterRepairPct.toFixed(1)}%`,
     `fallback-to-procedural: ${report.aggregate.fallbackToProceduralPct.toFixed(1)}%`,
+    `relaxed: ${RELAXED_RULE_ORDER.map(
+      (rule) =>
+        `${rule}=${report.aggregate.relaxedPct[rule].toFixed(1)}%`
+    ).join(', ')}`,
     `models: ${Object.entries(report.aggregate.models)
       .map(([model, count]) => `${model}=${String(count)}`)
       .join(', ')}`,

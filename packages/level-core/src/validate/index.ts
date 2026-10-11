@@ -8,6 +8,7 @@
 
 export { clampParTimeMs } from './clamp-par';
 export { validatePlan } from './validate-plan';
+export { relaxedRulesFor } from './relaxed-rules';
 export { ISSUE_CODES } from './types';
 export type { Issue, IssueCode, ValidationResult } from './types';
 export { bfsPath, bfsReachable, explorerAdjacency } from './graph-utils';
