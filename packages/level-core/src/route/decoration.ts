@@ -1,4 +1,11 @@
-import { Theme, type LevelPlan, type SurfaceGraph } from '@roomquest/schema';
+import {
+  DECORATION_LINE_MAX_CHARS,
+  DECORATION_MAX_LINES,
+  Theme,
+  type LevelDecorationLLM,
+  type LevelPlan,
+  type SurfaceGraph,
+} from '@roomquest/schema';
 import { buildDialogue, pickTitle } from '../generate/dialogue';
 import { LABEL_WORD } from '../generate/generate-plan';
 import { createRng } from '../generate/prng';
@@ -12,17 +19,12 @@ import {
 } from './candidates';
 
 /**
- * What Gemini returns for a hybrid route. Mirrors the decoration input
- * of `buildLevelDecorationSchema` (b08-followup, @roomquest/schema); kept
- * structural so either type is accepted.
+ * What Gemini returns for a hybrid route: the @roomquest/schema
+ * decoration shape. `buildLevelDecorationSchema` narrows the same fields
+ * to per-request string enums; its output is assignable to this type.
+ * Re-exported under the old name for compatibility.
  */
-export interface LevelDecoration {
-  routeId: string;
-  theme: string;
-  twistBeat: string;
-  hazards: { beat: string; type: string }[];
-  lines?: { beat: string; text: string }[];
-}
+export type LevelDecoration = LevelDecorationLLM;
 
 /** Explorer line for a beat, kept next to (not inside) the LevelPlan. */
 export interface DecorationLine {
@@ -40,8 +42,9 @@ export type ApplyDecorationResult =
     }
   | { ok: false; error: 'UNKNOWN_ROUTE_ID'; routeId: string };
 
-export const MAX_DECORATION_LINES = 8;
-export const MAX_DECORATION_LINE_CHARS = 80;
+/** Aliases of the schema limits (single source: @roomquest/schema). */
+export const MAX_DECORATION_LINES = DECORATION_MAX_LINES;
+export const MAX_DECORATION_LINE_CHARS = DECORATION_LINE_MAX_CHARS;
 const TWIST_PREFIX = 'Twist: ';
 
 /**

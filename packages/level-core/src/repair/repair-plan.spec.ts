@@ -7,7 +7,14 @@ import {
 import { PAR_TIME_MAX_MS, PAR_TIME_MIN_MS } from '@roomquest/schema';
 import type { LevelPlan } from '@roomquest/schema';
 import { validatePlan } from '../validate/validate-plan';
-import { repairPlan } from './repair-plan';
+import { repairPlan, type RepairResult } from './repair-plan';
+
+function planOf(result: RepairResult): LevelPlan {
+  if (!result.ok) {
+    throw new Error(`repair failed: ${result.result.issues.map((i) => i.code).join(',')}`);
+  }
+  return result.plan;
+}
 
 const GRAPH = SYNTHETIC_LIVING_ROOM;
 const PLAN = SYNTHETIC_LIVING_ROOM_PLAN;
@@ -21,9 +28,9 @@ describe('repairPlan', () => {
     const result = repairPlan(clonePlan(PLAN), GRAPH);
     expect(result.result.ok).toBe(true);
     expect(result.repairs).toEqual([]);
-    expect(result.plan.start).toBe(PLAN.start);
-    expect(result.plan.goal).toBe(PLAN.goal);
-    expect(result.plan.placements).toHaveLength(PLAN.placements.length);
+    expect(planOf(result).start).toBe(PLAN.start);
+    expect(planOf(result).goal).toBe(PLAN.goal);
+    expect(planOf(result).placements).toHaveLength(PLAN.placements.length);
   });
 
   it('clamps u/v into 0..1', () => {
@@ -39,7 +46,7 @@ describe('repairPlan', () => {
     expect(result.repairs.some((line) => line.includes('clamped u/v'))).toBe(
       true
     );
-    const repaired = result.plan.placements.find((p) => p.id === first.id);
+    const repaired = planOf(result).placements.find((p) => p.id === first.id);
     expect(repaired?.u).toBe(1);
     expect(repaired?.v).toBe(0);
     expect(result.result.ok).toBe(true);
@@ -62,7 +69,7 @@ describe('repairPlan', () => {
       result.repairs.some((line) => line.includes('dropped invalid slime'))
     ).toBe(true);
     expect(
-      result.plan.placements.some((p) => p.id === 'p-slime')
+      planOf(result).placements.some((p) => p.id === 'p-slime')
     ).toBe(false);
     expect(result.result.ok).toBe(true);
   });
@@ -82,7 +89,7 @@ describe('repairPlan', () => {
       result.repairs.some((line) => line.startsWith('inserted plank_bridge'))
     ).toBe(true);
     expect(
-      result.plan.placements.some((p) => p.piece === 'plank_bridge')
+      planOf(result).placements.some((p) => p.piece === 'plank_bridge')
     ).toBe(true);
     expect(result.result.ok).toBe(true);
   });
@@ -94,13 +101,13 @@ describe('repairPlan', () => {
     expect(
       result.repairs.some((line) => line.includes('clamped parTimeMs'))
     ).toBe(true);
-    expect(result.plan.parTimeMs).toBe(PAR_TIME_MIN_MS);
+    expect(planOf(result).parTimeMs).toBe(PAR_TIME_MIN_MS);
     expect(result.result.ok).toBe(true);
 
     const high = clonePlan(PLAN);
     high.parTimeMs = 999999;
     const highResult = repairPlan(high, GRAPH);
-    expect(highResult.plan.parTimeMs).toBe(PAR_TIME_MAX_MS);
+    expect(planOf(highResult).parTimeMs).toBe(PAR_TIME_MAX_MS);
     expect(highResult.result.ok).toBe(true);
   });
 
@@ -214,18 +221,21 @@ describe('repairPlan', () => {
       parTimeMs: PAR_TIME_MIN_MS,
     };
     const result = repairPlan(dirty, IWER_LIVING_ROOM);
-    const repairedHut = result.plan.placements.find(
-      (item) => item.piece === 'village_hut'
-    );
-    expect(repairedHut?.surface).not.toBe('s12');
-    expect(repairedHut?.surface).toBe(result.plan.start);
-    expect(
-      IWER_LIVING_ROOM.nodes.find((node) => node.id === repairedHut?.surface)
-        ?.label
-    ).toBe('table');
+    // The hut is still moved off the floor (logged), but the rest of this
+    // plan cannot be saved, so repair fails explicitly with no plan.
     expect(result.repairs.some((line) => line.includes('village_hut'))).toBe(
       true
     );
+    if (result.ok) {
+      const hut = result.plan.placements.find((p) => p.piece === 'village_hut');
+      expect(hut?.surface).toBe(result.plan.start);
+      expect(
+        IWER_LIVING_ROOM.nodes.find((node) => node.id === hut?.surface)?.label
+      ).toBe('table');
+    } else {
+      expect(result.plan).toBeUndefined();
+      expect(result.result.ok).toBe(false);
+    }
   });
 
   it('drops a second village_hut as extra', () => {
@@ -243,7 +253,7 @@ describe('repairPlan', () => {
     expect(
       result.repairs.some((line) => line.includes('dropped extra village_hut'))
     ).toBe(true);
-    expect(result.plan.placements.filter((p) => p.piece === 'village_hut')).toHaveLength(
+    expect(planOf(result).placements.filter((p) => p.piece === 'village_hut')).toHaveLength(
       1
     );
     expect(result.result.ok).toBe(true);
@@ -261,7 +271,7 @@ describe('repairPlan', () => {
     };
     const result = repairPlan(dirty as unknown as LevelPlan, GRAPH);
     expect(result.repairs.length).toBeGreaterThan(0);
-    expect(result.plan.placements.every((p) => p.id !== 'p-x')).toBe(true);
+    expect(planOf(result).placements.every((p) => p.id !== 'p-x')).toBe(true);
   });
 
   it('clamps non-finite u/v to 0.5', () => {
@@ -274,7 +284,7 @@ describe('repairPlan', () => {
     first.u = Number.NaN;
     first.v = Number.POSITIVE_INFINITY;
     const result = repairPlan(dirty, GRAPH);
-    const repaired = result.plan.placements.find((p) => p.id === first.id);
+    const repaired = planOf(result).placements.find((p) => p.id === first.id);
     expect(repaired?.u).toBe(0.5);
     expect(repaired?.v).toBe(0.5);
   });
@@ -307,7 +317,7 @@ describe('repairPlan', () => {
       result.repairs.some((line) => line.includes('to make room for a plank'))
     ).toBe(true);
     expect(
-      result.plan.placements.some((p) => p.piece === 'plank_bridge')
+      planOf(result).placements.some((p) => p.piece === 'plank_bridge')
     ).toBe(true);
   });
 
@@ -325,8 +335,59 @@ describe('repairPlan', () => {
       )
     ).not.toThrow();
     const fromNull = repairPlan(null as unknown as LevelPlan, GRAPH);
-    expect(fromNull.plan).toBeDefined();
+    expect(fromNull.ok).toBe(false);
+    expect(fromNull.plan).toBeUndefined();
     expect(Array.isArray(fromNull.repairs)).toBe(true);
     expect(fromNull.repairs.length).toBeGreaterThan(0);
+  });
+});
+
+describe('repairPlan never returns a placeholder plan', () => {
+  const STUB_TITLES = ['Unrepaired'];
+  const S1_S2_GRAPH = {
+    ...GRAPH,
+    nodes: GRAPH.nodes.filter((n) => n.id === 's1' || n.id === 's2'),
+    edges: GRAPH.edges.filter(
+      (e) => ['s1', 's2'].includes(e.a) && ['s1', 's2'].includes(e.b)
+    ),
+  };
+  const garbage: unknown[] = [null, undefined, 42, 'plan', [], true];
+
+  it('returns ok:false with no plan for inputs that used to yield the stub', () => {
+    for (const graph of [GRAPH, S1_S2_GRAPH, IWER_LIVING_ROOM]) {
+      for (const input of garbage) {
+        const out = repairPlan(input as LevelPlan, graph);
+        expect(out.ok).toBe(false);
+        expect(out.plan).toBeUndefined();
+        expect(out.result.ok).toBe(false);
+        expect(out.result.issues.length).toBeGreaterThan(0);
+      }
+      const thrown = repairPlan(PLAN, null as unknown as typeof GRAPH);
+      expect(thrown.ok).toBe(false);
+      expect(thrown.plan).toBeUndefined();
+    }
+  });
+
+  it('no output ever equals the old stub, and every ok output validates', () => {
+    const inputs: unknown[] = [
+      ...garbage,
+      {},
+      { placements: [] },
+      { ...PLAN, placements: [] },
+      { ...PLAN, start: 's1', goal: 's2', placements: PLAN.placements.slice(0, 2) },
+      PLAN,
+    ];
+    for (const graph of [GRAPH, S1_S2_GRAPH, IWER_LIVING_ROOM]) {
+      for (const input of inputs) {
+        const out = repairPlan(input as LevelPlan, graph);
+        if (out.ok) {
+          expect(STUB_TITLES).not.toContain(out.plan.title);
+          expect(out.plan.beats.some((b) => b.goal === 'Repair failed')).toBe(false);
+          expect(validatePlan(out.plan, graph).ok).toBe(true);
+        } else {
+          expect(out.plan).toBeUndefined();
+        }
+      }
+    }
   });
 });

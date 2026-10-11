@@ -188,11 +188,16 @@ export function bindPlanToGraph(request: LevelRequest): {
     return { plan: generated, repairs: [], relaxed: first.relaxed };
   }
   const repaired = repairPlan(generated, request.graph);
-  return {
-    plan: repaired.plan,
-    repairs: repaired.repairs,
-    relaxed: repaired.relaxed,
-  };
+  if (repaired.ok) {
+    return {
+      plan: repaired.plan,
+      repairs: repaired.repairs,
+      relaxed: repaired.relaxed,
+    };
+  }
+  // Repair failed explicitly (no placeholder). generatePlan's own output is
+  // already the procedural fallback; serve it as generated.
+  return { plan: generated, repairs: [], relaxed: first.relaxed };
 }
 
 export function proceduralOutcome(
@@ -617,7 +622,7 @@ export async function runDirector(
         tier: request.tier,
       });
       afterLocal = traceIssues(local.result.issues);
-      if (!local.result.ok || local.usedStub) {
+      if (!local.ok) {
         record(chat, callStarted, 'invalid', call.raw, call.ttftMs);
         return fallback('llm-invalid', 'route-validate', {
           validation: { firstTry, afterLocal, afterLlmRepair: null },
@@ -627,7 +632,7 @@ export async function runDirector(
       }
       plan = local.plan;
       repairs = local.repairs;
-      stage = local.fixedBy ?? 'repair-plan';
+      stage = local.fixedBy;
     } else {
       firstTry = [];
     }
@@ -755,21 +760,9 @@ export async function runDirector(
       request.graph,
       { seed, tier: request.tier }
     );
-    const afterLocal = local.usedStub
-      ? [
-          {
-            code: 'SCHEMA_INVALID',
-            path: 'local:stub-plan',
-          },
-        ]
-      : traceIssues(local.result.issues);
-    if (local.usedStub) {
-      options.logger.log(
-        'director.local_repair_stub candidate was unrecoverable; not serving the repairPlan stub'
-      );
-    }
-    if (local.result.ok && !local.usedStub) {
-      const fixedBy = local.fixedBy ?? 'repair-plan';
+    const afterLocal = traceIssues(local.result.issues);
+    if (local.ok) {
+      const fixedBy = local.fixedBy;
       options.logger.log(
         `director.plan_fixed stage=${fixedBy} placement=${placement} repairs=${local.repairs.join('|')}`
       );
@@ -816,7 +809,7 @@ export async function runDirector(
     }
 
     const issuesForRepair =
-      !local.usedStub && local.result.issues.length > 0
+      !local.unrecoverable && local.result.issues.length > 0
         ? local.result.issues
         : draft.issues;
     const previous = draft.raw ?? draft.rawText ?? null;

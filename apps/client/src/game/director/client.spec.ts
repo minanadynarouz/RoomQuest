@@ -508,8 +508,8 @@ describe('createDirectorClient', () => {
 
   it('falls back to generatePlan when snap and repair cannot validate', async () => {
     const snap: SnapFn = (plan) => ({ plan, changes: [] });
-    const repair: RepairFn = (plan) => ({
-      plan,
+    const repair: RepairFn = () => ({
+      ok: false,
       repairs: ['gave up'],
       result: {
         ok: false,

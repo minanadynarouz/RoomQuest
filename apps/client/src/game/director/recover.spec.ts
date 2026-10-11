@@ -96,8 +96,8 @@ describe('recoverPlan', () => {
   });
 
   it('fails after snap then repairPlan without using a fixture', async () => {
-    const repair: RepairFn = (plan) => ({
-      plan,
+    const repair: RepairFn = () => ({
+      ok: false,
       repairs: ['gave up'],
       relaxed: [],
       result: {

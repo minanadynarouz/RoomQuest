@@ -22,6 +22,7 @@ export interface RecoverPlanOptions {
 }
 
 export interface RecoveredPlan {
+  /** Recovered plan when `ok`; otherwise the last real candidate (never a placeholder). */
   plan: LevelPlan;
   ok: boolean;
   repairedBy?: RepairedBy;
@@ -87,30 +88,35 @@ export async function recoverPlan(
   }
 
   const repaired = await repair(snapped.plan, graph);
-  const afterRepair = repaired.result.ok
-    ? repaired.result
-    : await validate(repaired.plan, graph);
-  if (afterRepair.ok) {
-    return withRelaxed(
-      {
-        plan: repaired.plan,
-        ok: true,
-        repairedBy: 'repairPlan',
-        repairs: repaired.repairs,
-        issues: first.issues,
-      },
-      plan,
-      first,
-      snapped.plan,
-      afterSnap,
-      repaired.plan,
-      afterRepair
-    );
+  if (repaired.ok) {
+    const afterRepair = repaired.result.ok
+      ? repaired.result
+      : await validate(repaired.plan, graph);
+    if (afterRepair.ok) {
+      return withRelaxed(
+        {
+          plan: repaired.plan,
+          ok: true,
+          repairedBy: 'repairPlan',
+          repairs: repaired.repairs,
+          issues: first.issues,
+        },
+        plan,
+        first,
+        snapped.plan,
+        afterSnap,
+        repaired.plan,
+        afterRepair
+      );
+    }
   }
 
+  // repairPlan failed explicitly (no placeholder plan). `plan` is the last
+  // real candidate for diagnostics only; callers never serve it when
+  // `ok` is false — they take their existing next step.
   return withRelaxed(
     {
-      plan: repaired.plan,
+      plan: snapped.plan,
       ok: false,
       repairs: repaired.repairs,
       issues: first.issues,
@@ -119,7 +125,6 @@ export async function recoverPlan(
     first,
     snapped.plan,
     afterSnap,
-    repaired.plan,
-    afterRepair
+    repaired.result
   );
 }
