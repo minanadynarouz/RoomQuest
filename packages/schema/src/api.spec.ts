@@ -175,6 +175,23 @@ describe('API schemas', () => {
       repairs: [],
     };
 
+    describe('routeId', () => {
+      it('is optional: accepted with and without', () => {
+        expect(LevelResponse.parse(validResponse).routeId).toBeUndefined();
+        expect(
+          LevelResponse.parse({ ...validResponse, routeId: 'r1' }).routeId
+        ).toBe('r1');
+      });
+      it('rejects empty or non-string routeId', () => {
+        expect(() =>
+          LevelResponse.parse({ ...validResponse, routeId: '' })
+        ).toThrow();
+        expect(() =>
+          LevelResponse.parse({ ...validResponse, routeId: 3 })
+        ).toThrow();
+      });
+    });
+
     describe('lines', () => {
       const base = validResponse;
       it('accepts optional lines and keeps old responses valid', () => {

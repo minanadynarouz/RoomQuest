@@ -23,6 +23,10 @@ export function stripControlChars(text: string): string {
 export interface DecorationSanitizeReport {
   droppedLines: number;
   strippedChars: boolean;
+  /** Number of raw `lines` entries received (0 when absent / not an array). */
+  linesIn: number;
+  /** One reason per dropped line: not-object | empty | too-long | beat-not-offered | over-max | not-array. */
+  dropReasons: string[];
 }
 
 /**
@@ -48,6 +52,8 @@ export function sanitizeDecorationCandidate(
   const report: DecorationSanitizeReport = {
     droppedLines: 0,
     strippedChars: false,
+    linesIn: 0,
+    dropReasons: [],
   };
   if (!isRecord(raw)) {
     return { candidate: raw, report };
@@ -65,19 +71,23 @@ export function sanitizeDecorationCandidate(
   if (!Array.isArray(raw.lines)) {
     delete out.lines;
     report.droppedLines += 1;
+    report.dropReasons.push('not-array');
     return { candidate: out, report };
   }
+  report.linesIn = raw.lines.length;
   const beats = opts?.beats === undefined ? undefined : new Set(opts.beats);
   const lines: { beat: unknown; text: string }[] = [];
   for (const line of raw.lines as unknown[]) {
     if (!isRecord(line) || typeof line.text !== 'string') {
       report.droppedLines += 1;
+      report.dropReasons.push('not-object');
       continue;
     }
     const text = stripControlChars(line.text);
     report.strippedChars ||= text !== line.text;
     if (text.length === 0 || text.length > DECORATION_LINE_MAX_CHARS) {
       report.droppedLines += 1;
+      report.dropReasons.push(text.length === 0 ? 'empty' : 'too-long');
       continue;
     }
     if (
@@ -85,12 +95,16 @@ export function sanitizeDecorationCandidate(
       (typeof line.beat !== 'string' || !beats.has(line.beat))
     ) {
       report.droppedLines += 1;
+      report.dropReasons.push(`beat-not-offered:${String(line.beat)}`);
       continue;
     }
     lines.push({ beat: line.beat, text });
   }
   if (lines.length > DECORATION_MAX_LINES) {
     report.droppedLines += lines.length - DECORATION_MAX_LINES;
+    for (let i = DECORATION_MAX_LINES; i < lines.length; i += 1) {
+      report.dropReasons.push('over-max');
+    }
   }
   out.lines = lines.slice(0, DECORATION_MAX_LINES);
   return { candidate: out, report };
