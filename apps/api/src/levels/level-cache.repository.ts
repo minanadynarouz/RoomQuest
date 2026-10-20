@@ -33,6 +33,11 @@ export class LevelCacheRepository {
    * Waits for an in-flight upsert of the same key so a follow-up request
    * in the same process can hit.
    */
+  /** True when this call will be the process's first DB query. */
+  claimFirstQuery(): boolean {
+    return this.prisma.claimFirstQuery();
+  }
+
   async lookup(key: string): Promise<LevelCacheRow | null> {
     await this.waitForInflight(key);
 

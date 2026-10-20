@@ -1,3 +1,4 @@
+import { performance } from 'node:perf_hooks';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { validatePlan } from '@roomquest/level-core';
 import { LevelPlan, LevelResponse, type LevelRequest } from '@roomquest/schema';
@@ -6,6 +7,7 @@ import { RoomUnplayableException } from '../common/room-unplayable.exception';
 import { DirectorService } from '../director/director.service';
 import { DIRECTOR_RUNTIME, type DirectorRuntime } from '../director/models';
 import { PROMPT_VERSION } from '../director/prompts';
+import { claimFirstQuery, dbStageKey, roundMs } from '../common/first-query';
 import { makeCacheKey } from './cache-key';
 import { CacheMissLimiter } from './cache-miss-limiter';
 import { LevelCacheRepository } from './level-cache.repository';
@@ -45,7 +47,16 @@ export class LevelsService {
 
     this.logger.debug(`Level request from device ${deviceId} key=${cacheKey}`);
 
+    // Pre-call breakdown starts here. The daily-counter reserve is NOT run
+    // in parallel with this lookup: on a hit it would burn an LLM_DAILY_MAX
+    // slot for nothing. It overlaps the director's prompt prep instead.
+    const preCall: Record<string, number> = {};
+    const lookupCold = claimFirstQuery(this.cache);
+    const lookupStarted = performance.now();
     const cached = await this.cache.lookup(cacheKey);
+    preCall[dbStageKey('cacheLookup', lookupCold)] = roundMs(
+      performance.now() - lookupStarted
+    );
     if (cached !== null) {
       const parsed = LevelPlan.safeParse(cached.plan);
       if (parsed.success) {
@@ -77,7 +88,7 @@ export class LevelsService {
       throw new RateLimitedException(budget.retryAfterS);
     }
 
-    const response = await this.director.plan(request);
+    const response = await this.director.plan(request, preCall);
     const validation = validatePlan(response.plan, request.graph);
     if (!validation.ok) {
       throw new RoomUnplayableException();

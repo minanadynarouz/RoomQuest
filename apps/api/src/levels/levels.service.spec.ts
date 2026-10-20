@@ -360,3 +360,18 @@ describe('LevelsService lines (route-arm levels)', () => {
     }
   });
 });
+
+describe('LevelsService pre-call timing', () => {
+  it('times the cache lookup and hands the breakdown to the director on a miss', async () => {
+    const { service, directorPlan } = await serviceWith({ cached: null });
+    await service.create(request, 'device-1');
+    const preCall = (directorPlan.mock.calls[0] as unknown[] | undefined)?.[1] as Record<string, number>;
+    expect(typeof preCall.cacheLookupMs).toBe('number');
+  });
+
+  it('cache hit never reaches the director (no daily-counter reserve)', async () => {
+    const { service, directorPlan } = await serviceWith({ cached: cachedRow(validPlan) });
+    await service.create(request, 'device-1');
+    expect(directorPlan).not.toHaveBeenCalled();
+  });
+});

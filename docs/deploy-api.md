@@ -71,6 +71,26 @@ pnpm --filter api dev
 
 `GET /api/health` reports `db: "up"` when `DATABASE_URL` points at a reachable Postgres, `db: "disabled"` when the URL is unset, and `db: "down"` when the URL is set but the database is unreachable. The process still starts either way; `POST /api/v1/levels` does not need a database (it skips the cache, logs a warning, and still returns 200). `POST /api/v1/levels/:cacheKey/result` returns `202 { stored: false }` in those same no-DB cases.
 
+## Database latency: Neon cold starts, warm-up, pooling
+
+**Neon idle suspend.** On the free tier Neon suspends compute after ~5 min idle. The next query waits for the compute to resume (a few hundred ms up to a few seconds), on top of a fresh TCP/TLS connect. The API's `director.precall` log line and the `preCallMs` telemetry field split this out: the first DB query of the process is reported as `cacheLookupColdMs` / `dailyReserveColdMs`, and later queries as `cacheLookupMs` / `dailyReserveMs`. A cold key after a long uptime does not appear (the label tracks the first query of the process), so a large warm `cacheLookupMs` after an idle gap points at a Neon resume.
+
+**Boot `SELECT 1`.** On boot (`PrismaService.onApplicationBootstrap`, never under tests) the API runs one `SELECT 1` in the background and logs `prisma.warmup ok ms=…` or `prisma.warmup failed …`. That only helps the first request after a restart or deploy. It does nothing for idle suspends later on. To avoid those:
+
+- ping `GET /api/health` (it queries the DB) every ≤4 min from an external uptime monitor or a Render cron job, or
+- turn off scale-to-zero ("always on" / suspend timeout disabled) on the Neon compute for prod (this needs a paid plan).
+
+Note: `CONNECT_TIMEOUT_MS` in `apps/api/src/prisma/create-adapter.ts` is 2 s. A resume slower than that fails the query. The cache lookup then degrades to a miss and the request still returns 200.
+
+**Pooled URL.** The runtime `DATABASE_URL` must be Neon's **pooled** string (`-pooler` host, PgBouncer transaction mode). `DIRECT_URL` (unpooled) is only for `prisma migrate`. Example:
+
+```
+DATABASE_URL=postgresql://USER:PASS@ep-xxx-pooler.REGION.aws.neon.tech/neondb?sslmode=require&connection_limit=5&pool_timeout=10
+DIRECT_URL=postgresql://USER:PASS@ep-xxx.REGION.aws.neon.tech/neondb?sslmode=require
+```
+
+`connection_limit` caps connections per instance. Keep it small (3 to 5 for one Render instance) so instances × limit stays under the pooler's client limit. Note that the API uses a Prisma driver adapter (`@prisma/adapter-neon` / `adapter-pg`). The driver's pool, not Prisma's engine, owns the connections, so the URL's `connection_limit` / `pool_timeout` are guidance for engine-based tools, and the pool size is set by the adapter config (driver default `max` = 10). The process has one shared `PrismaClient` (`PrismaService`, a Nest singleton), and the daily counter is one atomic `INSERT … ON CONFLICT DO UPDATE … RETURNING` round trip.
+
 ## 5. HTTP smoke (`pnpm --filter api smoke`)
 
 Contract check against a **running** API. Engineering Lead can point this at staging/prod later. It does not start the process and does not create Render/Neon resources.

@@ -68,6 +68,11 @@ export class LlmDailyUsage {
    * Reserve one live Gemini slot for the current UTC day.
    * Returns `ok` only when the new count is ≤ max.
    */
+  /** True when this call will be the process's first DB query. */
+  claimFirstQuery(): boolean {
+    return this.prisma.claimFirstQuery();
+  }
+
   async consume(): Promise<LlmDailyConsumeResult> {
     const client = this.prisma.getClient();
     if (client === null) {

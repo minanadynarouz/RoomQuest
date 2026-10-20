@@ -32,6 +32,8 @@ export interface LlmCallTelemetry {
   hedgeRole?: 'first' | 'second';
   /** Call start, ms after the request started (hedge timing). */
   startOffsetMs?: number;
+  /** First call of a request only: server pre-call stage breakdown (ms). */
+  preCallMs?: Record<string, number>;
 }
 
 export interface DirectorLogger {
