@@ -144,3 +144,39 @@ export function perfSignature(stats: RqPerfStats): string {
     stats.route ?? '',
   ].join('|');
 }
+
+/** Store fields the overlay samples each frame (structural `GameStore`). */
+export interface PerfStoreLike {
+  planSource: PlanSource | null;
+  directorLatencyMs: number | null;
+  repairs: readonly string[];
+  fallbackReason: FallbackReason | null;
+  validationIssues: readonly unknown[];
+  directorRequest: {
+    value: {
+      status: DirectorRequestStatus;
+      requestId?: string;
+      repairedBy?: RepairedBy;
+      relaxed?: readonly RelaxedRule[];
+    };
+  };
+  level: { lines: Readonly<Record<string, string>>; routeId: string | null };
+}
+
+/** Copy the store-backed director fields into `into` (no allocation). */
+export function sampleStoreStats(
+  store: PerfStoreLike | null | undefined,
+  into: RqPerfStats
+): void {
+  into.source = store?.planSource ?? null;
+  into.latencyMs = store?.directorLatencyMs ?? null;
+  into.repairs = store?.repairs.length ?? 0;
+  into.fallbackReason = store?.fallbackReason ?? null;
+  into.validationIssues = store?.validationIssues.length ?? 0;
+  into.directorStatus = store?.directorRequest.value.status ?? 'idle';
+  into.requestId = store?.directorRequest.value.requestId ?? null;
+  into.repairedBy = store?.directorRequest.value.repairedBy ?? null;
+  into.relaxed = store?.directorRequest.value.relaxed ?? [];
+  into.lines = store ? Object.keys(store.level.lines).length : 0;
+  into.route = store?.level.routeId ?? null;
+}
