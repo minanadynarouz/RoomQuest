@@ -270,6 +270,8 @@ function localResult(
     relaxed?: RelaxedRule[];
     /** Only for a server plan repaired locally (`llm_repaired`). */
     lines?: LevelLine[];
+    /** Only for a server plan repaired locally (`llm_repaired`). */
+    routeId?: string;
   }
 ): DirectorResult {
   return {
@@ -290,6 +292,7 @@ function localResult(
     repairedBy: extras?.repairedBy,
     relaxed: extras?.relaxed,
     ...(extras?.lines && extras.lines.length > 0 ? { lines: extras.lines } : {}),
+    ...(extras?.routeId ? { routeId: extras.routeId } : {}),
   };
 }
 
@@ -573,6 +576,7 @@ export function createDirectorClient(
           repairedBy: recovered.repairedBy,
           relaxed: recovered.relaxed,
           lines: parsed.data.lines,
+          routeId: parsed.data.routeId,
         }
       );
       logDirectorResult(result);
@@ -611,6 +615,7 @@ export function createDirectorClient(
       ...(parsed.data.lines && parsed.data.lines.length > 0
         ? { lines: parsed.data.lines }
         : {}),
+      ...(parsed.data.routeId ? { routeId: parsed.data.routeId } : {}),
     };
     logDirectorResult(result);
     return finish(result);

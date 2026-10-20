@@ -124,6 +124,7 @@ const statsGetter = createStatsGetter(() =>
     repairedBy: gameStore.directorRequest.value.repairedBy ?? null,
     relaxed: gameStore.directorRequest.value.relaxed ?? [],
     lines: Object.keys(gameStore.level.lines).length,
+    route: gameStore.level.routeId,
   })
 );
 
@@ -255,6 +256,7 @@ function exposeHooks(
       director: () => ({
         ...gameStore.directorRequest.value,
         lines: Object.keys(gameStore.level.lines).length,
+        routeId: gameStore.level.routeId,
       }),
       playSynthetic: playSyntheticLevel,
     },

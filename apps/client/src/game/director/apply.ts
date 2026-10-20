@@ -32,5 +32,6 @@ export function applyDirectorResult(
     issues: result.issues,
     tier: result.tier,
     lines: result.lines,
+    routeId: result.routeId,
   });
 }

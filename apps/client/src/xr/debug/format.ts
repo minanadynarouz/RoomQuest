@@ -45,6 +45,7 @@ const DEBUG_LINES: DebugLine[] = [
   { id: 'debug-repaired', text: '' },
   { id: 'debug-relaxed', text: '' },
   { id: 'debug-lines', text: '' },
+  { id: 'debug-route', text: '' },
 ];
 
 function setLineText(index: number, text: string): void {
@@ -70,6 +71,7 @@ export function formatDebugLines(stats: RqPerfStats): DebugLine[] {
     `${padLabel('relaxed')}${formatDash(stats.relaxed.join(','))}`
   );
   setLineText(13, `${padLabel('lines')}${String(stats.lines)}`);
+  setLineText(14, `${padLabel('route')}${formatDash(stats.route)}`);
   return DEBUG_LINES;
 }
 

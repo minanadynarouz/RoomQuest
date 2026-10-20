@@ -1352,3 +1352,140 @@ describe('director lines (Pip speech cards)', () => {
     expect(store.level.lines).toEqual({});
   });
 });
+
+describe('director routeId (debug overlay)', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    resetHealthPrewarmForTests();
+  });
+
+  function linesClient(
+    fetchFn: FetchLike,
+    extra?: Partial<Parameters<typeof createDirectorClient>[0]>
+  ) {
+    return createDirectorClient({
+      fetch: fetchFn,
+      apiBaseUrl: 'http://localhost:3000',
+      deviceId: '11111111-2222-4333-8444-555555555555',
+      clientVersion: '0.1.0',
+      date: '2026-10-09',
+      ...extra,
+    });
+  }
+
+  function surveyingStore() {
+    const store = createGameStore();
+    store.requestLevel();
+    store.startSurveying();
+    return store;
+  }
+
+  const ROUTE_ID = 'route-table-bridge';
+
+  it('keeps routeId from an llm response into level.routeId', async () => {
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve(jsonResponse(apiResponse({ routeId: ROUTE_ID })))
+    );
+    const result = await linesClient(fetchFn).requestPlan(GRAPH);
+    expect(result.usedFallback).toBe(false);
+    expect(result.routeId).toBe(ROUTE_ID);
+
+    const store = surveyingStore();
+    applyDirectorResult(store, result);
+    expect(store.level.routeId).toBe(ROUTE_ID);
+    expect(store.state.level.routeId).toBe(ROUTE_ID);
+  });
+
+  it('keeps routeId when the server plan is locally repaired', async () => {
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve(
+        jsonResponse(
+          apiResponse({ plan: slimeOnFloor(apiPlan()), routeId: ROUTE_ID })
+        )
+      )
+    );
+    const result = await linesClient(fetchFn).requestPlan(GRAPH);
+    expect(result.source).toBe('llm_repaired');
+    expect(result.routeId).toBe(ROUTE_ID);
+  });
+
+  it('drops routeId on procedural fallback', async () => {
+    const snap: SnapFn = (plan) => ({ plan, changes: [] });
+    const route: RouteRepairFn = (plan) => ({
+      plan,
+      changed: false,
+      issues: [],
+      strategy: 'none',
+    });
+    const repair: RepairFn = () => ({
+      ok: false,
+      repairs: [],
+      result: {
+        ok: false,
+        issues: [{ code: 'GOAL_UNREACHABLE', message: 'no path' }],
+        relaxed: [],
+      },
+      relaxed: [],
+    });
+    const fetchFn = vi.fn<FetchLike>(() =>
+      Promise.resolve(
+        jsonResponse(
+          apiResponse({ plan: slimeOnFloor(apiPlan()), routeId: ROUTE_ID })
+        )
+      )
+    );
+    const result = await linesClient(fetchFn, {
+      snap,
+      route,
+      repair,
+    }).requestPlan(GRAPH);
+    expect(result.source).toBe('procedural');
+    expect(result.routeId).toBeUndefined();
+    expect('routeId' in result).toBe(false);
+
+    const store = surveyingStore();
+    applyDirectorResult(store, result);
+    expect(store.level.routeId).toBeNull();
+  });
+
+  it('drops routeId on network fallback', async () => {
+    const down = await linesClient(
+      vi.fn<FetchLike>(() => Promise.reject(new Error('offline')))
+    ).requestPlan(GRAPH);
+    expect(down.usedFallback).toBe(true);
+    expect(down.routeId).toBeUndefined();
+  });
+
+  it('is absent when the server omits routeId', async () => {
+    const result = await linesClient(
+      vi.fn<FetchLike>(() => Promise.resolve(jsonResponse(apiResponse())))
+    ).requestPlan(GRAPH);
+    expect(result.routeId).toBeUndefined();
+    expect('routeId' in result).toBe(false);
+    const store = surveyingStore();
+    applyDirectorResult(store, result);
+    expect(store.level.routeId).toBeNull();
+  });
+
+  it('clears routeId on exit', () => {
+    const store = surveyingStore();
+    applyDirectorResult(store, {
+      plan: localPlan(),
+      source: 'llm',
+      cacheKey: 'k',
+      promptVersion: 'v1',
+      latencyMs: 1,
+      repairs: [],
+      usedFallback: false,
+      routeId: ROUTE_ID,
+    });
+    expect(store.level.routeId).toBe(ROUTE_ID);
+    store.exit();
+    expect(store.level.routeId).toBeNull();
+  });
+});

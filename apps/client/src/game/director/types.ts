@@ -205,6 +205,11 @@ export interface DirectorResult {
    * the played plan came from the server; dropped on procedural/local fallback.
    */
   lines?: LevelLine[];
+  /**
+   * Server-chosen route id (route-arm levels only). Same lifetime as
+   * `lines`: dropped on procedural/local fallback.
+   */
+  routeId?: string;
 }
 
 export interface DirectorClient {

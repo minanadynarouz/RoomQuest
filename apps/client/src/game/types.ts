@@ -58,6 +58,8 @@ export interface StartBuildingOptions {
   tier?: Tier;
   /** Pip lines from a server-resolved plan (omit for local plans). */
   lines?: readonly LevelLine[];
+  /** Server route id (route-arm levels; omit for local plans). */
+  routeId?: string;
 }
 
 /** Beat index (string, as in `LevelLine.beat`) → Pip line text. */
@@ -66,6 +68,8 @@ export type LevelLinesMap = Readonly<Record<LevelLine['beat'], LevelLine['text']
 /** Per-level director extras kept next to the plan. */
 export interface LevelExtras {
   lines: LevelLinesMap;
+  /** Server-chosen route id; null when absent. */
+  routeId: string | null;
 }
 
 /**
