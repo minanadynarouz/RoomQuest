@@ -24,6 +24,7 @@ export const DECORATION_SYSTEM_PREFIX: string = [
   '2. Choose a short theme of 2 to 4 words that fits the real furniture.',
   '3. Choose the twist beat and any hazards only from the options listed for that route.',
   `4. Write Pip's lines: at most one per beat, at most ${String(DECORATION_MAX_LINES)}, each ${String(DECORATION_LINE_MAX_CHARS)} characters or fewer.`,
+  'Make each line one short, complete, grammatical English sentence.',
   '',
   "Pip's voice: curious, brave, a little clumsy, warm and slightly cheeky. First person, present tense, talking to the player as a friend. Always name the real furniture and make it sound huge (\"the desk plateau\", \"sofa mountains\"). Match the beat: arrival = wonder, a gap or climb = asking for help, slime = nervous then brave, gems = delight, portal = playful, final beat = triumph.",
   '',
@@ -47,16 +48,16 @@ const FEW_SHOT_1_AI = JSON.stringify({
   twistBeat: '2',
   hazards: [{ beat: '2', type: 'slime' }],
   lines: [
-    { beat: '0', text: "Whoa, the sofa mountains! Let's climb!" },
-    { beat: '2', text: 'Eep, a slime by the bookshelf! Can you make it sleepy?' },
-    { beat: '3', text: 'The crystal! We crossed the whole living room together!' },
+    { beat: '0', text: "Whoa, let's climb the sofa mountains!" },
+    { beat: '2', text: 'Eep, can you make that slime by the bookshelf sleepy?' },
+    { beat: '3', text: 'We crossed the whole living room to the crystal together!' },
   ],
 });
 
 const FEW_SHOT_2_USER = [
   'Theme hint: snow. Tier: normal. Relaxed rules: The surfaces here are close together, so short routes are fine.',
   'Routes:',
-  '- r0: floor, then desk, then chair, 4 beats. twist options: 1, 3. hazards: 1 [slime, gate], 3 [moving_platform]',
+  '- r0: floor, then desk, then table, 4 beats. twist options: 1, 3. hazards: 1 [slime, gate], 3 [moving_platform]',
   '- r1: floor, then chair, 3 beats. twist options: 1. hazards: 1 [slime]',
 ].join('\n');
 
@@ -66,9 +67,9 @@ const FEW_SHOT_2_AI = JSON.stringify({
   twistBeat: '3',
   hazards: [{ beat: '1', type: 'slime' }],
   lines: [
-    { beat: '0', text: 'Brr! The desk plateau looks like a snowy cliff!' },
-    { beat: '1', text: 'A slime by the chair legs... shh, tiptoe with me.' },
-    { beat: '3', text: 'The floating ledge wobbles! Hold it steady for me?' },
+    { beat: '0', text: 'Brr, the desk plateau looks like a snowy cliff!' },
+    { beat: '1', text: "A slime is napping on the table, so let's tiptoe past!" },
+    { beat: '3', text: 'Can you hold this wobbly floating ledge steady for me?' },
   ],
 });
 
