@@ -77,8 +77,19 @@ describe.skipIf(dbUrl === undefined && process.env.CI !== 'true')(
   () => {
     let app!: NestExpressApplication;
     let nowMs = Date.UTC(2026, 9, 10, 12, 0, 0);
+    // DirectorService caches the chat per process, so count Gemini calls
+    // (model generations) rather than factory invocations.
+    const geminiCalls = vi.fn();
+    class CountingFakeListChatModel extends FakeListChatModel {
+      async _generate(
+        ...args: Parameters<FakeListChatModel['_generate']>
+      ): ReturnType<FakeListChatModel['_generate']> {
+        geminiCalls();
+        return super._generate(...args);
+      }
+    }
     const createPrimary = vi.fn(() => {
-      return new FakeListChatModel({ responses: [validJson] });
+      return new CountingFakeListChatModel({ responses: [validJson] });
     });
 
     beforeAll(async () => {
@@ -121,6 +132,7 @@ describe.skipIf(dbUrl === undefined && process.env.CI !== 'true')(
     beforeEach(async () => {
       nowMs = Date.UTC(2026, 9, 10, 12, 0, 0);
       createPrimary.mockClear();
+      geminiCalls.mockClear();
       const prisma = app.get(PrismaService);
       const client = prisma.getClient();
       if (client !== null) {
@@ -154,7 +166,7 @@ describe.skipIf(dbUrl === undefined && process.env.CI !== 'true')(
         'llm-quota'
       );
 
-      expect(createPrimary).toHaveBeenCalledTimes(MAX);
+      expect(geminiCalls).toHaveBeenCalledTimes(MAX);
 
       const health = await request(httpServer(app))
         .get('/api/health')
@@ -176,7 +188,7 @@ describe.skipIf(dbUrl === undefined && process.env.CI !== 'true')(
         .expect(200);
       expect(LevelResponse.parse(second.body as unknown).source).toBe('cache');
 
-      expect(createPrimary).toHaveBeenCalledTimes(1);
+      expect(geminiCalls).toHaveBeenCalledTimes(1);
 
       const health = await request(httpServer(app))
         .get('/api/health')
@@ -199,7 +211,7 @@ describe.skipIf(dbUrl === undefined && process.env.CI !== 'true')(
         .expect(200);
       expect(LevelResponse.parse(early.body as unknown).source).toBe('llm');
 
-      expect(createPrimary).toHaveBeenCalledTimes(2);
+      expect(geminiCalls).toHaveBeenCalledTimes(2);
 
       const health = await request(httpServer(app))
         .get('/api/health')
@@ -231,7 +243,7 @@ describe.skipIf(dbUrl === undefined && process.env.CI !== 'true')(
       );
       expect(llm).toHaveLength(MAX);
       expect(quota).toHaveLength(12 - MAX);
-      expect(createPrimary).toHaveBeenCalledTimes(MAX);
+      expect(geminiCalls).toHaveBeenCalledTimes(MAX);
 
       const health = await request(httpServer(app))
         .get('/api/health')
