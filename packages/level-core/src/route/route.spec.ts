@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { IWER_GRAPHS, IWER_ROOM_IDS } from '@roomquest/fixtures';
+import { IWER_GRAPHS, IWER_ROOM_IDS, SYNTHETIC_LIVING_ROOM } from '@roomquest/fixtures';
 import type { LevelPlan, SurfaceGraph, Tier } from '@roomquest/schema';
 import { compactGraphForPrompt, promptGraphJsonBytes } from '../prompt/compact-graph';
 import { validatePlan } from '../validate/validate-plan';
-import { generatePlan } from '../generate/generate-plan';
+import { generatePlan, generatePlanResult } from '../generate/generate-plan';
 import {
   applyDecoration,
   candidateRoutes,
@@ -283,4 +283,31 @@ describe('sanitizeDecorationLines', () => {
     console.log(`[bytes] decoration=${String(promptGraphJsonBytes(deco))} placements=${String(promptGraphJsonBytes(route.plan.placements))}`);
     expect(promptGraphJsonBytes(deco)).toBeLessThan(promptGraphJsonBytes(route.plan.placements));
   });
+});
+
+describe('candidateRoutes regression: no-route-candidates', () => {
+  /** Server seed format: makeDailySeed(roomHash, date) = `${roomHash}-${date}`. */
+  const DATES = Array.from({ length: 20 }, (_, i) =>
+    new Date(Date.UTC(2026, 9, 1 + i)).toISOString().slice(0, 10)
+  );
+  const GRAPHS: [string, SurfaceGraph][] = [
+    ...IWER_ROOM_IDS.map((room): [string, SurfaceGraph] => [room, IWER_GRAPHS[room]]),
+    ['synthetic_living_room', SYNTHETIC_LIVING_ROOM],
+  ];
+  it('every fixture graph × tier × 20 daily seeds yields ≥1 valid candidate with generatePlan relaxed rules', () => {
+    for (const [room, graph] of GRAPHS) {
+      for (const tier of TIERS) {
+        for (const date of DATES) {
+          const seed = `${graph.roomHash}-${date}`;
+          const routes = candidateRoutes(graph, { seed, tier });
+          expect(routes.length, `${room}/${tier}/${seed}`).toBeGreaterThanOrEqual(1);
+          const expected = generatePlanResult(graph, seed, tier).relaxed;
+          for (const route of routes) {
+            expect(validatePlan(route.plan, graph).ok).toBe(true);
+            expect(route.relaxed).toEqual(expected);
+          }
+        }
+      }
+    }
+  }, SWEEP_MS);
 });
