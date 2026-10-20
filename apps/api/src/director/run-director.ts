@@ -1,3 +1,4 @@
+import { performance } from 'node:perf_hooks';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import {
   hedgedInvoke,
@@ -94,6 +95,11 @@ export interface DirectorOutcome {
   firstTryRawText: string | null;
   /** Route arm: hedged decoration request bookkeeping; null otherwise. */
   hedge?: HedgeTrace | null;
+  /**
+   * Server work before the first model call: per-stage ms plus `totalMs`
+   * (request start → first invoke). Undefined when no model call started.
+   */
+  preCall?: Record<string, number>;
 }
 
 export interface RouteDecorationTrace {
@@ -124,6 +130,14 @@ export interface RunDirectorOptions {
    * enforces the 80 % rule) before the hedge fires.
    */
   hedge?: { delayMs: number; reserve?: HedgeOptions['reserve'] };
+  /**
+   * LLM_DAILY_MAX reservation started by the caller in parallel with prompt
+   * prep; awaited right before the first model call. `false` → procedural
+   * `llm-quota` (failedAt `quota-precheck`). Omitted: no gate.
+   */
+  llmGate?: Promise<boolean>;
+  /** Caller-side pre-call stage timings (ms) merged into `preCall`. */
+  preCall?: Record<string, number>;
   /** `DIRECTOR_PLACEMENT`: `uv` (default) or `slot`. */
   placement?: DirectorPlacementMode;
   /**
@@ -175,6 +189,10 @@ type TraceExtras = Partial<
     | 'routeDecoration'
   >
 >;
+
+function roundMs(ms: number): number {
+  return Math.round(ms * 10) / 10;
+}
 
 function withTrace(
   outcome: Pick<DirectorOutcome, 'response' | 'telemetry'> &
@@ -335,6 +353,18 @@ export async function runDirector(
   request: LevelRequest,
   options: RunDirectorOptions
 ): Promise<DirectorOutcome> {
+  const holder: { preCall?: Record<string, number> } = {};
+  const outcome = await runDirectorInner(request, options, holder);
+  return holder.preCall === undefined
+    ? outcome
+    : { ...outcome, preCall: holder.preCall };
+}
+
+async function runDirectorInner(
+  request: LevelRequest,
+  options: RunDirectorOptions,
+  holder: { preCall?: Record<string, number> }
+): Promise<DirectorOutcome> {
   const now = options.now ?? (() => Date.now());
   const startedMs = options.startedMs ?? now();
   const repairMin =
@@ -342,6 +372,39 @@ export async function runDirector(
   const promptVersion = options.promptVersion ?? PROMPT_VERSION;
   const seed = makeDailySeed(request.graph.roomHash, request.date);
   const telemetry: LlmCallTelemetry[] = [];
+  // Same object as the caller's so late caller stages (dailyReserveMs) land.
+  const preCall: Record<string, number> = options.preCall ?? {};
+  let preCallDone = false;
+  const timeStage = <T>(name: string, fn: () => T): T => {
+    const t0 = performance.now();
+    try {
+      return fn();
+    } finally {
+      preCall[name] = roundMs(performance.now() - t0);
+    }
+  };
+  /** Await the caller's daily-usage reservation; false = capped/unavailable. */
+  const passGate = async (): Promise<boolean> => {
+    if (options.llmGate === undefined) return true;
+    const t0 = performance.now();
+    const ok = await options.llmGate;
+    preCall.llmGateWaitMs = roundMs(performance.now() - t0);
+    return ok;
+  };
+  /** Close the pre-call breakdown right before the first model invoke. */
+  const finishPreCall = (): void => {
+    if (preCallDone) return;
+    preCallDone = true;
+    preCall.totalMs = roundMs(Math.max(0, now() - startedMs));
+    holder.preCall = preCall;
+    options.logger.log(
+      `director.precall placement=${options.placement ?? DEFAULT_DIRECTOR_PLACEMENT} ${Object.entries(
+        preCall
+      )
+        .map(([key, value]) => `${key}=${String(value)}`)
+        .join(' ')}`
+    );
+  };
 
   const requestedPlacement = options.placement ?? DEFAULT_DIRECTOR_PLACEMENT;
   let slotContext: SlotRequestContext | undefined;
@@ -421,6 +484,9 @@ export async function runDirector(
       promptChars: callStarted.promptChars,
       startOffsetMs: Math.max(0, callStarted.ms - startedMs),
       ...callStarted.extra,
+      ...(telemetry.length === 0 && holder.preCall !== undefined
+        ? { preCallMs: { ...holder.preCall } }
+        : {}),
     };
     telemetry.push(row);
     logLlmCall(options.logger, row);
@@ -593,14 +659,17 @@ export async function runDirector(
    */
   const runRoute = async (): Promise<DirectorOutcome> => {
     const chat = options.decoration ?? options.primary;
-    const candidates = candidateRoutes(request.graph, {
-      seed,
-      tier: request.tier,
-    });
+    const candidates = timeStage('candidateRoutesMs', () =>
+      candidateRoutes(request.graph, {
+        seed,
+        tier: request.tier,
+      })
+    );
     if (candidates.length === 0) {
       return fallback('no-route-candidates', 'route-candidates');
     }
-    const enums = decorationEnums(candidates);
+    const enums = timeStage('decorationEnumsMs', () => decorationEnums(candidates));
+    const callOptions = timeStage('schemaMs', () => routeCallOptions(enums));
     const trace: RouteDecorationTrace = {
       candidateCount: candidates.length,
       routeId: null,
@@ -608,9 +677,15 @@ export async function runDirector(
       bannedWordHits: 0,
       replaced: [],
     };
-    const messages = toLangchainMessages(
-      buildDecorationMessages(candidates, { seed, tier: request.tier })
+    const messages = timeStage('promptMs', () =>
+      toLangchainMessages(
+        buildDecorationMessages(candidates, { seed, tier: request.tier })
+      )
     );
+    if (!(await passGate())) {
+      return fallback('llm-quota', 'quota-precheck', { routeDecoration: trace });
+    }
+    finishPreCall();
 
     const callStarted: CallStart = {
       ms: now(),
@@ -624,7 +699,7 @@ export async function runDirector(
     }
     const hedged = await hedgedInvoke(
       (signal) =>
-        chat.invokeStructured(messages, signal, routeCallOptions(enums)),
+        chat.invokeStructured(messages, signal, callOptions),
       deadline.signal,
       {
         delayMs: options.hedge?.delayMs ?? 0,
@@ -825,7 +900,7 @@ export async function runDirector(
       const routed = await runRoute();
       return { ...routed, hedge: routeHedge };
     }
-    const draftMessages = [
+    const draftMessages = timeStage('promptMs', () => [
       new SystemMessage(SYSTEM_PREFIX),
       new HumanMessage(
         buildUserMessage({
@@ -836,9 +911,13 @@ export async function runDirector(
           placement,
         })
       ),
-    ];
+    ]);
 
     const chat = options.primary;
+    if (!(await passGate())) {
+      return fallback('llm-quota', 'quota-precheck');
+    }
+    finishPreCall();
     const draft = await attempt(chat, draftMessages, 'draft');
 
     if (draft.kind !== 'plan') {

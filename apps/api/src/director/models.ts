@@ -159,6 +159,8 @@ export const defaultDirectorChatFactory: DirectorChatFactory = {
   },
 };
 
+const STRUCTURED_RUNNABLE_CACHE_MAX = 256;
+
 export function wrapChatModel(
   model: BaseChatModel,
   provider: LlmProvider,
@@ -166,12 +168,14 @@ export function wrapChatModel(
   wrapOptions: WrapChatModelOptions = {}
 ): StructuredChat {
   const fallback = wrapOptions.thinkingFallback ?? [];
-  return {
-    provider,
-    model: modelId,
-    async invokeStructured(messages, signal, options) {
-      stripUnsupportedThinking(model, fallback);
-      const structured = model.withStructuredOutput(
+  // withStructuredOutput runnables per schema identity (bounded). The static
+  // plan schema is always cached; per-request schemas need `schemaKey`.
+  const runnables = new Map<string, ReturnType<BaseChatModel['withStructuredOutput']>>();
+  const structuredFor = (
+    options: Parameters<StructuredChat['invokeStructured']>[2]
+  ): ReturnType<BaseChatModel['withStructuredOutput']> => {
+    const build = (): ReturnType<BaseChatModel['withStructuredOutput']> =>
+      model.withStructuredOutput(
         options?.responseSchema ?? LevelPlanLLMGeminiSchema,
         {
           includeRaw: true,
@@ -179,6 +183,30 @@ export function wrapChatModel(
           name: options?.schemaName ?? 'LevelPlanLLM',
         }
       );
+    const key =
+      options?.responseSchema === undefined
+        ? `static:${options?.schemaName ?? 'LevelPlanLLM'}`
+        : options.schemaKey === undefined
+          ? undefined
+          : `${options.schemaName ?? ''}:${options.schemaKey}`;
+    if (key === undefined) return build();
+    let runnable = runnables.get(key);
+    if (runnable === undefined) {
+      runnable = build();
+      if (runnables.size >= STRUCTURED_RUNNABLE_CACHE_MAX) {
+        const oldest = runnables.keys().next().value;
+        if (oldest !== undefined) runnables.delete(oldest);
+      }
+      runnables.set(key, runnable);
+    }
+    return runnable;
+  };
+  return {
+    provider,
+    model: modelId,
+    async invokeStructured(messages, signal, options) {
+      stripUnsupportedThinking(model, fallback);
+      const structured = structuredFor(options);
       const startedMs = Date.now();
       const firstToken = { ms: null as number | null };
       const callbacks: Partial<BaseCallbackHandler>[] = [

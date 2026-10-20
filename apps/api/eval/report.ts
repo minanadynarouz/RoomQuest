@@ -25,6 +25,7 @@ const LlmCallTelemetrySchema = z.object({
   outcome: z.enum(['ok', 'invalid', 'repaired', 'timeout', 'error', 'aborted']),
   hedgeRole: z.enum(['first', 'second']).optional(),
   startOffsetMs: z.number().optional(),
+  preCallMs: z.record(z.string(), z.number()).optional(),
   /** Null when the transport did not stream (not obtainable). */
   ttfbMs: z.number().nullable().default(null),
   totalMs: z.number().optional(),

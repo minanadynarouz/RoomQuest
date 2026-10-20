@@ -31,6 +31,11 @@ export interface StructuredCallOptions {
   responseSchema?: Record<string, unknown>;
   /** Structured-output name passed to LangChain. */
   schemaName?: string;
+  /**
+   * Stable identity of `responseSchema` (e.g. the enum-set key). When set,
+   * the wrapper reuses the withStructuredOutput runnable for that key.
+   */
+  schemaKey?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

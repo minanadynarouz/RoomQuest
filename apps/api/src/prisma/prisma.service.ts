@@ -2,6 +2,7 @@ import {
   Inject,
   Injectable,
   Logger,
+  type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -15,7 +16,7 @@ export const PRISMA_PING_TIMEOUT_MS = 2_000;
 export type DbHealth = 'up' | 'down' | 'disabled';
 
 @Injectable()
-export class PrismaService implements OnModuleDestroy {
+export class PrismaService implements OnModuleDestroy, OnApplicationBootstrap {
   private readonly logger = new Logger(PrismaService.name);
   private readonly client: PrismaClient | null;
   /** True only when DATABASE_URL is unset — not when the URL is bad. */
@@ -35,6 +36,49 @@ export class PrismaService implements OnModuleDestroy {
    */
   getClient(): PrismaClient | null {
     return this.client;
+  }
+
+  private firstQueryClaimed = false;
+
+  /**
+   * True exactly once per process: for the caller about to run the first DB
+   * query. Timing breakdowns label that query `…ColdMs` because it pays the
+   * connection setup (and, on Neon free tier, a compute resume after idle).
+   */
+  claimFirstQuery(): boolean {
+    if (this.firstQueryClaimed) return false;
+    this.firstQueryClaimed = true;
+    return true;
+  }
+
+  /** Boot-time connection warm-up (never in tests; never throws). */
+  onApplicationBootstrap(): void {
+    if (process.env.VITEST !== undefined || process.env.NODE_ENV === 'test') {
+      return;
+    }
+    void this.warmConnection();
+  }
+
+  /**
+   * `SELECT 1` so the TCP/TLS connection (and a suspended Neon compute) is
+   * up before the first user request. Logs one line; never throws.
+   */
+  async warmConnection(now: () => number = () => Date.now()): Promise<boolean> {
+    const client = this.client;
+    if (client === null) return false;
+    this.claimFirstQuery();
+    const started = now();
+    try {
+      await client.$queryRawUnsafe('SELECT 1');
+      this.logger.log(`prisma.warmup ok ms=${String(now() - started)}`);
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.name : 'error';
+      this.logger.warn(
+        `prisma.warmup failed error=${message} ms=${String(now() - started)}`
+      );
+      return false;
+    }
   }
 
   /**

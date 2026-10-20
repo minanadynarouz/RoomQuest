@@ -36,12 +36,35 @@ export function toLangchainMessages(
  * Gemini-safe JSON schema (never a zod object) built from the candidate
  * enums.
  */
+const ROUTE_SCHEMA_CACHE_MAX = 256;
+const routeSchemaCache = new Map<string, Record<string, unknown>>();
+
+/** Stable key of an enum set (order-insensitive per field). */
+export function decorationEnumsKey(enums: LevelDecorationEnums): string {
+  const norm = (values: readonly string[]): string =>
+    [...new Set(values)].sort().join(',');
+  return `${norm(enums.routeIds)}|${norm(enums.beats)}|${norm(enums.hazardTypes)}`;
+}
+
 export function routeCallOptions(
   enums: LevelDecorationEnums
 ): StructuredCallOptions {
+  // Memoized per enum set (process-wide, bounded): zod build + Gemini
+  // conversion only once per distinct candidate shape.
+  const key = decorationEnumsKey(enums);
+  let schema = routeSchemaCache.get(key);
+  if (schema === undefined) {
+    schema = buildLevelDecorationGeminiSchema(enums);
+    if (routeSchemaCache.size >= ROUTE_SCHEMA_CACHE_MAX) {
+      const oldest = routeSchemaCache.keys().next().value;
+      if (oldest !== undefined) routeSchemaCache.delete(oldest);
+    }
+    routeSchemaCache.set(key, schema);
+  }
   return {
-    responseSchema: buildLevelDecorationGeminiSchema(enums),
+    responseSchema: schema,
     schemaName: 'LevelDecoration',
+    schemaKey: `decoration:${key}`,
   };
 }
 

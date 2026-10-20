@@ -84,6 +84,21 @@ export const envSchema = z.object({
     z.coerce.number().int().min(0).max(60_000).default(3000)
   ),
   /**
+   * Background Gemini `models.get` at boot (TLS/DNS warm-up). Unset: on only
+   * when DIRECTOR_MODE=live and GOOGLE_API_KEY is set. Never in tests/CI.
+   */
+  DIRECTOR_WARMUP: z
+    .string()
+    .optional()
+    .transform((value, ctx) => {
+      const v = value?.trim().toLowerCase() ?? '';
+      if (v === '') return undefined;
+      if (['1', 'true', 'on', 'yes'].includes(v)) return true;
+      if (['0', 'false', 'off', 'no'].includes(v)) return false;
+      ctx.addIssue({ code: 'custom', message: 'DIRECTOR_WARMUP must be on/off' });
+      return z.NEVER;
+    }),
+  /**
    * Only attempt the second (LLM repair) Gemini call when at least this many
    * ms of the director's LLM window remain; otherwise go procedural with
    * fallbackReason `llm-invalid`.

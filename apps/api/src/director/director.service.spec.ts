@@ -127,9 +127,11 @@ describe('DirectorService', () => {
   });
 
   it('skips Gemini and returns procedural llm-quota when the daily cap is exhausted', async () => {
-    const createPrimary = vi.fn(() => {
-      throw new Error('must not construct a live model when the daily cap is hit');
-    });
+    // Chat construction may overlap the reservation (no network); the
+    // model must never be invoked.
+    const fake = new FakeListChatModel({ responses: ['{}'] });
+    const generate = vi.spyOn(fake, '_generate');
+    const createPrimary = vi.fn(() => fake);
     const consume = vi.fn(() => Promise.resolve('capped' as const));
     const director = await serviceWithEnv(
       { DIRECTOR_MODE: 'live', GOOGLE_API_KEY: 'test-google-key' },
@@ -142,13 +144,17 @@ describe('DirectorService', () => {
     expect(parsed.source).toBe('procedural');
     expect(parsed.fallbackReason).toBe('llm-quota');
     expect(consume).toHaveBeenCalledOnce();
-    expect(createPrimary).not.toHaveBeenCalled();
+    expect(generate).not.toHaveBeenCalled();
+    const outcome = await director.run(request);
+    expect(outcome.failedAt).toBe('quota-precheck');
+    expect(outcome.telemetry).toHaveLength(0);
+    expect(generate).not.toHaveBeenCalled();
   });
 
   it('skips Gemini and returns procedural llm-quota when the daily counter is unavailable', async () => {
-    const createPrimary = vi.fn(() => {
-      throw new Error('must not construct a live model when the counter is down');
-    });
+    const fake = new FakeListChatModel({ responses: ['{}'] });
+    const generate = vi.spyOn(fake, '_generate');
+    const createPrimary = vi.fn(() => fake);
     const director = await serviceWithEnv(
       { DIRECTOR_MODE: 'live', GOOGLE_API_KEY: 'test-google-key' },
       { createPrimary },
@@ -158,6 +164,27 @@ describe('DirectorService', () => {
     const parsed = LevelResponse.parse(await director.plan(request));
     expect(parsed.source).toBe('procedural');
     expect(parsed.fallbackReason).toBe('llm-quota');
-    expect(createPrimary).not.toHaveBeenCalled();
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it('builds the chat model once per process and reuses it across requests', async () => {
+    const createPrimary = vi.fn(
+      () => new FakeListChatModel({ responses: [planToLlmJson(SYNTHETIC_LIVING_ROOM_PLAN)] })
+    );
+    const director = await serviceWithEnv(
+      { DIRECTOR_MODE: 'live', GOOGLE_API_KEY: 'test-google-key' },
+      { createPrimary },
+      false,
+      () => Promise.resolve('ok' as const)
+    );
+    const first = await director.run(request);
+    await director.run(request);
+    expect(createPrimary).toHaveBeenCalledTimes(1);
+    expect(first.preCall?.totalMs).toBeGreaterThanOrEqual(0);
+    expect(first.preCall).toHaveProperty('dailyReserveMs');
+    expect(first.preCall).toHaveProperty('modelGetMs');
+    expect(first.preCall).toHaveProperty('breakerMs');
+    expect(first.preCall).toHaveProperty('llmGateWaitMs');
+    expect(first.telemetry[0]?.preCallMs).toEqual(first.preCall);
   });
 });
